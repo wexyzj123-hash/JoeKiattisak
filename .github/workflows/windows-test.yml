@@ -44,31 +44,27 @@ jobs:
         shell: cmd
         run: call run_tests.bat
 
-      - name: ใส่ข้อมูลตัวอย่าง + เปิดเซิร์ฟเวอร์จริง
+      - name: ใส่ข้อมูลตัวอย่าง + เปิดเซิร์ฟเวอร์จริง + Microsoft Edge กดดูทุกหน้า + PDF / Excel
+        # ขั้นเดียวกัน: Windows runner ปิดโปรเซสที่เปิดค้างไว้เมื่อจบแต่ละขั้น — เซิร์ฟเวอร์ต้องอยู่ขั้นเดียวกับการทดสอบ
         working-directory: work/E-Checksheet
         run: |
           .\.venv\Scripts\python.exe run.py --demo
-          $p = Start-Process -FilePath .\.venv\Scripts\python.exe -ArgumentList "run.py" -RedirectStandardOutput server.log -RedirectStandardError server.err -PassThru -WindowStyle Hidden
-          "SERVER_PID=$($p.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          .\.venv\Scripts\python.exe -m pip install -q playwright
+          New-Item -ItemType Directory -Force ..\..\win-out | Out-Null
+          $p = Start-Process -FilePath .\.venv\Scripts\python.exe -ArgumentList "run.py" -RedirectStandardOutput ..\..\win-out\server.log -RedirectStandardError ..\..\win-out\server.err -PassThru -WindowStyle Hidden
+          $ready = $false
           for ($i = 0; $i -lt 60; $i++) {
-            try { $r = Invoke-WebRequest -Uri http://127.0.0.1:5100/login -UseBasicParsing -TimeoutSec 5; if ($r.StatusCode -eq 200) { Write-Host "เซิร์ฟเวอร์พร้อม"; exit 0 } } catch { }
+            try { $r = Invoke-WebRequest -Uri http://127.0.0.1:5100/login -UseBasicParsing -TimeoutSec 5; if ($r.StatusCode -eq 200) { $ready = $true; break } } catch { }
             Start-Sleep -Seconds 2
           }
-          Get-Content server.log, server.err
-          exit 1
-
-      - name: Microsoft Edge กดดูทุกหน้า + PDF / Excel
-        working-directory: work/E-Checksheet
-        run: |
-          .\.venv\Scripts\python.exe -m pip install -q playwright
+          if (-not $ready) { Get-Content ..\..\win-out\server.log, ..\..\win-out\server.err; exit 1 }
+          Write-Host "เซิร์ฟเวอร์พร้อม (PID $($p.Id))"
           .\.venv\Scripts\python.exe ..\..\.github\win\smoke.py http://127.0.0.1:5100 ..\..\win-out
-
-      - name: เก็บ log เซิร์ฟเวอร์
-        if: always()
-        working-directory: work/E-Checksheet
-        run: |
-          if (Test-Path server.log) { Copy-Item server.log, server.err ..\..\win-out\ -ErrorAction SilentlyContinue }
-          if ($env:SERVER_PID) { Stop-Process -Id $env:SERVER_PID -ErrorAction SilentlyContinue }
+          $code = $LASTEXITCODE
+          if ($p.HasExited) { Write-Host "เซิร์ฟเวอร์หยุดทำงานระหว่างทดสอบ (exit $($p.ExitCode))" }
+          if ($code -ne 0 -or $p.HasExited) { Write-Host "---- server.err ----"; Get-Content ..\..\win-out\server.err -Tail 60 }
+          Stop-Process -Id $p.Id -ErrorAction SilentlyContinue
+          exit $code
 
       - uses: actions/upload-artifact@v4
         if: always()
