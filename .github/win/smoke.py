@@ -12,6 +12,11 @@ from datetime import date, timedelta
 
 from playwright.sync_api import sync_playwright
 
+for _s in (sys.stdout, sys.stderr):      # คอนโซล Windows (cp1252) พิมพ์ภาษาไทยไม่ได้ — แบบเดียวกับ run.py
+    try:
+        _s.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, ValueError):
+        pass
 B = sys.argv[1].rstrip("/")
 OUT = sys.argv[2]
 os.makedirs(OUT, exist_ok=True)
