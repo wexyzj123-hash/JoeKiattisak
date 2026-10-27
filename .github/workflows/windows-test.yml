@@ -1,0 +1,78 @@
+name: windows-test
+# ทดสอบ E-Checksheet บน Windows จริง: แตกไฟล์ zip เวอร์ชันล่าสุด → ชุดทดสอบทั้งหมดด้วย run_tests.bat →
+# ใส่ข้อมูลตัวอย่าง → เปิดเซิร์ฟเวอร์จริง (python run.py) → Microsoft Edge กดดูทุกหน้า + สร้าง PDF ด้วย Edge
+on:
+  push:
+    branches: [claude/sharp-tesla-iwjskz]
+    paths: ["*.zip", ".github/**"]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.12", "3.13"]
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ตั้งเขตเวลาเครื่องเป็นประเทศไทย (เหมือนเครื่องที่โรงงาน)
+        run: |
+          tzutil /s "SE Asia Standard Time"
+          tzutil /g
+          Get-Date
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: แตกไฟล์เวอร์ชันล่าสุด
+        run: |
+          $zip = Get-ChildItem E-Checksheet_69_v*.zip | Sort-Object { [version]($_.BaseName -replace '.*_v', '') } | Select-Object -Last 1
+          "ZIP=$($zip.Name)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Expand-Archive $zip.FullName -DestinationPath work
+          Write-Host "ทดสอบ $($zip.Name)"
+          "### ไฟล์ที่ทดสอบ: $($zip.Name) · Python ${{ matrix.python }} · $(tzutil /g)" | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: ชุดทดสอบทั้งหมด (run_tests.bat)
+        working-directory: work/E-Checksheet
+        shell: cmd
+        run: call run_tests.bat
+
+      - name: ใส่ข้อมูลตัวอย่าง + เปิดเซิร์ฟเวอร์จริง
+        working-directory: work/E-Checksheet
+        run: |
+          .\.venv\Scripts\python.exe run.py --demo
+          $p = Start-Process -FilePath .\.venv\Scripts\python.exe -ArgumentList "run.py" -RedirectStandardOutput server.log -RedirectStandardError server.err -PassThru -WindowStyle Hidden
+          "SERVER_PID=$($p.Id)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          for ($i = 0; $i -lt 60; $i++) {
+            try { $r = Invoke-WebRequest -Uri http://127.0.0.1:5100/login -UseBasicParsing -TimeoutSec 5; if ($r.StatusCode -eq 200) { Write-Host "เซิร์ฟเวอร์พร้อม"; exit 0 } } catch { }
+            Start-Sleep -Seconds 2
+          }
+          Get-Content server.log, server.err
+          exit 1
+
+      - name: Microsoft Edge กดดูทุกหน้า + PDF / Excel
+        working-directory: work/E-Checksheet
+        run: |
+          .\.venv\Scripts\python.exe -m pip install -q playwright
+          .\.venv\Scripts\python.exe ..\..\.github\win\smoke.py http://127.0.0.1:5100 ..\..\win-out
+
+      - name: เก็บ log เซิร์ฟเวอร์
+        if: always()
+        working-directory: work/E-Checksheet
+        run: |
+          if (Test-Path server.log) { Copy-Item server.log, server.err ..\..\win-out\ -ErrorAction SilentlyContinue }
+          if ($env:SERVER_PID) { Stop-Process -Id $env:SERVER_PID -ErrorAction SilentlyContinue }
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-py${{ matrix.python }}
+          path: win-out
+          if-no-files-found: ignore
