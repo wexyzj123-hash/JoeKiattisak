@@ -9,7 +9,7 @@ import sqlite3
 from datetime import date, timedelta
 from typing import Mapping
 
-from . import timeutil
+from . import capa, timeutil
 from .hazards import hazard_scope_sql, risk_area_options
 from .images import ImageError, save_attachment
 from .incidents import LOST_RACE, NOT_FOUND
@@ -277,3 +277,58 @@ def submit_round(db, user, round_id: int, expected_version: int | None = None) -
         return LOST_RACE
     db.commit()
     return []
+
+
+# ---------- ข้อไม่ผ่าน → รายการอันตราย / CAPA (กดครั้งเดียว ซ้ำแล้วได้ตัวเดิม) ----------
+def _finding(db, user, answer_id):
+    """ข้อที่ไม่ผ่านในรอบที่ส่งแล้วและผู้ใช้เห็น (ผู้ตรวจต้องมี patrol.perform) → (answer, round, errors)"""
+    if "patrol.perform" not in user_permissions(db, user):
+        return None, None, ["คุณไม่มีสิทธิ์ตรวจความปลอดภัย"]
+    ans = db.execute("SELECT * FROM patrol_answers WHERE id=?", (_int(answer_id) or 0,)).fetchone()
+    rnd = visible_round(db, user, ans["round_id"]) if ans else None
+    if rnd is None or rnd["status"] != "submitted":
+        return None, None, NOT_FOUND
+    if ans["result"] != "fail":
+        return None, None, ["สร้างได้เฉพาะข้อที่ไม่ผ่านของรอบที่ส่งแล้ว"]
+    return ans, rnd, []
+
+
+def finding_to_hazard(db, user, answer_id, hazard_type_id, source_id, upload_root: str) -> tuple[int | None, list[str]]:
+    from . import workflow
+    ans, rnd, errors = _finding(db, user, answer_id)
+    if errors:
+        return None, errors
+    existing = db.execute("SELECT id FROM hazards WHERE patrol_answer_id=?", (ans["id"],)).fetchone()
+    if existing:
+        return existing["id"], []
+    desc = " — ".join(x for x in (ans["section"], ans["note"]) if x)[:2000]
+    hid, errors = workflow.report(db, user, {"title": ans["text_th"][:200], "description": desc, "risk_area_id": str(rnd["risk_area_id"]),
+                                             "hazard_type_id": str(hazard_type_id), "source_id": str(source_id)},
+                                  patrol_answer_id=ans["id"], require_permission=False)
+    if hid is None:
+        existing = db.execute("SELECT id FROM hazards WHERE patrol_answer_id=?", (ans["id"],)).fetchone()     # อีกแท็บ/การเชื่อมต่อสร้างตัดหน้าไปแล้ว
+        return (existing["id"], []) if existing else (None, errors)
+    for att in db.execute("SELECT * FROM patrol_attachments WHERE answer_id=? ORDER BY id", (ans["id"],)).fetchall():
+        try:
+            with open(os.path.join(upload_root, f"patrol-{ans['id']}", att["stored_name"]), "rb") as fh:
+                save_attachment(db, upload_root, hid, "before", att["orig_name"], fh.read(), user["id"])
+        except (OSError, ImageError):
+            continue                                                                                    # คัดลอกรูปไม่สำเร็จไม่ทำให้การสร้างล้ม
+    return hid, []
+
+
+def finding_to_capa(db, user, answer_id, form: Mapping) -> tuple[int | None, list[str]]:
+    ans, rnd, errors = _finding(db, user, answer_id)
+    if errors:
+        return None, errors
+    existing = db.execute("SELECT id FROM capas WHERE source_kind='patrol' AND source_id=?", (ans["id"],)).fetchone()
+    if existing:
+        return existing["id"], []
+    data = dict(form)
+    if not (data.get("title") or "").strip():
+        data["title"] = ans["text_th"][:200]
+    cid, errors = capa.create(db, user, data, ("patrol", ans["id"]), require_permission=False)
+    if cid is None:
+        existing = db.execute("SELECT id FROM capas WHERE source_kind='patrol' AND source_id=?", (ans["id"],)).fetchone()
+        return (existing["id"], []) if existing else (None, errors)
+    return cid, []

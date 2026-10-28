@@ -9,7 +9,7 @@ import sqlite3
 from datetime import date, timedelta
 from typing import Mapping
 
-from . import notify, timeutil
+from . import capa, notify, timeutil
 from .customfields import fields_for_type, validate_custom
 from .hazards import add_event, next_code, risk_area_options, user_in_scope, visible_hazard
 from .perms import user_permissions
@@ -34,7 +34,7 @@ def _need(db, user, perm: str, what: str) -> list[str]:
 
 
 def _transition(db, hazard, sets: dict, kind: str, user, to_status: str, note: str = "", data: dict | None = None,
-                notify_event: str | None = None) -> list[str]:
+                notify_event: str | None = None, guard=None) -> list[str]:
     cols = ", ".join(f"{c}=?" for c in sets)
     # ตรวจทั้งสถานะและ version — กันคนตัดหน้าแม้สถานะเดิม (ประเมินซ้ำ/โอนงาน) แล้วบันทึกเหตุการณ์ผิดจากความจริง
     cur = db.execute(f"UPDATE hazards SET {cols}, status=?, version=version+1, updated_at=datetime('now','localtime') "
@@ -44,14 +44,20 @@ def _transition(db, hazard, sets: dict, kind: str, user, to_status: str, note: s
         db.rollback()
         return LOST_RACE
     add_event(db, hazard["id"], user["id"], kind, hazard["status"], to_status, note, data)
+    if guard is not None:                                              # ตรวจเงื่อนไขหลังได้ล็อกเขียนแล้ว (ในธุรกรรมเดียวกัน) — ไม่มีใครแทรกได้ระหว่างตรวจกับบันทึก
+        blocked = guard()
+        if blocked:
+            db.rollback()
+            return blocked
     if notify_event:
         notify.emit(db, notify_event, hazard["id"], user["id"])       # แถวแจ้งเตือนอยู่ใน transaction เดียวกับการเปลี่ยนสถานะ
     db.commit()
     return []
 
 
-def report(db, user, form: Mapping) -> tuple[int | None, list[str]]:
-    errors = _need(db, user, "hazard.report", "แจ้งอันตราย")
+def report(db, user, form: Mapping, *, patrol_answer_id: int | None = None, require_permission: bool = True) -> tuple[int | None, list[str]]:
+    """แจ้งอันตราย; require_permission=False ใช้เฉพาะเส้นทางที่ตรวจสิทธิ์เองแล้ว (ข้อไม่ผ่านจากการตรวจของผู้ตรวจ)"""
+    errors = _need(db, user, "hazard.report", "แจ้งอันตราย") if require_permission else []
     if errors:
         return None, errors
     title, desc = (form.get("title") or "").strip(), (form.get("description") or "").strip()
@@ -79,9 +85,9 @@ def report(db, user, form: Mapping) -> tuple[int | None, list[str]]:
     for attempt in (1, 2):
         try:
             cur = db.execute("INSERT INTO hazards(code,title,description,risk_area_id,hazard_type_id,source_id,reported_by,"
-                             "status,custom) VALUES(?,?,?,?,?,?,?,'reported',?)",
+                             "status,custom,patrol_answer_id) VALUES(?,?,?,?,?,?,?,'reported',?,?)",
                              (next_code(db), title, desc, area, type_id, source_id, user["id"],
-                              json.dumps(custom, ensure_ascii=False)))
+                              json.dumps(custom, ensure_ascii=False), patrol_answer_id))
             break
         except sqlite3.IntegrityError:                  # รหัสชนกันตอนสร้างพร้อมกัน — คำนวณใหม่แล้วลองอีกครั้ง
             db.rollback()
@@ -181,7 +187,8 @@ def close(db, user, hazard_id: int, note: str) -> list[str]:
         return [f"ผลการแก้ไขยาวเกิน {NOTE_MAX} ตัวอักษร"]
     if hazard["level_requires_approval"] and user["id"] in _owners_ever(db, hazard):
         return [f"รายการระดับ {hazard['level_name']} ต้องให้ผู้ที่ไม่เคยเป็นผู้รับผิดชอบรายการนี้เป็นผู้ปิดรายการ"]
-    return _transition(db, hazard, {"closing_note": note}, "closed", user, "closed", note, notify_event="hazard_closed")
+    return _transition(db, hazard, {"closing_note": note}, "closed", user, "closed", note, notify_event="hazard_closed",
+                       guard=lambda: capa.gate_errors(db, "hazard", hazard["id"]))
 
 
 def reject(db, user, hazard_id: int, reason: str) -> list[str]:

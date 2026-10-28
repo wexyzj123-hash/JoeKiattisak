@@ -8,7 +8,7 @@ import re
 from datetime import date, timedelta
 from typing import Mapping
 
-from . import notify, timeutil
+from . import capa, notify, timeutil
 from .hazards import user_in_scope
 from .incidents import (LOST_RACE, MAX_PEOPLE, NOT_FOUND, OPEN_STATUSES, add_event, parse_people, visible_incident)
 from .perms import user_permissions
@@ -39,7 +39,7 @@ def _open_for(db, user, perm: str, what: str, incident_id, allowed: tuple[str, .
 
 
 def _transition(db, inc, sets: dict, kind: str, user, to_status: str, note: str = "", data: dict | None = None,
-                notify_event: str | None = None) -> list[str]:
+                notify_event: str | None = None, guard=None) -> list[str]:
     cols = ", ".join(f"{c}=?" for c in sets)
     cur = db.execute(f"UPDATE incidents SET {cols}, status=?, version=version+1, updated_at=datetime('now','localtime') "
                      "WHERE id=? AND status=? AND version=?",
@@ -48,6 +48,11 @@ def _transition(db, inc, sets: dict, kind: str, user, to_status: str, note: str 
         db.rollback()
         return LOST_RACE
     add_event(db, inc["id"], user["id"], kind, inc["status"], to_status, note, data)
+    if guard is not None:                                              # ตรวจหลังได้ล็อกเขียนแล้ว (ธุรกรรมเดียวกัน)
+        blocked = guard()
+        if blocked:
+            db.rollback()
+            return blocked
     if notify_event:
         notify.emit_incident(db, notify_event, inc["id"], user["id"])
     db.commit()
@@ -143,7 +148,8 @@ def close(db, user, incident_id: int, note: str) -> list[str]:
         return [f"ผลการแก้ไขยาวเกิน {NOTE_MAX} ตัวอักษร"]
     if user["id"] in investigators_ever(db, inc):
         return ["ผู้ที่เคยเป็นผู้สอบสวนรายการนี้ปิดรายการเองไม่ได้ ต้องให้ผู้อื่นที่มีสิทธิ์ปิดเป็นผู้ปิด"]
-    return _transition(db, inc, {"closing_note": note}, "closed", user, "closed", note, notify_event="incident_closed")
+    return _transition(db, inc, {"closing_note": note}, "closed", user, "closed", note, notify_event="incident_closed",
+                       guard=lambda: capa.gate_errors(db, "incident", inc["id"]))
 
 
 def reject(db, user, incident_id: int, reason: str) -> list[str]:

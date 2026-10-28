@@ -113,8 +113,9 @@ def _source(db, user, source) -> tuple[int | None, list[str]]:
     return row["risk_area_id"], []
 
 
-def create(db, user, form: Mapping, source: tuple[str, int] | None = None) -> tuple[int | None, list[str]]:
-    if "capa.create" not in user_permissions(db, user):
+def create(db, user, form: Mapping, source: tuple[str, int] | None = None, *, require_permission: bool = True) -> tuple[int | None, list[str]]:
+    """สร้าง CAPA; require_permission=False ใช้เฉพาะเส้นทางที่ตรวจสิทธิ์เองแล้ว (ข้อไม่ผ่านจากการตรวจของผู้ตรวจ)"""
+    if require_permission and "capa.create" not in user_permissions(db, user):
         return None, ["คุณไม่มีสิทธิ์สร้าง CAPA"]
     errors: list[str] = []
     title, desc = (form.get("title") or "").strip(), (form.get("description") or "").strip()
