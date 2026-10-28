@@ -51,8 +51,9 @@ CREATE TABLE IF NOT EXISTS safety_roles (
 DEFAULT_ROLES = (
     ("admin", "ผู้ดูแลระบบ", ",".join(PERMISSIONS)),
     ("assessor", "ผู้ประเมิน/จป.", "master.view,hazard.report,hazard.assess,hazard.assign,hazard.close,"
-                                  "incident.report,incident.investigate,incident.close"),
-    ("dept_head", "หัวหน้าหน่วยงาน", "master.view,hazard.report,hazard.assign,hazard.close,incident.report,incident.investigate"),
+                                  "incident.report,incident.investigate,incident.close,patrol.perform,patrol.view,capa.create,capa.verify"),
+    ("dept_head", "หัวหน้าหน่วยงาน", "master.view,hazard.report,hazard.assign,hazard.close,incident.report,incident.investigate,"
+                                     "patrol.view,capa.create"),
     ("reporter", "ผู้แจ้ง", "hazard.report,incident.report"),
     ("viewer", "ผู้ดูข้อมูล", "master.view"),
 )
@@ -163,7 +164,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_custom_fields_key ON custom_fields(COALESCE
 """
 
 NOTIFY_EVENTS = ("hazard_reported", "hazard_assessed", "hazard_assigned", "hazard_closed", "hazard_rejected", "due_soon", "overdue",
-                 "incident_reported", "incident_assigned", "incident_closed")
+                 "incident_reported", "incident_assigned", "incident_closed",
+                 "capa_assigned", "capa_done", "capa_verified", "capa_reopened", "capa_due_soon", "capa_overdue", "patrol_due", "patrol_overdue")
 NOTIFY_CHANNELS = ("inapp", "telegram", "line", "teams", "email")
 OUTBOX_CHANNELS = ("telegram", "line", "teams", "email")
 OUTBOX_STATUSES = ("pending", "sent", "failed", "dead", "cancelled")
@@ -275,6 +277,10 @@ def seed_notify(con) -> None:
         con.executemany("INSERT INTO notify_rules(event, recipients, channels, offset_days, min_score) VALUES(?,?,?,?,?)",
                         DEFAULT_RULES)
         con.execute("INSERT INTO app_settings(key, value) VALUES('notify_rules_seeded', '1')")
+    con.execute("INSERT OR IGNORE INTO app_settings(key, value) VALUES('require_capa_verified', '0')")
+    if con.execute("SELECT 1 FROM app_settings WHERE key='patrol_rules_seeded'").fetchone() is None:
+        con.executemany("INSERT INTO notify_rules(event, recipients, channels, offset_days, min_score) VALUES(?,?,?,?,?)", PATROL_RULES)
+        con.execute("INSERT INTO app_settings(key, value) VALUES('patrol_rules_seeded', '1')")
     if con.execute("SELECT 1 FROM app_settings WHERE key='incident_rules_seeded'").fetchone() is None:
         con.executemany("INSERT INTO notify_rules(event, recipients, channels, offset_days, min_score) VALUES(?,?,?,?,?)", INCIDENT_RULES)
         con.execute("INSERT INTO app_settings(key, value) VALUES('incident_rules_seeded', '1')")
@@ -388,6 +394,168 @@ def seed_incidents(con) -> None:
     con.commit()
 
 
+PATROL_DDL = """
+CREATE TABLE IF NOT EXISTS checklists (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    code        TEXT NOT NULL COLLATE NOCASE UNIQUE,
+    name_th     TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    active      INTEGER NOT NULL DEFAULT 1,
+    created_by  INTEGER REFERENCES safety_users(id),
+    created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE TABLE IF NOT EXISTS checklist_items (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    checklist_id          INTEGER NOT NULL REFERENCES checklists(id),
+    section               TEXT NOT NULL DEFAULT '',
+    text_th               TEXT NOT NULL,
+    require_photo_on_fail INTEGER NOT NULL DEFAULT 0,
+    weight                INTEGER NOT NULL DEFAULT 1,
+    sort                  INTEGER NOT NULL DEFAULT 0,
+    active                INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_checklist_items_cl ON checklist_items(checklist_id, sort, id);
+CREATE TABLE IF NOT EXISTS patrol_plans (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    checklist_id INTEGER NOT NULL REFERENCES checklists(id),
+    risk_area_id INTEGER NOT NULL REFERENCES risk_areas(id),
+    frequency    TEXT NOT NULL CHECK (frequency IN ('daily','weekly','monthly')),
+    inspector_id INTEGER REFERENCES safety_users(id),
+    active       INTEGER NOT NULL DEFAULT 1,
+    created_by   INTEGER REFERENCES safety_users(id),
+    created_at   TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_patrol_plans_active ON patrol_plans(checklist_id, risk_area_id) WHERE active = 1;
+CREATE TABLE IF NOT EXISTS patrol_rounds (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    code         TEXT NOT NULL UNIQUE,
+    plan_id      INTEGER REFERENCES patrol_plans(id),
+    checklist_id INTEGER NOT NULL REFERENCES checklists(id),
+    risk_area_id INTEGER NOT NULL REFERENCES risk_areas(id),
+    inspector_id INTEGER NOT NULL REFERENCES safety_users(id),
+    status       TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','submitted')),
+    started_at   TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    submitted_at TEXT,
+    passed       INTEGER NOT NULL DEFAULT 0,
+    failed       INTEGER NOT NULL DEFAULT 0,
+    na           INTEGER NOT NULL DEFAULT 0,
+    score_pct    INTEGER,
+    version      INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_patrol_rounds_area ON patrol_rounds(risk_area_id, status);
+CREATE TABLE IF NOT EXISTS patrol_answers (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    round_id     INTEGER NOT NULL REFERENCES patrol_rounds(id),
+    item_id      INTEGER NOT NULL REFERENCES checklist_items(id),
+    section      TEXT NOT NULL DEFAULT '',
+    text_th      TEXT NOT NULL,
+    weight       INTEGER NOT NULL DEFAULT 1,
+    require_photo INTEGER NOT NULL DEFAULT 0,
+    sort         INTEGER NOT NULL DEFAULT 0,
+    result       TEXT CHECK (result IN ('pass','fail','na')),
+    note         TEXT NOT NULL DEFAULT '',
+    UNIQUE (round_id, item_id)
+);
+CREATE TABLE IF NOT EXISTS patrol_attachments (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    answer_id   INTEGER NOT NULL REFERENCES patrol_answers(id),
+    stored_name TEXT NOT NULL,
+    orig_name   TEXT NOT NULL,
+    size        INTEGER NOT NULL,
+    uploaded_by INTEGER REFERENCES safety_users(id),
+    uploaded_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE TRIGGER IF NOT EXISTS patrol_rounds_frozen_upd BEFORE UPDATE ON patrol_rounds WHEN OLD.status = 'submitted'
+BEGIN SELECT RAISE(ABORT, 'submitted patrol round is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS patrol_rounds_frozen_del BEFORE DELETE ON patrol_rounds WHEN OLD.status = 'submitted'
+BEGIN SELECT RAISE(ABORT, 'submitted patrol round is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS patrol_answers_frozen_upd BEFORE UPDATE ON patrol_answers
+WHEN (SELECT status FROM patrol_rounds WHERE id = OLD.round_id) = 'submitted'
+BEGIN SELECT RAISE(ABORT, 'submitted patrol round is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS patrol_answers_frozen_del BEFORE DELETE ON patrol_answers
+WHEN (SELECT status FROM patrol_rounds WHERE id = OLD.round_id) = 'submitted'
+BEGIN SELECT RAISE(ABORT, 'submitted patrol round is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS patrol_answers_frozen_ins BEFORE INSERT ON patrol_answers
+WHEN (SELECT status FROM patrol_rounds WHERE id = NEW.round_id) = 'submitted'
+BEGIN SELECT RAISE(ABORT, 'submitted patrol round is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS patrol_attachments_frozen_upd BEFORE UPDATE ON patrol_attachments
+WHEN (SELECT r.status FROM patrol_answers a JOIN patrol_rounds r ON r.id = a.round_id WHERE a.id = OLD.answer_id) = 'submitted'
+BEGIN SELECT RAISE(ABORT, 'submitted patrol round is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS patrol_attachments_frozen_del BEFORE DELETE ON patrol_attachments
+WHEN (SELECT r.status FROM patrol_answers a JOIN patrol_rounds r ON r.id = a.round_id WHERE a.id = OLD.answer_id) = 'submitted'
+BEGIN SELECT RAISE(ABORT, 'submitted patrol round is immutable'); END;
+CREATE TRIGGER IF NOT EXISTS patrol_attachments_frozen_ins BEFORE INSERT ON patrol_attachments
+WHEN (SELECT r.status FROM patrol_answers a JOIN patrol_rounds r ON r.id = a.round_id WHERE a.id = NEW.answer_id) = 'submitted'
+BEGIN SELECT RAISE(ABORT, 'submitted patrol round is immutable'); END;
+"""
+
+CAPA_DDL = """
+CREATE TABLE IF NOT EXISTS capas (
+    id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+    code                 TEXT NOT NULL UNIQUE,
+    source_kind          TEXT NOT NULL CHECK (source_kind IN ('hazard','incident','patrol','manual')),
+    source_id            INTEGER,
+    action_type          TEXT NOT NULL CHECK (action_type IN ('corrective','preventive')),
+    title                TEXT NOT NULL,
+    description          TEXT NOT NULL DEFAULT '',
+    risk_area_id         INTEGER NOT NULL REFERENCES risk_areas(id),
+    owner_id             INTEGER NOT NULL REFERENCES safety_users(id),
+    due_date             TEXT NOT NULL,
+    status               TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open','in_progress','done','verified','cancelled')),
+    created_by           INTEGER NOT NULL REFERENCES safety_users(id),
+    created_at           TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    done_by              INTEGER REFERENCES safety_users(id),
+    done_at              TEXT,
+    done_note            TEXT NOT NULL DEFAULT '',
+    verified_by          INTEGER REFERENCES safety_users(id),
+    verified_at          TEXT,
+    verify_note          TEXT NOT NULL DEFAULT '',
+    effectiveness_due    TEXT,
+    effectiveness_result TEXT CHECK (effectiveness_result IN ('effective','ineffective')),
+    effectiveness_note   TEXT NOT NULL DEFAULT '',
+    reopen_count         INTEGER NOT NULL DEFAULT 0,
+    cancel_reason        TEXT NOT NULL DEFAULT '',
+    version              INTEGER NOT NULL DEFAULT 0,
+    updated_at           TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_capas_status ON capas(status, due_date);
+CREATE INDEX IF NOT EXISTS idx_capas_source ON capas(source_kind, source_id);
+CREATE INDEX IF NOT EXISTS idx_capas_owner ON capas(owner_id);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_capas_patrol_source ON capas(source_id) WHERE source_kind = 'patrol';
+CREATE TABLE IF NOT EXISTS capa_events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    capa_id     INTEGER NOT NULL REFERENCES capas(id),
+    at          TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    actor_id    INTEGER REFERENCES safety_users(id),
+    kind        TEXT NOT NULL,
+    from_status TEXT,
+    to_status   TEXT,
+    note        TEXT NOT NULL DEFAULT '',
+    data        TEXT NOT NULL DEFAULT ''
+);
+CREATE TRIGGER IF NOT EXISTS capa_events_no_update BEFORE UPDATE ON capa_events
+BEGIN SELECT RAISE(ABORT, 'capa_events is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS capa_events_no_delete BEFORE DELETE ON capa_events
+BEGIN SELECT RAISE(ABORT, 'capa_events is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS capa_events_no_replace BEFORE INSERT ON capa_events
+WHEN EXISTS (SELECT 1 FROM capa_events WHERE id = NEW.id)
+BEGIN SELECT RAISE(ABORT, 'capa_events is append-only'); END;
+"""
+
+PATROL_RULES = (
+    ("capa_assigned", "owner", _ALL, 0, None),
+    ("capa_done", "role:assessor", "inapp", 0, None),
+    ("capa_verified", "owner", "inapp", 0, None),
+    ("capa_reopened", "owner", "inapp", 0, None),
+    ("capa_due_soon", "owner", "inapp,telegram", 2, None),
+    ("capa_overdue", "owner", _ALL, 1, None),
+    ("capa_overdue", "owner,role:dept_head", _ALL, 3, None),
+    ("capa_overdue", "role:admin,role:dept_head", _ALL, 7, None),
+    ("patrol_due", "owner", "inapp", 0, None),
+    ("patrol_overdue", "owner,role:dept_head", "inapp,telegram", 1, None),
+    ("patrol_overdue", "owner,role:dept_head", "inapp,telegram", 5, None),
+)
+
 DEFAULT_LIKELIHOOD = ("แทบไม่เกิด", "เกิดได้ยาก", "เกิดได้บางครั้ง", "เกิดบ่อย", "เกิดบ่อยมาก")
 DEFAULT_SEVERITY = ("เล็กน้อย", "ปานกลาง", "ร้ายแรง", "รุนแรง", "รุนแรงมาก")
 DEFAULT_LEVELS = (("ต่ำ", 1, 4, "#2ecc71", 30, 0), ("ปานกลาง", 5, 9, "#f1c40f", 14, 0),
@@ -419,8 +587,10 @@ def ensure_schema(con) -> None:
     _add_column(con, "safety_users", "line_user_id", "TEXT")
     _add_column(con, "safety_users", "email", "TEXT")
     _add_column(con, "safety_users", "notify_channels", "TEXT NOT NULL DEFAULT 'inapp'")
-    con.executescript(MASTER_DDL + ROLES_DDL + RISK_DDL + HAZARD_DDL + CUSTOM_DDL + NOTIFY_DDL + INCIDENT_DDL)
+    con.executescript(MASTER_DDL + ROLES_DDL + RISK_DDL + HAZARD_DDL + CUSTOM_DDL + NOTIFY_DDL + INCIDENT_DDL + PATROL_DDL + CAPA_DDL)
     _add_column(con, "notifications", "incident_id", "INTEGER")
+    _add_column(con, "hazards", "patrol_answer_id", "INTEGER")
+    con.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_hazards_patrol_answer ON hazards(patrol_answer_id) WHERE patrol_answer_id IS NOT NULL")
     rebuild_notify_rules_if_needed(con)
     seed_roles(con)
     seed_risk(con)

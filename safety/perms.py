@@ -14,6 +14,11 @@ PERMISSIONS: dict[str, str] = {
     "incident.report": "แจ้งอุบัติเหตุ/Near Miss",
     "incident.investigate": "สอบสวนอุบัติเหตุ",
     "incident.close": "ปิดรายการอุบัติเหตุ",
+    "patrol.manage": "จัดการแบบตรวจและแผนการตรวจ",
+    "patrol.perform": "ตรวจความปลอดภัย (Safety Patrol)",
+    "patrol.view": "ดูผลการตรวจทั้งหมดในขอบเขต",
+    "capa.create": "สร้าง/มอบหมาย CAPA",
+    "capa.verify": "ยืนยันผล CAPA",
 }
 
 
