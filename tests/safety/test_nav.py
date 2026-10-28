@@ -18,17 +18,18 @@ HOME = ["หน้าหลัก"]
 
 def test_admin_sees_home_plus_all_groups_in_screenshot_order():
     groups = nav_items(ALL, "/")
-    assert [g.title for g in groups] == ["เมนูหลัก", "ระบบข้อมูลหลัก", "อุบัติเหตุ", "ตรวจความปลอดภัย & CAPA", "ข้อมูลองค์กร", "ผู้ดูแลระบบ"]
+    assert [g.title for g in groups] == ["เมนูหลัก", "ระบบข้อมูลหลัก", "อุบัติเหตุ", "ตรวจความปลอดภัย & CAPA", "รายงาน & สถิติ", "ข้อมูลองค์กร", "ผู้ดูแลระบบ"]
     assert labels(groups) == [
         HOME,
         ["ภาพรวมดำเนินงาน", "ภาพรวมตามหน่วยงาน", "พื้นที่เสี่ยง", "ลงทะเบียนบันทึกอันตราย", "แหล่งที่มา", "ประเภทอันตราย"],
         ["รายงานอุบัติเหตุ / Near Miss", "สถิติอุบัติเหตุ"],
         ["ตรวจความปลอดภัย (Safety Patrol)", "CAPA"],
+        ["รายงานและสถิติ"],
         ["โรงงาน", "แผนก", "ไลน์/กลุ่มงาน", "สาเหตุอุบัติเหตุ"],
         ["ประเภทผู้ใช้งาน", "ผู้ใช้งาน", "เกณฑ์ความเสี่ยง", "ฟิลด์เพิ่มเติม", "ระดับความรุนแรงการบาดเจ็บ", "แบบตรวจความปลอดภัย", "แผนการตรวจ", "ตั้งค่า CAPA", "การแจ้งเตือน"]]
     hrefs = [i.href for g in groups for i in g.items]
     assert hrefs == ["/", "/overview", "/overview/departments", "/master/risk-areas", "/hazards", "/master/hazard-sources",
-                     "/master/hazard-types", "/incidents", "/incidents/stats", "/patrols", "/capas", "/master/factories", "/master/departments", "/master/lines",
+                     "/master/hazard-types", "/incidents", "/incidents/stats", "/patrols", "/capas", "/reports", "/master/factories", "/master/departments", "/master/lines",
                      "/master/incident-causes", "/admin/roles", "/admin/users", "/admin/criteria", "/admin/custom-fields",
                      "/admin/injury-severities", "/admin/checklists", "/admin/patrol-plans", "/admin/capa-settings", "/admin/notifications"]
 
@@ -41,6 +42,7 @@ def test_nav_items_hide_unpermitted():
     assert labels(nav_items({"incident.report"}, "/")) == [HOME, ["รายงานอุบัติเหตุ / Near Miss"], ["CAPA"]]
     assert labels(nav_items({"patrol.view"}, "/")) == [HOME, ["ตรวจความปลอดภัย (Safety Patrol)"]]
     assert labels(nav_items({"capa.verify"}, "/")) == [HOME, ["CAPA"]]
+    assert labels(nav_items({"report.view"}, "/")) == [HOME, ["รายงานและสถิติ"]]
     assert nav_items(set(), "/") == []
     assert labels(nav_items({"users.manage"}, "/")) == [HOME, ["ผู้ใช้งาน", "การแจ้งเตือน"]]
     assert labels(nav_items({"criteria.manage"}, "/")) == [HOME, ["เกณฑ์ความเสี่ยง", "ฟิลด์เพิ่มเติม", "ระดับความรุนแรงการบาดเจ็บ", "ตั้งค่า CAPA"]]

@@ -65,7 +65,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             return redirect(app.config["HUB_URL"])
         return None
 
-    from .views import (api, criteria, custom_fields, hazards, home, master, notifications, notify_admin, overview, pages, profile, search, injury_admin, incidents, patrol_admin, patrols, capas,
+    from .views import (api, criteria, custom_fields, hazards, home, master, notifications, notify_admin, overview, pages, profile, search, injury_admin, incidents, patrol_admin, patrols, capas, reports,
                         roles, sso, users)
     app.register_blueprint(notify_admin.bp)
     app.register_blueprint(search.bp)
@@ -74,6 +74,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.register_blueprint(patrol_admin.bp)
     app.register_blueprint(patrols.bp)
     app.register_blueprint(capas.bp)
+    app.register_blueprint(reports.bp)
     app.register_blueprint(notifications.bp)
     app.register_blueprint(profile.bp)
     app.register_blueprint(overview.bp)

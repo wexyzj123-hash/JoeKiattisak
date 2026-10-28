@@ -1,0 +1,30 @@
+{% extends "layout.html" %}
+{% block title %}{{ rep.title }} · Safety 4.0{% endblock %}
+{% block body %}
+{% set q = '?' ~ ({'year': year, 'month': month, 'department_id': dept or ''} | urlencode) %}
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+  <div><h1 style="margin-bottom:0">{{ rep.title }}</h1><p class="muted" style="margin:4px 0 0">{{ rep.subtitle }} · {{ rep.period_label }}</p></div>
+  {% if can_export %}<div style="display:flex;gap:8px"><a class="btn" href="/reports/{{ key }}/xlsx{{ q }}">ส่งออก Excel</a><a class="btn" href="/reports/{{ key }}/pdf{{ q }}">ส่งออก PDF</a></div>{% endif %}
+</div>
+{% if key != 'capa' %}
+<form method="get" class="card" style="max-width:none;margin:16px 0;display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+  <label>ปี (ค.ศ.) <select name="year">{% for y in years %}<option value="{{ y }}" {{ 'selected' if y == year }}>{{ y }}</option>{% endfor %}</select></label>
+  {% if key == 'monthly' %}
+  <label>เดือน <select name="month">{% for m in months %}<option value="{{ loop.index }}" {{ 'selected' if loop.index == month }}>{{ m }}</option>{% endfor %}</select></label>
+  <label>แผนก <select name="department_id"><option value="">ทุกแผนกในขอบเขต</option>{% for d in departments %}<option value="{{ d['id'] }}" {{ 'selected' if d['id'] == dept }}>{{ d['factory'] }} / {{ d['name_th'] }}</option>{% endfor %}</select></label>
+  {% endif %}
+  <button type="submit">แสดงรายงาน</button>
+</form>
+{% endif %}
+{% if rep.kpis %}<div class="kpis" style="margin-top:16px">
+  {% for k in rep.kpis %}<div class="kpi"><span class="kpi-n">{{ k.value }}</span><span class="kpi-l">{{ k.label }}{% if k.note %} · {{ k.note }}{% endif %}</span></div>{% endfor %}
+</div>{% endif %}
+{% for t in rep.tables %}
+<section class="card dash-card" style="max-width:none;margin:16px 0 0"><h2>{{ t.title }}</h2>
+  {% if t.rows %}<div class="table-wrap"><table class="table-stack" style="width:100%"><tr>{% for c in t.columns %}<th>{{ c }}</th>{% endfor %}</tr>
+    {% for row in t.rows %}<tr>{% for v in row %}<td>{{ v }}</td>{% endfor %}</tr>{% endfor %}</table></div>
+  {% else %}<div class="empty-state">{{ mascot('thinking', 72, decorative=True) }}<p>{{ t.empty_text }}</p></div>{% endif %}
+</section>
+{% endfor %}
+<p class="muted" style="margin-top:12px">จัดทำเมื่อ {{ rep.generated_at }}</p>
+{% endblock %}

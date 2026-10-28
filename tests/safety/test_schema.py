@@ -33,7 +33,8 @@ def test_default_roles_seeded_with_admin_all_permissions(tmp_path):
     assert set(PERMISSIONS) == {"master.view", "master.edit", "users.manage", "roles.manage", "hazard.report",
                                 "hazard.assess", "hazard.assign", "hazard.close", "criteria.manage",
                                 "incident.report", "incident.investigate", "incident.close",
-                                "patrol.manage", "patrol.perform", "patrol.view", "capa.create", "capa.verify"}
+                                "patrol.manage", "patrol.perform", "patrol.view", "capa.create", "capa.verify",
+                                "report.view", "report.export", "report.manage"}
 
 
 def test_seed_does_not_overwrite_edited_role(tmp_path):

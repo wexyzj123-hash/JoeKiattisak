@@ -36,6 +36,9 @@ MENU = (
         ("ตรวจความปลอดภัย (Safety Patrol)", "/patrols", "clipboard", "patrol.perform|patrol.view"),
         ("CAPA", "/capas", "check", "capa.create|capa.verify|hazard.report|incident.report|patrol.perform"),
     )),
+    ("รายงาน & สถิติ", (
+        ("รายงานและสถิติ", "/reports", "overview", "report.view"),
+    )),
     ("ข้อมูลองค์กร", (
         ("โรงงาน", "/master/factories", "building", "master.view"),
         ("แผนก", "/master/departments", "layers", "master.view"),

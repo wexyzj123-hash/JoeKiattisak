@@ -51,11 +51,11 @@ CREATE TABLE IF NOT EXISTS safety_roles (
 DEFAULT_ROLES = (
     ("admin", "ผู้ดูแลระบบ", ",".join(PERMISSIONS)),
     ("assessor", "ผู้ประเมิน/จป.", "master.view,hazard.report,hazard.assess,hazard.assign,hazard.close,"
-                                  "incident.report,incident.investigate,incident.close,patrol.perform,patrol.view,capa.create,capa.verify"),
+                                  "incident.report,incident.investigate,incident.close,patrol.perform,patrol.view,capa.create,capa.verify,report.view,report.export,report.manage"),
     ("dept_head", "หัวหน้าหน่วยงาน", "master.view,hazard.report,hazard.assign,hazard.close,incident.report,incident.investigate,"
-                                     "patrol.view,capa.create"),
+                                     "patrol.view,capa.create,report.view,report.export"),
     ("reporter", "ผู้แจ้ง", "hazard.report,incident.report"),
-    ("viewer", "ผู้ดูข้อมูล", "master.view"),
+    ("viewer", "ผู้ดูข้อมูล", "master.view,report.view"),
 )
 
 

@@ -19,6 +19,9 @@ PERMISSIONS: dict[str, str] = {
     "patrol.view": "ดูผลการตรวจทั้งหมดในขอบเขต",
     "capa.create": "สร้าง/มอบหมาย CAPA",
     "capa.verify": "ยืนยันผล CAPA",
+    "report.view": "ดูรายงานและสถิติ",
+    "report.export": "ส่งออกรายงาน Excel/PDF และบันทึกการส่งรายงาน",
+    "report.manage": "จัดการกำหนดส่งรายงาน",
 }
 
 
