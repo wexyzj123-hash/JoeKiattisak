@@ -5,6 +5,10 @@
   <h1>{{ 'แก้ไข' if row else 'เพิ่ม' }}{{ td.label_th }}</h1>
   {% for e in errors %}<div class="flash">{{ e }}</div>{% endfor %}
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  {% if td.parent %}<label>{{ td.parent.label_th }}
+    <select name="{{ td.parent.column }}" required><option value="">— เลือก —</option>
+      {% for p in parents %}<option value="{{ p['id'] }}" {{ 'selected' if p['id'] == selected }}>{{ p['name_th'] }} ({{ p['code'] }})</option>{% endfor %}
+    </select></label>{% endif %}
   <label>รหัส <input name="code" value="{{ values.get('code', '') }}" required maxlength="32"></label>
   <label>ชื่อ <input name="name_th" value="{{ values.get('name_th', '') }}" required maxlength="200"></label>
   <label>อธิบาย <input name="description" value="{{ values.get('description', '') }}" maxlength="1000"></label>

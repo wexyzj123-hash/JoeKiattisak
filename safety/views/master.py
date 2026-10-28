@@ -4,7 +4,7 @@ from __future__ import annotations
 from flask import Blueprint, abort, g, redirect, render_template, request
 
 from ..db import get_db
-from ..master import REGISTRY, get_row, list_rows, save_row, toggle_row
+from ..master import REGISTRY, active_options, get_row, list_rows, parent_td, save_row, toggle_row
 from ..perms import permission_required, user_permissions
 
 bp = Blueprint("master", __name__, url_prefix="/master")
@@ -46,7 +46,15 @@ def _form(td, row_id=None):
         if not errors:
             return redirect(f"/master/{td.slug}")
     values = request.form if request.method == "POST" else (row or {})
-    return render_template("master_form.html", td=td, row=row, values=values, errors=errors)
+    parents, selected = [], None
+    if td.parent:
+        parents = list(active_options(db, parent_td(td)))
+        selected = _int(values.get(td.parent.column), 0)
+        if row is not None and selected and all(p["id"] != selected for p in parents):   # แม่เดิมที่ถูกปิดแล้ว ยังแสดงให้เห็น
+            cur = db.execute(f"SELECT id, code, name_th FROM {td.parent.table} WHERE id=?", (selected,)).fetchone()
+            parents = ([cur] if cur else []) + parents
+    return render_template("master_form.html", td=td, row=row, values=values, errors=errors,
+                           parents=parents, selected=selected)
 
 
 @bp.route("/<slug>/new", methods=["GET", "POST"])

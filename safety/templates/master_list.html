@@ -12,11 +12,11 @@
 </form>
 <div class="card" style="max-width:none;margin:0;overflow-x:auto">
 <table style="width:100%;border-collapse:collapse">
-  <tr><th>ลำดับ</th>{{ th('code', 'รหัส') }}{{ th('name_th', 'ชื่อ') }}<th>อธิบาย</th>{{ th('active', 'สถานะ') }}{{ th('creator', 'ผู้บันทึก') }}<th>ดำเนินการ</th></tr>
+  <tr><th>ลำดับ</th>{{ th('code', 'รหัส') }}{{ th('name_th', 'ชื่อ') }}{% if td.parent %}{{ th('parent', td.parent.label_th) }}{% endif %}<th>อธิบาย</th>{{ th('active', 'สถานะ') }}{{ th('creator', 'ผู้บันทึก') }}<th>ดำเนินการ</th></tr>
   {% for r in page.rows %}
   <tr>
     <td>{{ (page.page - 1) * page.per_page + loop.index }}</td>
-    <td>{{ r['code'] }}</td><td>{{ r['name_th'] }}</td><td>{{ r['description'] }}</td>
+    <td>{{ r['code'] }}</td><td>{{ r['name_th'] }}</td>{% if td.parent %}<td>{{ r['parent_name'] or '' }}</td>{% endif %}<td>{{ r['description'] }}</td>
     <td>{{ 'ใช้งาน' if r['active'] else 'ปิดใช้งาน' }}</td><td>{{ r['creator'] or '' }}</td>
     <td>{% if can_edit %}
       <a href="/master/{{ td.slug }}/{{ r['id'] }}/edit">แก้ไข</a>
@@ -25,7 +25,7 @@
         <button type="submit">{{ 'ปิดใช้งาน' if r['active'] else 'เปิดใช้งาน' }}</button></form>
     {% endif %}</td>
   </tr>
-  {% else %}<tr><td colspan="7">ไม่พบข้อมูล</td></tr>{% endfor %}
+  {% else %}<tr><td colspan="8">ไม่พบข้อมูล</td></tr>{% endfor %}
 </table>
 </div>
 <nav style="display:flex;gap:6px;margin-top:12px">
