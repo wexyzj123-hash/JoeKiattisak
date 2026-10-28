@@ -67,17 +67,19 @@ def sanitize_name(filename: str) -> str:
 
 
 # ตาราง/คอลัมน์ที่อนุญาตเท่านั้น (ชื่อ scope ไม่เคยถูกต่อเข้า SQL ตรง ๆ)
-SCOPES = {"hazard": ("hazard_attachments", "hazard_id", ""), "incident": ("incident_attachments", "incident_id", "incident-")}
+SCOPES = {"hazard": ("hazard_attachments", "hazard_id", "", True), "incident": ("incident_attachments", "incident_id", "incident-", True),
+          "patrol": ("patrol_attachments", "answer_id", "patrol-", False)}          # รูปของรอบตรวจผูกกับข้อคำตอบ ไม่มีประเภทก่อน/หลัง
 
 
 def save_attachment(db, upload_root: str, owner_id: int, kind: str, filename: str, data: bytes, user_id: int,
                     scope: str = "hazard") -> int:
     if scope not in SCOPES:
         raise ValueError("unknown attachment scope")
-    table, fk, prefix = SCOPES[scope]
-    if kind not in KINDS:
+    table, fk, prefix, has_kind = SCOPES[scope]
+    if has_kind and kind not in KINDS:
         raise ImageError("ประเภทรูปภาพไม่ถูกต้อง")
-    used = db.execute(f"SELECT COUNT(*) FROM {table} WHERE {fk}=? AND kind=?", (owner_id, kind)).fetchone()[0]
+    used = db.execute(f"SELECT COUNT(*) FROM {table} WHERE {fk}=?" + (" AND kind=?" if has_kind else ""),
+                      (owner_id, kind) if has_kind else (owner_id,)).fetchone()[0]
     if used >= MAX_PER_KIND:
         raise ImageError(f"แนบรูปได้ไม่เกิน {MAX_PER_KIND} รูปต่อประเภท")
     jpeg = process_image(data)
@@ -88,8 +90,12 @@ def save_attachment(db, upload_root: str, owner_id: int, kind: str, filename: st
     with open(path, "xb") as fh:
         fh.write(jpeg)
     try:
-        cur = db.execute(f"INSERT INTO {table}({fk}, kind, stored_name, orig_name, size, uploaded_by) "
-                         "VALUES(?,?,?,?,?,?)", (owner_id, kind, stored, sanitize_name(filename), len(jpeg), user_id))
+        if has_kind:
+            cur = db.execute(f"INSERT INTO {table}({fk}, kind, stored_name, orig_name, size, uploaded_by) "
+                             "VALUES(?,?,?,?,?,?)", (owner_id, kind, stored, sanitize_name(filename), len(jpeg), user_id))
+        else:
+            cur = db.execute(f"INSERT INTO {table}({fk}, stored_name, orig_name, size, uploaded_by) "
+                             "VALUES(?,?,?,?,?)", (owner_id, stored, sanitize_name(filename), len(jpeg), user_id))
         db.commit()
     except Exception:
         db.rollback()

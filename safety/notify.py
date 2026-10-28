@@ -48,7 +48,7 @@ def _split(text) -> list[str]:
     return [p.strip() for p in str(text or "").split(",") if p.strip()]
 
 
-def recipients_for(db, rule, hazard, actor_id: int | None) -> list:
+def recipients_for(db, rule, hazard, actor_id: int | None, owner_fallback_role: str | None = None) -> list:
     """ผู้ใช้ที่ใช้งานอยู่ตามกฎ: reporter / owner / role:<key> (เฉพาะผู้ที่ขอบเขตครอบคลุมรายการ); ไม่รวมผู้กระทำเอง ไม่ซ้ำ"""
     found: dict[int, object] = {}
 
@@ -61,7 +61,13 @@ def recipients_for(db, rule, hazard, actor_id: int | None) -> list:
         if kind == "reporter":
             add(get(hazard["reported_by"]))
         elif kind == "owner":
-            add(get(hazard["owner_id"]))
+            owner = get(hazard["owner_id"])
+            if owner is None and owner_fallback_role:                        # ไม่มีผู้ตรวจประจำแผน → ผู้ที่มีบทบาทนี้ในขอบเขต
+                for u in db.execute("SELECT * FROM safety_users WHERE role=? AND active=1 ORDER BY id", (owner_fallback_role,)):
+                    if user_in_scope(db, u, hazard["risk_area_id"]):
+                        add(u)
+            else:
+                add(owner)
         elif kind.startswith("role:"):
             for u in db.execute("SELECT * FROM safety_users WHERE role=? AND active=1 ORDER BY id", (kind[5:],)):
                 if user_in_scope(db, u, hazard["risk_area_id"]):
@@ -100,7 +106,7 @@ def _stage(event: str, hazard, offset_days: int | None) -> str:
 
 
 def _rule_matches(rule, event: str, hazard, offset_days: int | None) -> bool:
-    if event in ("due_soon", "overdue") and rule["offset_days"] != offset_days:
+    if event in ("due_soon", "overdue", "capa_due_soon", "capa_overdue", "patrol_due", "patrol_overdue") and rule["offset_days"] != offset_days:
         return False
     if event == "hazard_assessed" and rule["min_score"] is not None:
         return hazard["score"] is not None and hazard["score"] >= rule["min_score"]
@@ -113,7 +119,8 @@ def _queue_external(db, channel: str, target: str, title: str, body: str, urgent
 
 
 def _write_rows(db, event: str, rec, title: str, body: str, stage: str, ref: str, link: str, hazard_id, incident_id,
-                actor_id, offset_days, urgent_base: bool, require_any: frozenset = frozenset()) -> int:
+                actor_id, offset_days, urgent_base: bool, require_any: frozenset = frozenset(), allow_ids: frozenset = frozenset(),
+                owner_fallback_role: str | None = None) -> int:
     """เขียนแถวแจ้งเตือน/คิวส่งตามกฎของเหตุการณ์ (ใช้ร่วมกันระหว่างอันตรายและอุบัติเหตุ); คืนจำนวนแถวในระบบที่สร้างใหม่"""
     created = 0
     for rule in db.execute("SELECT * FROM notify_rules WHERE event=? AND enabled=1 ORDER BY id", (event,)).fetchall():
@@ -121,9 +128,9 @@ def _write_rows(db, event: str, rec, title: str, body: str, stage: str, ref: str
             continue
         key = f"{event}:{ref}:{rule['id']}:{stage}"
         channels = set(_split(rule["channels"]))
-        urgent = int(urgent_base or (event == "overdue" and rule["offset_days"] >= 3))
-        for user in recipients_for(db, rule, rec, actor_id):
-            if require_any and not (require_any & user_permissions(db, user)):
+        urgent = int(urgent_base or (event in ("overdue", "capa_overdue") and rule["offset_days"] >= 3))
+        for user in recipients_for(db, rule, rec, actor_id, owner_fallback_role):
+            if require_any and user["id"] not in allow_ids and not (require_any & user_permissions(db, user)):
                 continue                                       # ไม่แจ้งคนที่เปิดรายการนี้ไม่ได้ (ลิงก์จะ 404)
             note_id = None
             if "inapp" in channels:
@@ -209,6 +216,94 @@ def emit_incident(db, event: str, incident_id: int, actor_id: int | None) -> int
         return created
     except Exception:                                              # noqa: BLE001
         log.exception("emit_incident(%s, incident=%s) failed; rolled back", event, incident_id)
+        db.execute("ROLLBACK TO notify")
+        db.execute("RELEASE notify")
+        return 0
+
+
+# ---------- CAPA และ Safety Patrol ----------
+def render_capa_message(event: str, capa, extra: Mapping | None = None) -> tuple[str, str]:
+    """ข้อความแจ้งเตือน CAPA: รหัส หัวข้อ พื้นที่ กำหนดส่ง เท่านั้น — ไม่คัดลอกข้อความอิสระ (หมายเหตุ/รายละเอียด)"""
+    extra = extra or {}
+    code, title = clean(capa["code"], 40), clean(capa["title"], FIELD_MAX)
+    where = f" · พื้นที่ {clean(extra.get('area'), FIELD_MAX)}" if extra.get("area") else ""
+    due = f" · ครบกำหนด {clean(capa['due_date'], 10)}"
+    days = extra.get("days")
+    head, tail = {
+        "capa_assigned": (f"มอบหมาย CAPA {code}", f"{title}{due}{where}"),
+        "capa_done": (f"CAPA ดำเนินการเสร็จ รอยืนยัน {code}", f"{title}{where}"),
+        "capa_verified": (f"CAPA ยืนยันผลแล้ว {code}", f"{title}{where}"),
+        "capa_reopened": (f"CAPA ถูกตีกลับให้แก้ไข {code}", f"{title}{due}{where}"),
+        "capa_due_soon": (f"CAPA ใกล้ครบกำหนด {code} (อีก {days} วัน)", f"{title}{due}{where}"),
+        "capa_overdue": (f"CAPA เกินกำหนด {code} ({days} วัน)", f"{title}{due}{where}"),
+    }.get(event, (f"แจ้งเตือน CAPA {code}", title))
+    return clean(head, TITLE_MAX), clean(tail, BODY_MAX)
+
+
+def render_patrol_message(event: str, plan, extra: Mapping | None = None) -> tuple[str, str]:
+    extra = extra or {}
+    name = clean(extra.get("checklist"), FIELD_MAX)
+    where = f" · พื้นที่ {clean(extra.get('area'), FIELD_MAX)}" if extra.get("area") else ""
+    due = clean(extra.get("due"), 10)
+    days = extra.get("days")
+    head, tail = {
+        "patrol_due": (f"ถึงรอบตรวจความปลอดภัย: {name}", f"ครบกำหนด {due}{where}"),
+        "patrol_overdue": (f"เลยรอบตรวจความปลอดภัย {days} วัน: {name}", f"ครบกำหนด {due}{where}"),
+    }.get(event, (f"แจ้งเตือนการตรวจ: {name}", f"{due}{where}"))
+    return clean(head, TITLE_MAX), clean(tail, BODY_MAX)
+
+
+def emit_capa(db, event: str, capa_id: int, actor_id: int | None, *, offset_days: int | None = None, days: int | None = None) -> int:
+    """แจ้งเตือนเหตุการณ์ของ CAPA ตามกฎ; สัญญาเดียวกับ emit (SAVEPOINT, ไม่ throw, ไม่ commit)"""
+    if event not in NOTIFY_EVENTS or not event.startswith("capa_"):
+        return 0
+    db.execute("SAVEPOINT notify")
+    try:
+        capa = db.execute("SELECT c.*, c.created_by AS reported_by FROM capas c WHERE c.id=?", (capa_id,)).fetchone()
+        if capa is None:
+            db.execute("RELEASE notify")
+            return 0
+        area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (capa["risk_area_id"],)).fetchone()
+        title, body = render_capa_message(event, capa, {"area": area[0] if area else "", "days": days if days is not None else offset_days})
+        if event in ("capa_due_soon", "capa_overdue"):
+            stage = str(offset_days)
+        elif event == "capa_assigned":
+            stage = f"{capa['owner_id']}:{capa['due_date']}"
+        elif event in ("capa_done", "capa_reopened"):
+            stage = str(capa["reopen_count"])
+        else:
+            stage = "1"
+        created = _write_rows(db, event, capa, title, body, stage, f"c{capa_id}", f"/capas/{capa_id}", None, None, actor_id, offset_days, False,
+                              frozenset({"capa.create", "capa.verify"}), frozenset({capa["owner_id"], capa["created_by"]}))
+        db.execute("RELEASE notify")
+        return created
+    except Exception:                                              # noqa: BLE001
+        log.exception("emit_capa(%s, capa=%s) failed; rolled back", event, capa_id)
+        db.execute("ROLLBACK TO notify")
+        db.execute("RELEASE notify")
+        return 0
+
+
+def emit_patrol(db, event: str, plan_id: int, actor_id: int | None, *, offset_days: int | None = None, days: int | None = None, due: str = "") -> int:
+    """แจ้งเตือนครบรอบ/เลยรอบตรวจของแผนการตรวจ (ผู้ตรวจประจำแผน หรือผู้ประเมินในขอบเขตถ้าไม่ได้กำหนด)"""
+    if event not in NOTIFY_EVENTS or not event.startswith("patrol_"):
+        return 0
+    db.execute("SAVEPOINT notify")
+    try:
+        plan = db.execute("SELECT p.*, p.inspector_id AS owner_id, p.created_by AS reported_by FROM patrol_plans p WHERE p.id=?", (plan_id,)).fetchone()
+        if plan is None:
+            db.execute("RELEASE notify")
+            return 0
+        area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (plan["risk_area_id"],)).fetchone()
+        cl = db.execute("SELECT name_th FROM checklists WHERE id=?", (plan["checklist_id"],)).fetchone()
+        title, body = render_patrol_message(event, plan, {"area": area[0] if area else "", "checklist": cl[0] if cl else "", "due": due,
+                                                          "days": days if days is not None else offset_days})
+        created = _write_rows(db, event, plan, title, body, f"{due}:{offset_days}", f"p{plan_id}", f"/patrols?plan={plan_id}", None, None, actor_id,
+                              offset_days, False, frozenset({"patrol.perform", "patrol.view"}), frozenset(), "assessor")
+        db.execute("RELEASE notify")
+        return created
+    except Exception:                                              # noqa: BLE001
+        log.exception("emit_patrol(%s, plan=%s) failed; rolled back", event, plan_id)
         db.execute("ROLLBACK TO notify")
         db.execute("RELEASE notify")
         return 0
