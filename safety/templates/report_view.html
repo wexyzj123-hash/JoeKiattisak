@@ -19,6 +19,13 @@
 {% if rep.kpis %}<div class="kpis" style="margin-top:16px">
   {% for k in rep.kpis %}<div class="kpi"><span class="kpi-n">{{ k.value }}</span><span class="kpi-l">{{ k.label }}{% if k.note %} · {{ k.note }}{% endif %}</span></div>{% endfor %}
 </div>{% endif %}
+{% if can_export %}
+<form method="post" action="/reports/{{ key }}/submit" class="card" style="max-width:none;margin:16px 0 0;display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="year" value="{{ year }}"><input type="hidden" name="month" value="{{ month }}"><input type="hidden" name="department_id" value="{{ dept or '' }}">
+  <label style="flex:1;min-width:200px">หมายเหตุการส่งรายงาน (ไม่บังคับ) <input name="note" maxlength="500"></label>
+  <button type="submit">บันทึกว่าส่งรายงานงวดนี้แล้ว</button>
+</form>
+{% endif %}
 {% for t in rep.tables %}
 <section class="card dash-card" style="max-width:none;margin:16px 0 0"><h2>{{ t.title }}</h2>
   {% if t.rows %}<div class="table-wrap"><table class="table-stack" style="width:100%"><tr>{% for c in t.columns %}<th>{{ c }}</th>{% endfor %}</tr>

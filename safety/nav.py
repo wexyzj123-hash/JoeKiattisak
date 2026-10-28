@@ -53,6 +53,7 @@ MENU = (
         ("ระดับความรุนแรงการบาดเจ็บ", "/admin/injury-severities", "sliders", "criteria.manage"),
         ("แบบตรวจความปลอดภัย", "/admin/checklists", "clipboard", "patrol.manage"),
         ("แผนการตรวจ", "/admin/patrol-plans", "clock", "patrol.manage"),
+        ("กำหนดส่งรายงาน", "/admin/report-due", "clock", "report.manage"),
         ("ตั้งค่า CAPA", "/admin/capa-settings", "sliders", "criteria.manage"),
         ("การแจ้งเตือน", "/admin/notifications", "bell", "users.manage"),
     )),

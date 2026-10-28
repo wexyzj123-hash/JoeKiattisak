@@ -59,6 +59,36 @@ DEFAULT_ROLES = (
 )
 
 
+REPORT_DDL = """
+CREATE TABLE IF NOT EXISTS report_due (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    report_key    TEXT NOT NULL CHECK (report_key IN ('monthly','annual','incidents','capa')),
+    department_id INTEGER REFERENCES departments(id),
+    frequency     TEXT NOT NULL CHECK (frequency IN ('monthly','yearly')),
+    due_day       INTEGER NOT NULL CHECK (due_day BETWEEN 1 AND 28),
+    due_month     INTEGER CHECK (due_month IS NULL OR due_month BETWEEN 1 AND 12),
+    active        INTEGER NOT NULL DEFAULT 1,
+    created_by    INTEGER REFERENCES safety_users(id),
+    created_at    TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_report_due_active ON report_due(report_key, COALESCE(department_id, 0), frequency) WHERE active = 1;
+CREATE TABLE IF NOT EXISTS report_submissions (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    report_key    TEXT NOT NULL CHECK (report_key IN ('monthly','annual','incidents','capa')),
+    department_id INTEGER REFERENCES departments(id),
+    period        TEXT NOT NULL,
+    submitted_by  INTEGER NOT NULL REFERENCES safety_users(id),
+    submitted_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    note          TEXT NOT NULL DEFAULT ''
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_report_submission ON report_submissions(report_key, COALESCE(department_id, 0), period);
+CREATE TRIGGER IF NOT EXISTS report_submissions_no_update BEFORE UPDATE ON report_submissions
+BEGIN SELECT RAISE(ABORT, 'report_submissions is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS report_submissions_no_delete BEFORE DELETE ON report_submissions
+BEGIN SELECT RAISE(ABORT, 'report_submissions is append-only'); END;
+"""
+
+
 def seed_roles(con) -> None:
     """ใส่บทบาทตั้งต้น 5 บทบาทเมื่อยังไม่มี (ไม่ทับที่แอดมินแก้แล้ว)"""
     for key, name, perms in DEFAULT_ROLES:
@@ -590,7 +620,7 @@ def ensure_schema(con) -> None:
     _add_column(con, "safety_users", "line_user_id", "TEXT")
     _add_column(con, "safety_users", "email", "TEXT")
     _add_column(con, "safety_users", "notify_channels", "TEXT NOT NULL DEFAULT 'inapp'")
-    con.executescript(MASTER_DDL + ROLES_DDL + RISK_DDL + HAZARD_DDL + CUSTOM_DDL + NOTIFY_DDL + INCIDENT_DDL + PATROL_DDL + CAPA_DDL)
+    con.executescript(MASTER_DDL + ROLES_DDL + RISK_DDL + HAZARD_DDL + CUSTOM_DDL + NOTIFY_DDL + INCIDENT_DDL + PATROL_DDL + CAPA_DDL + REPORT_DDL)
     _add_column(con, "notifications", "incident_id", "INTEGER")
     _add_column(con, "hazards", "patrol_answer_id", "INTEGER")
     con.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_hazards_patrol_answer ON hazards(patrol_answer_id) WHERE patrol_answer_id IS NOT NULL")
