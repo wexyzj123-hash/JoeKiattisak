@@ -1,0 +1,60 @@
+/* hub/assets/scene.css — ภาพเคลื่อนไหว 3 โซนที่หน้าเข้าสู่ระบบและหน้าเลือกระบบ (ภาพประกอบล้วน ไม่มีข้อมูลจริง)
+   ทุกการเคลื่อนไหวทำเป็นวง ๆ ช้า ๆ เพื่อเป็นบรรยากาศ ไม่ดึงสายตาจากฟอร์ม; ปิดทั้งหมดเมื่อผู้ใช้ตั้งค่าลดการเคลื่อนไหว */
+.tz-wrap { margin: 0; }
+.tz { display: block; width: 100%; height: auto; border-radius: 14px; box-shadow: 0 0 0 1px rgba(143, 208, 255, .25); }
+.tz-legend { list-style: none; margin: 10px 0 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; font-size: .92rem; }
+.tz-legend li { display: flex; align-items: flex-start; gap: 8px; min-width: 0; line-height: 1.3; }
+.tz-legend i { flex: none; width: 10px; height: 10px; margin-top: .35em; border-radius: 50%; }
+.tz-legend b { font-weight: 700; }
+.tz-legend small { display: block; opacity: .85; }
+.tz-a i { background: #ffb81c; box-shadow: 0 0 10px #ffb81c; } .tz-g i { background: #3fd49a; box-shadow: 0 0 10px #3fd49a; } .tz-c i { background: #3cc8ff; box-shadow: 0 0 10px #3cc8ff; }
+
+.tz-twinkle { animation: tz-twinkle 3.6s ease-in-out infinite; animation-delay: var(--d, 0s); }
+.tz-cloud { animation: tz-drift var(--t, 80s) linear infinite; animation-delay: var(--d, 0s); }
+.tz-spin { animation: tz-spin var(--t, 10s) linear infinite; }
+.tz-rev { animation-direction: reverse; }
+.tz-ring { animation: tz-ring 3.6s ease-out infinite; animation-delay: var(--d, 0s); }
+.tz-shield { animation: tz-breathe 4s ease-in-out infinite; }
+.tz-check { stroke-dasharray: 1; stroke-dashoffset: 0; animation: tz-check 5s ease-in-out infinite; }
+.tz-lamp { opacity: .18; animation: tz-lamp 3.6s steps(1, end) infinite; }
+.tz-lamp-0 { animation-delay: 0s; } .tz-lamp-1 { animation-delay: 1.2s; } .tz-lamp-2 { animation-delay: 2.4s; }
+.tz-sway { animation: tz-sway 4.2s ease-in-out infinite alternate; animation-delay: var(--d, 0s); }
+.tz-drop { animation: tz-drop 2.4s ease-in infinite; animation-delay: var(--d, 0s); opacity: 0; }
+.tz-leaf { animation: tz-leaf 11s ease-in-out infinite; animation-delay: var(--d, 0s); }
+.tz-flow { stroke-dasharray: 8 16; animation: tz-flow 1.4s linear infinite; }
+.tz-pipe { stroke-dasharray: 18 22; animation-duration: 2.2s; }
+.tz-bolt { animation: tz-bolt 3s ease-in-out infinite; filter: drop-shadow(0 0 8px rgba(255, 210, 63, .8)); }
+.tz-bubble { animation: tz-rise 4.5s ease-out infinite; animation-delay: var(--d, 0s); opacity: 0; }
+
+@keyframes tz-twinkle { 0%, 100% { opacity: .25; } 50% { opacity: 1; } }
+@keyframes tz-drift { from { transform: translateX(-160px); } to { transform: translateX(1360px); } }
+@keyframes tz-spin { to { transform: rotate(360deg); } }
+@keyframes tz-ring { 0% { transform: scale(.7); opacity: .65; } 100% { transform: scale(1.55); opacity: 0; } }
+@keyframes tz-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.035); } }
+@keyframes tz-check { 0%, 8% { stroke-dashoffset: 1; } 30%, 88% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: 0; } }
+@keyframes tz-lamp { 0% { opacity: 1; } 33.4% { opacity: .18; } 100% { opacity: .18; } }
+@keyframes tz-sway { from { transform: rotate(-2.6deg); } to { transform: rotate(2.6deg); } }
+@keyframes tz-drop { 0% { transform: translateY(0); opacity: 0; } 15% { opacity: .95; } 100% { transform: translateY(150px); opacity: 0; } }
+@keyframes tz-leaf { 0% { transform: translate(0, 0) rotate(0); opacity: 0; } 12% { opacity: 1; } 50% { transform: translate(90px, 70px) rotate(70deg); } 90% { opacity: 1; } 100% { transform: translate(190px, 150px) rotate(160deg); opacity: 0; } }
+@keyframes tz-flow { to { stroke-dashoffset: -24; } }
+@keyframes tz-bolt { 0%, 55%, 100% { opacity: 1; } 60% { opacity: .35; } 66% { opacity: 1; } 72% { opacity: .5; } 78% { opacity: 1; } }
+@keyframes tz-rise { 0% { transform: translateY(0) scale(.7); opacity: 0; } 20% { opacity: .9; } 100% { transform: translateY(-110px) scale(1.2); opacity: 0; } }
+
+/* หน้าเข้าสู่ระบบ: ภาพอยู่ใต้ข้อความ ในแผงแบรนด์ */
+.auth-brand .tz-wrap { width: 100%; max-width: 640px; margin-top: 8px; }
+.auth-brand .tz-legend { color: var(--shell-text); }
+
+/* หน้าเลือกระบบ: ภาพเป็นแถบเต็มความกว้างใต้คำทักทายในแผงหลัก */
+.hero.hero-scene { grid-template-columns: minmax(0, 1fr) auto; padding-bottom: 20px; }
+.hero-scene .tz-wrap { grid-column: 1 / -1; margin-top: 6px; }
+.hero-scene .hero-art { margin-bottom: 0; }
+.hero-scene .tz-legend { color: var(--shell-text); }
+
+@media (max-width: 640px) {
+  .tz-legend { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .hero-scene .hero-art { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tz *, .tz { animation: none !important; transition: none !important; }
+  .tz-lamp-0 { opacity: 1; } .tz-lamp-1, .tz-lamp-2 { opacity: .18; } .tz-drop, .tz-bubble, .tz-leaf { opacity: .8; }
+}

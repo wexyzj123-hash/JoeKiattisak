@@ -14,15 +14,16 @@
     </div>
   </details>
 </header>
-<main class="wrap">
+<main class="wrap wrap-wide">
 {% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
-<section class="hero">
+<section class="hero hero-scene">
   <div class="hero-text">
     <p class="hero-kicker">สวัสดี {{ g.user['name_th'] }}</p>
     <h1>เลือกระบบที่ต้องการใช้งาน</h1>
     <p>{{ 'มีรายการที่ต้องติดตาม — เปิดระบบที่มีตัวเลขแจ้งเตือนเพื่อดูรายละเอียด' if any_badge else 'เข้าสู่ระบบครั้งเดียว ใช้ได้ทุกระบบที่คุณมีสิทธิ์' }}</p>
   </div>
-  <div class="hero-art">{{ mascot('alert' if any_badge else 'default', 150, decorative=True) }}</div>
+  <div class="hero-art">{{ mascot('alert' if any_badge else 'default', 120, decorative=True) }}</div>
+  {% include "_scene_block.html" %}
 </section>
 <div class="tiles">
   {% for a in apps %}

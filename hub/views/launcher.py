@@ -50,6 +50,14 @@ def theme_css():
     return send_file(THEME_CSS, mimetype="text/css", max_age=3600)
 
 
+ASSETS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
+
+
+@bp.route("/static/hub/scene.css")
+def scene_css():
+    return send_file(os.path.join(ASSETS, "scene.css"), mimetype="text/css", max_age=300)
+
+
 @bp.route("/static/mascot/<name>")
 def mascot_file(name):
     """ภาพมาสคอตจริง (ถ้ามี) — เฉพาะชื่อท่าที่รู้จักและนามสกุล png/webp เท่านั้น"""
