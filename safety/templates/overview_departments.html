@@ -3,7 +3,7 @@
 {% block body %}
 <h1>ภาพรวมตามหน่วยงาน</h1>
 <div class="card" style="max-width:none;margin:0;overflow-x:auto">
-<table style="width:100%;border-collapse:collapse">
+<table class="table-stack" style="width:100%">
   <tr><th>โรงงาน</th><th>แผนก</th><th>เปิดอยู่</th><th>เกินกำหนด</th><th>ระดับสูงขึ้นไป</th></tr>
   {% for r in rows %}
   <tr><td>{{ r['factory'] }}</td><td>{{ r['department'] }}</td><td>{{ r['open'] }}</td>

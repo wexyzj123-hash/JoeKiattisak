@@ -48,7 +48,18 @@ const MEASURE = () => {
       if (!scrolls) offenders.push(el.tagName.toLowerCase() + (el.className && typeof el.className === 'string' ? '.' + el.className.split(' ')[0] : '') + ' right=' + Math.round(r.right));
     }
   });
-  return { scrollWidth: document.documentElement.scrollWidth, clientWidth: vw, innerWidth: window.innerWidth, offenders: offenders.slice(0, 6), contrastFails: fails.slice(0, 12), title: document.title };
+  const stack = { tables: 0, unlabeled: 0, narrowControls: [], outside: [] };
+  document.querySelectorAll('table.table-stack').forEach((t) => {
+    stack.tables++;
+    t.querySelectorAll('td').forEach((td) => { if (!td.hasAttribute('data-label') && !td.hasAttribute('colspan')) stack.unlabeled++; });
+    if (vw <= 640) t.querySelectorAll('input:not([type=hidden]):not([type=checkbox]):not([type=radio]), select, textarea, button').forEach((c) => {
+      const r = c.getBoundingClientRect(); if (r.width === 0) return;
+      const isField = c.tagName !== 'BUTTON';
+      if (isField && r.width < 120) stack.narrowControls.push((c.name || c.tagName) + '=' + Math.round(r.width));
+      if (r.right > vw + 1 || r.left < -1) stack.outside.push((c.name || c.tagName) + '@' + Math.round(r.right));
+    });
+  });
+  return { stack, scrollWidth: document.documentElement.scrollWidth, clientWidth: vw, innerWidth: window.innerWidth, offenders: offenders.slice(0, 6), contrastFails: fails.slice(0, 12), title: document.title };
 };
 
 (async () => {

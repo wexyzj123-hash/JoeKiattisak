@@ -124,7 +124,7 @@ SHOTS = os.environ.get("VISUAL_SHOTS")
 def results(world):
     if SHOTS:
         os.makedirs(SHOTS, exist_ok=True)
-    job = {"themes": ["dark", "light"], "viewports": [{"width": 390, "height": 844}, {"width": 1280, "height": 800}],
+    job = {"themes": ["dark", "light"], "viewports": [{"width": 320, "height": 640}, {"width": 390, "height": 844}, {"width": 768, "height": 900}, {"width": 1280, "height": 800}],
            "pages": pages(world), **({"shotDir": SHOTS} if SHOTS else {})}
     pages_out = run_job(job)["pages"]
     if os.environ.get("VISUAL_REPORT"):                       # เก็บผลดิบไว้วิเคราะห์ (ไม่กระทบการทดสอบ)
@@ -139,10 +139,19 @@ def test_every_page_loads_without_errors(results):
     assert {r["status"] for r in results if r["name"] != "sf-sso-error"} == {200}
 
 
-def test_no_horizontal_scroll_at_390px_on_key_pages(results):
-    bad = [(r["name"], r["theme"], r["scrollWidth"], r["clientWidth"], r["offenders"]) for r in results
-           if r["width"] == 390 and (r["scrollWidth"] > r["clientWidth"] + 1 or r["offenders"])]
+def test_no_horizontal_scroll_at_any_tested_width(results):
+    bad = [(r["name"], r["theme"], r["width"], r["scrollWidth"], r["clientWidth"], r["offenders"]) for r in results
+           if r["scrollWidth"] > r["clientWidth"] + 1 or r["offenders"]]
     assert not bad, bad
+
+
+def test_stacked_tables_are_labelled_and_controls_usable_on_narrow_screens(results):
+    assert sum(r["stack"]["tables"] for r in results) > 0
+    bad = [(r["name"], r["theme"], r["width"], r["stack"]) for r in results
+           if r["stack"]["unlabeled"] or r["stack"]["narrowControls"] or r["stack"]["outside"]]
+    assert not bad, json.dumps(bad, ensure_ascii=False)[:3000]
+    assert {r["name"] for r in results if r["stack"]["tables"]} >= {"sf-notify-admin", "sf-users", "sf-custom-fields", "sf-criteria",
+                                                                    "sf-hazards", "sf-factories", "hub-admin-users", "hub-admin-apps"}
 
 
 def test_measured_text_contrast_is_at_least_aa_in_both_themes(results):

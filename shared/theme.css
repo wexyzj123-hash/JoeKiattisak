@@ -75,6 +75,19 @@ table { border-collapse: collapse; }
 .heatmap th, .heatmap td { border: 0; padding: 0; }
 table th, table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
 
+/* ตารางที่ซ้อนเป็นการ์ดบนจอแคบ (ชื่อคอลัมน์ใส่ผ่าน data-label โดย theme.js) */
+.table-stack td { overflow-wrap: anywhere; }
+@media (max-width: 640px) {
+  .table-stack, .table-stack tbody { display: block; width: 100% !important; }
+  .table-stack tr.hrow { display: none; }
+  .table-stack tr { display: block; border: 1px solid var(--line); border-radius: 12px; padding: 6px 12px; margin: 0 0 10px; background: var(--panel); }
+  .table-stack td { display: grid; grid-template-columns: minmax(4.5rem, 6rem) minmax(0, 1fr); gap: 8px; align-items: start; border: 0; padding: 5px 0; }
+  .table-stack td[data-label]::before { content: attr(data-label); color: var(--muted); font-size: .85rem; }
+  .table-stack td:not([data-label]) { display: block; }
+  .table-stack td input:not([type="checkbox"]):not([type="radio"]), .table-stack td select, .table-stack td textarea { min-width: 120px; width: 100%; }
+  .table-stack td form { display: flex; flex-wrap: wrap; gap: 6px; }
+}
+
 /* ฉากต้อนรับ (เข้าสู่ระบบ) / หัวข้อทักทาย / สถานะว่าง / แบนเนอร์ */
 .scene { display: grid; justify-items: center; gap: 4px; margin: 6vh auto 16px; text-align: center; }
 .scene h1 { margin: 0; }

@@ -4,7 +4,7 @@
 <h1>ฟิลด์เพิ่มเติม</h1>
 <p style="color:var(--muted)">กำหนดข้อมูลเพิ่มเติมที่ต้องกรอกตอนบันทึกอันตราย แยกตามประเภทอันตราย (หรือใช้กับทุกประเภท) — รหัสและชนิดแก้ไม่ได้หลังสร้าง ปิดใช้งานได้ ข้อมูลเดิมยังแสดงอยู่</p>
 <div class="card" style="max-width:none;margin:0 0 16px;overflow-x:auto">
-<table style="width:100%;border-collapse:collapse">
+<table class="table-stack" style="width:100%">
   <tr><th>ประเภทอันตราย</th><th>รหัส</th><th>ชื่อ</th><th>ชนิด</th><th>ตัวเลือก</th><th>บังคับ</th><th>ลำดับ</th><th>สถานะ</th><th>ดำเนินการ</th></tr>
   {% for f in fields %}
   <tr>

@@ -3,7 +3,7 @@
 {% block body %}
 <p><a href="/">← กลับหน้ารวมระบบ</a> · <a href="/admin/apps">ทะเบียนระบบ</a></p>
 <h1>ผู้ใช้ของ Hub</h1>
-<div class="table-wrap"><table style="width:100%;border-collapse:collapse">
+<div class="table-wrap"><table class="table-stack" style="width:100%">
 <tr><th>ชื่อผู้ใช้</th><th>ชื่อ</th><th>บทบาท</th><th>สถานะ</th><th>ดำเนินการ</th></tr>
 {% for u in users %}
 <tr><td>{{ u['username'] }}</td><td>{{ u['name_th'] }}</td><td>{{ roles[u['role']] }}</td><td>{{ 'ใช้งาน' if u['active'] else 'ปิด' }}</td>

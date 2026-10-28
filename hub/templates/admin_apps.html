@@ -3,8 +3,8 @@
 {% block body %}
 <p><a href="/">← กลับหน้ารวมระบบ</a> · <a href="/admin/users">ผู้ใช้</a></p>
 <h1>ทะเบียนระบบ</h1>
-<div class="table-wrap"><table style="width:100%;border-collapse:collapse">
-<tr><th>รหัส</th><th>ชื่อ</th><th>ที่อยู่</th><th>จำกัดบทบาท</th><th>สถานะ</th><th></th></tr>
+<div class="table-wrap"><table class="table-stack" style="width:100%">
+<tr><th>รหัส</th><th>ชื่อ</th><th>ที่อยู่</th><th>จำกัดบทบาท</th><th>สถานะ</th><th>ดำเนินการ</th></tr>
 {% for a in apps %}
 <tr><td>{{ a['key'] }}</td><td>{{ a['name_th'] }}</td><td>{{ a['url'] }}</td><td>{{ roles.get(a['required_role'], 'ทุกคน') }}</td>
 <td>{{ 'ใช้งาน' if a['enabled'] else 'ปิด' }}</td>

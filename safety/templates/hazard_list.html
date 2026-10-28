@@ -20,7 +20,7 @@
   <button type="submit">ค้นหา</button>
 </form>
 <div class="card" style="max-width:none;margin:0;overflow-x:auto">
-<table style="width:100%;border-collapse:collapse">
+<table class="table-stack" style="width:100%">
   <tr>{{ th('code', 'รหัส') }}<th>หัวข้อ</th><th>พื้นที่</th>{{ th('score', 'ความเสี่ยง') }}{{ th('status', 'สถานะ') }}{{ th('due_date', 'ครบกำหนด') }}<th>ผู้แจ้ง</th><th>ผู้รับผิดชอบ</th>{{ th('reported_at', 'แจ้งเมื่อ') }}</tr>
   {% for r in rows %}
   <tr>

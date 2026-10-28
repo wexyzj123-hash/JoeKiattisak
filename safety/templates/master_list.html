@@ -11,7 +11,7 @@
   {% if can_edit %}<a class="btn" href="/master/{{ td.slug }}/new">+ เพิ่ม{{ td.label_th }}</a>{% endif %}
 </form>
 <div class="card" style="max-width:none;margin:0;overflow-x:auto">
-<table style="width:100%;border-collapse:collapse">
+<table class="table-stack" style="width:100%">
   <tr><th>ลำดับ</th>{{ th('code', 'รหัส') }}{{ th('name_th', 'ชื่อ') }}{% if td.parent %}{{ th('parent', td.parent.label_th) }}{% endif %}<th>อธิบาย</th>{{ th('active', 'สถานะ') }}{{ th('creator', 'ผู้บันทึก') }}<th>ดำเนินการ</th></tr>
   {% for r in page.rows %}
   <tr>
