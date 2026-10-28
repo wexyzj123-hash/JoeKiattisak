@@ -88,6 +88,16 @@
     <button type="submit">บันทึกรายชื่อ (แทนที่รายการเดิมทั้งหมด)</button>
   </form>
   {% endif %}
+  {% if actions.reclassify %}
+  <form method="post" action="/incidents/{{ i['id'] }}/reclassify" class="card" style="max-width:none;margin:0">
+    <h2>ปรับระดับความรุนแรงของการบาดเจ็บ</h2>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="version" value="{{ i['version'] }}">
+    <label>ระดับใหม่ <select name="injury_severity_id" required>{% for sv in severities %}<option value="{{ sv['id'] }}" {{ 'selected' if i['injury_severity_id'] == sv['id'] }}>{{ sv['name_th'] }}{{ ' (นับเป็นหยุดงาน)' if sv['counts_lost_time'] }}</option>{% endfor %}</select></label>
+    <label>จำนวนวันที่หยุดงาน (ต้องระบุถ้าเป็นระดับหยุดงาน) <input name="lost_days" inputmode="numeric" value="{{ i['lost_days'] if i['lost_days'] is not none else '' }}"></label>
+    <label>เหตุผล <input name="reason" maxlength="500" required></label>
+    <button type="submit">บันทึกการปรับระดับ</button>
+  </form>
+  {% endif %}
   {% if actions.reject %}
   <form method="post" action="/incidents/{{ i['id'] }}/reject" class="card" style="max-width:none;margin:0">
     <h2>ปฏิเสธรายการ</h2>

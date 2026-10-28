@@ -16,7 +16,7 @@ INCIDENT_STATUS_TH = {"reported": "แจ้งแล้ว", "investigating": "
                       "closed": "ปิดแล้ว", "rejected": "ปฏิเสธ"}
 INCIDENT_KIND_TH = {"accident": "อุบัติเหตุ", "near_miss": "Near Miss"}
 INCIDENT_EVENT_TH = {"reported": "แจ้งเหตุการณ์", "assigned": "มอบหมายผู้สอบสวน", "investigated": "บันทึกผลสอบสวน",
-                     "people_updated": "แก้ไขรายชื่อผู้เกี่ยวข้อง", "closed": "ปิดรายการ", "rejected": "ปฏิเสธรายการ"}
+                     "people_updated": "แก้ไขรายชื่อผู้เกี่ยวข้อง", "reclassified": "ปรับระดับความรุนแรง", "closed": "ปิดรายการ", "rejected": "ปฏิเสธรายการ"}
 PEOPLE_ROLES = {"injured": "ผู้บาดเจ็บ", "witness": "พยาน", "involved": "ผู้เกี่ยวข้อง"}
 OPEN_STATUSES = ("reported", "investigating", "actions_set")
 VIEW_ALL_PERMS = {"incident.investigate", "incident.close"}

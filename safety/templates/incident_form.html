@@ -24,14 +24,18 @@
     <label>ความรุนแรงที่อาจเกิด <select name="severity"><option value="">— เลือก —</option>{% for s in scales['severity'] %}<option value="{{ s['level'] }}" {{ 'selected' if values.get('severity', '') | string == s['level'] | string }}>{{ s['level'] }} — {{ s['label_th'] }}</option>{% endfor %}</select></label>
   </div>
   <fieldset style="border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;gap:10px"><legend>ผู้เกี่ยวข้อง (ข้อมูลส่วนบุคคล — เห็นได้เฉพาะผู้สอบสวนและผู้แจ้ง)</legend>
-    {% for n in range(slots) %}
+    {% macro slot(n) %}
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr));gap:8px">
       <label>ชื่อ-สกุล <input name="people_name_{{ n }}" value="{{ values.get('people_name_' ~ n, '') }}" maxlength="120"></label>
       <label>รหัสพนักงาน <input name="people_no_{{ n }}" value="{{ values.get('people_no_' ~ n, '') }}" maxlength="30"></label>
       <label>บทบาท <select name="people_role_{{ n }}">{% for k, v in people_roles.items() %}<option value="{{ k }}" {{ 'selected' if values.get('people_role_' ~ n, 'injured') == k }}>{{ v }}</option>{% endfor %}</select></label>
       <label>หมายเหตุ <input name="people_note_{{ n }}" value="{{ values.get('people_note_' ~ n, '') }}" maxlength="300"></label>
     </div>
-    {% endfor %}
+    {% endmacro %}
+    {% for n in range(visible_slots) %}{{ slot(n) }}{% endfor %}
+    <details><summary>เพิ่มผู้เกี่ยวข้องอีก (สูงสุด {{ slots }} คน)</summary>
+      <div style="display:grid;gap:10px;margin-top:10px">{% for n in range(visible_slots, slots) %}{{ slot(n) }}{% endfor %}</div>
+    </details>
   </fieldset>
   <label>รูปถ่ายที่เกิดเหตุ (ไม่เกิน {{ max_photos }} รูป, JPEG/PNG/WebP, รูปละไม่เกิน 10 MB)
     <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple capture="environment"></label>

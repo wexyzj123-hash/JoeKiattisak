@@ -178,3 +178,41 @@ def update_people(db, user, incident_id: int, form: Mapping) -> list[str]:
     add_event(db, inc["id"], user["id"], "people_updated", inc["status"], inc["status"], data={"count": len(people)})
     db.commit()
     return []
+
+
+def reclassify(db, user, incident_id: int, severity_id, reason: str, lost_days, expected_version: int | None = None) -> list[str]:
+    """ปรับระดับความรุนแรงของการบาดเจ็บหลังแจ้ง (เช่น ปฐมพยาบาล → หยุดงาน) พร้อมเหตุผลและประวัติ; ใช้ได้กับอุบัติเหตุที่ยังไม่ถูกปฏิเสธ (รวมที่ปิดแล้ว)
+    ไม่เปลี่ยนสถานะ; ประวัติเก็บรหัสระดับเดิม/ใหม่ + เหตุผล (ไม่มีข้อมูลบุคคล); ตัวนับวันปลอดอุบัติเหตุตามระดับใหม่ทันที"""
+    inc, errors = _open_for(db, user, "incident.investigate", "ปรับระดับความรุนแรง", incident_id, (*OPEN_STATUSES, "closed"))
+    if errors:
+        return errors
+    if expected_version is not None and expected_version != inc["version"]:
+        return STALE_FORM
+    if inc["kind"] != "accident":
+        return ["Near Miss ไม่มีระดับการบาดเจ็บให้ปรับ"]
+    new = _int(severity_id)
+    sev = db.execute("SELECT * FROM injury_severities WHERE id=? AND active=1", (new,)).fetchone() if new is not None else None
+    if sev is None:
+        return ["กรุณาเลือกระดับความรุนแรงที่ใช้งานอยู่"]
+    if new == inc["injury_severity_id"]:
+        return ["ระดับที่เลือกเหมือนเดิม"]
+    reason = (reason or "").strip()
+    if not reason:
+        return ["กรุณาระบุเหตุผลที่ปรับระดับ"]
+    if len(reason) > 500:
+        return ["เหตุผลยาวเกิน 500 ตัวอักษร"]
+    raw = "" if lost_days is None else str(lost_days).strip()
+    lost = inc["lost_days"]
+    if raw or sev["counts_lost_time"]:
+        lost = _int(raw)
+        if lost is None or not 0 <= lost <= LOST_DAYS_MAX:
+            return [f"ระดับหยุดงานต้องระบุจำนวนวันที่หยุดงาน (0-{LOST_DAYS_MAX})"]
+    cur = db.execute("UPDATE incidents SET injury_severity_id=?, lost_days=?, version=version+1, updated_at=datetime('now','localtime') "
+                     "WHERE id=? AND status=? AND version=?", (new, lost, inc["id"], inc["status"], inc["version"]))
+    if cur.rowcount != 1:
+        db.rollback()
+        return LOST_RACE
+    add_event(db, inc["id"], user["id"], "reclassified", inc["status"], inc["status"], reason,
+              {"old": inc["injury_severity_id"], "new": new, "lost_days": lost})
+    db.commit()
+    return []

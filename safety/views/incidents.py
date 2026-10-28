@@ -108,7 +108,7 @@ def _form_context(values, errors):
         "incident_form.html", values=values, errors=errors, areas=risk_area_options(db, g.user), max_photos=MAX_PER_KIND,
         severities=db.execute("SELECT * FROM injury_severities WHERE active=1 ORDER BY rank, id").fetchall(),
         scales={k: db.execute("SELECT level, label_th FROM risk_scales WHERE kind=? ORDER BY level", (k,)).fetchall() for k in ("likelihood", "severity")},
-        people_roles=PEOPLE_ROLES, kind_th=INCIDENT_KIND_TH, slots=5)
+        people_roles=PEOPLE_ROLES, kind_th=INCIDENT_KIND_TH, slots=MAX_PEOPLE_SLOTS, visible_slots=5)
 
 
 @bp.route("/new", methods=["GET", "POST"])
@@ -151,6 +151,7 @@ def detail(incident_id):
         "close": closer and status == "actions_set" and not was_investigator,
         "close_blocked": closer and status == "actions_set" and was_investigator,
         "reject": inv and is_open,
+        "reclassify": inv and inc["kind"] == "accident" and status != "rejected",
         "people": inv and is_open,
         "photos": is_open and (mine or inv or closer),
         "after_photos": status == "actions_set" and (inv or closer),
@@ -170,6 +171,7 @@ def detail(incident_id):
         "incident_detail.html", i=inc, refs=refs, crumb=breadcrumb(db, REGISTRY["risk-areas"], inc["risk_area_id"]), actions=actions,
         people=people, people_n=people_count(db, incident_id), people_roles=PEOPLE_ROLES, slots=slots, owners=owners, events=events,
         status_th=INCIDENT_STATUS_TH, kind_th=INCIDENT_KIND_TH, event_th=INCIDENT_EVENT_TH,
+        severities=db.execute("SELECT * FROM injury_severities WHERE active=1 ORDER BY rank, id").fetchall(),
         causes=db.execute("SELECT id, name_th FROM incident_causes WHERE active=1 ORDER BY code").fetchall(),
         lost_time=lost_time,
         photos={k: db.execute("SELECT * FROM incident_attachments WHERE incident_id=? AND kind=? ORDER BY id", (incident_id, k)).fetchall()
@@ -208,6 +210,15 @@ def close(incident_id):
         flash("ปิดรายการเรียบร้อย — ขอบคุณที่ช่วยให้โรงงานปลอดภัยขึ้น", "celebrate")
         errors = _attach(incident_id, "after", files)
     return _done(errors, incident_id)
+
+
+@bp.route("/<int:incident_id>/reclassify", methods=["POST"])
+@permission_required("incident.investigate")
+def reclassify(incident_id):
+    _load(incident_id)
+    f = request.form
+    return _done(incident_flow.reclassify(get_db(), g.user, incident_id, f.get("injury_severity_id"), f.get("reason", ""), f.get("lost_days"),
+                                          expected_version=_int(f.get("version"))), incident_id)
 
 
 @bp.route("/<int:incident_id>/reject", methods=["POST"])

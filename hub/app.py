@@ -15,6 +15,8 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 
 
 def create_app(test_config: dict | None = None) -> Flask:
+    from shared.timezone import apply_timezone
+    apply_timezone()                                # เวลาไทยทั้งโปรเซส (datetime.now / SQLite localtime)
     app = Flask(__name__)
     app.config.update(
         DATABASE=os.environ.get("HUB_DATABASE", os.path.join(ROOT, "data", "hub.db")),
