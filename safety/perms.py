@@ -11,6 +11,9 @@ PERMISSIONS: dict[str, str] = {
     "hazard.assign": "มอบหมายผู้รับผิดชอบ",
     "hazard.close": "ปิดรายการอันตราย",
     "criteria.manage": "จัดการเกณฑ์ความเสี่ยง",
+    "incident.report": "แจ้งอุบัติเหตุ/Near Miss",
+    "incident.investigate": "สอบสวนอุบัติเหตุ",
+    "incident.close": "ปิดรายการอุบัติเหตุ",
 }
 
 

@@ -31,7 +31,8 @@ def test_default_roles_seeded_with_admin_all_permissions(tmp_path):
     admin = con.execute("SELECT permissions, is_system FROM safety_roles WHERE key='admin'").fetchone()
     assert set(admin["permissions"].split(",")) == set(PERMISSIONS) and admin["is_system"] == 1
     assert set(PERMISSIONS) == {"master.view", "master.edit", "users.manage", "roles.manage", "hazard.report",
-                                "hazard.assess", "hazard.assign", "hazard.close", "criteria.manage"}
+                                "hazard.assess", "hazard.assign", "hazard.close", "criteria.manage",
+                                "incident.report", "incident.investigate", "incident.close"}
 
 
 def test_seed_does_not_overwrite_edited_role(tmp_path):

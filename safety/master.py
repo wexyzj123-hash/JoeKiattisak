@@ -42,6 +42,7 @@ REGISTRY: dict[str, TableDef] = {td.slug: td for td in (
     TableDef("risk_areas", "risk-areas", "พื้นที่เสี่ยง", ParentDef("line_id", "lines", "ไลน์/กลุ่มงาน")),
     TableDef("hazard_types", "hazard-types", "ประเภทอันตราย"),
     TableDef("hazard_sources", "hazard-sources", "แหล่งที่มา"),
+    TableDef("incident_causes", "incident-causes", "สาเหตุอุบัติเหตุ"),
 )}
 
 # คอลัมน์ที่เรียงได้ (ชื่อจาก URL → นิพจน์ SQL ที่เขียนตายตัว; ข้อความจากผู้ใช้ไม่เคยถูกต่อเข้า SQL)

@@ -151,7 +151,7 @@ def test_users_manage_cannot_touch_an_existing_admin(safety_app):
 
 def test_users_manage_can_still_manage_ordinary_users(safety_app):
     adm = login(safety_app)
-    custom_role(safety_app, adm, "hr", ["users.manage", "master.view", "hazard.report"])
+    custom_role(safety_app, adm, "hr", ["users.manage", "master.view", "hazard.report", "incident.report"])   # ต้องครอบคลุมสิทธิ์ของผู้แจ้งเดิม
     hr = login(safety_app, "hr")
     uid = make_user(safety_app, "reporter")
     post(hr, action="set_role", id=str(uid), role="viewer")

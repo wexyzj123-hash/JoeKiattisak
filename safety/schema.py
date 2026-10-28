@@ -37,7 +37,7 @@ def _master(table: str, parent: str = "", parent_table: str = "") -> str:
 
 MASTER_DDL = (_master("factories") + _master("departments", "factory_id", "factories")
               + _master("lines", "department_id", "departments") + _master("risk_areas", "line_id", "lines")
-              + _master("hazard_types") + _master("hazard_sources"))
+              + _master("hazard_types") + _master("hazard_sources") + _master("incident_causes"))
 
 ROLES_DDL = """
 CREATE TABLE IF NOT EXISTS safety_roles (
@@ -50,9 +50,10 @@ CREATE TABLE IF NOT EXISTS safety_roles (
 
 DEFAULT_ROLES = (
     ("admin", "ผู้ดูแลระบบ", ",".join(PERMISSIONS)),
-    ("assessor", "ผู้ประเมิน/จป.", "master.view,hazard.report,hazard.assess,hazard.assign,hazard.close"),
-    ("dept_head", "หัวหน้าหน่วยงาน", "master.view,hazard.report,hazard.assign,hazard.close"),
-    ("reporter", "ผู้แจ้ง", "hazard.report"),
+    ("assessor", "ผู้ประเมิน/จป.", "master.view,hazard.report,hazard.assess,hazard.assign,hazard.close,"
+                                  "incident.report,incident.investigate,incident.close"),
+    ("dept_head", "หัวหน้าหน่วยงาน", "master.view,hazard.report,hazard.assign,hazard.close,incident.report,incident.investigate"),
+    ("reporter", "ผู้แจ้ง", "hazard.report,incident.report"),
     ("viewer", "ผู้ดูข้อมูล", "master.view"),
 )
 
@@ -246,6 +247,113 @@ def seed_notify(con) -> None:
     con.commit()
 
 
+INCIDENT_DDL = """
+CREATE TABLE IF NOT EXISTS injury_severities (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    code             TEXT NOT NULL UNIQUE,
+    name_th          TEXT NOT NULL,
+    rank             INTEGER NOT NULL DEFAULT 0,
+    counts_lost_time INTEGER NOT NULL DEFAULT 0,
+    active           INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS incidents (
+    id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+    code                    TEXT NOT NULL UNIQUE,
+    kind                    TEXT NOT NULL CHECK (kind IN ('accident','near_miss')),
+    occurred_at             TEXT NOT NULL,
+    risk_area_id            INTEGER NOT NULL REFERENCES risk_areas(id),
+    title                   TEXT NOT NULL,
+    description             TEXT NOT NULL DEFAULT '',
+    immediate_action        TEXT NOT NULL DEFAULT '',
+    injury_severity_id      INTEGER REFERENCES injury_severities(id),
+    likelihood              INTEGER,
+    severity                INTEGER,
+    score                   INTEGER,
+    risk_level_id           INTEGER REFERENCES risk_levels(id),
+    level_name              TEXT,
+    level_color             TEXT,
+    level_requires_approval INTEGER NOT NULL DEFAULT 0,
+    reported_by             INTEGER NOT NULL REFERENCES safety_users(id),
+    reported_at             TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    status                  TEXT NOT NULL DEFAULT 'reported'
+                            CHECK (status IN ('reported','investigating','actions_set','closed','rejected')),
+    owner_id                INTEGER REFERENCES safety_users(id),
+    cause_id                INTEGER REFERENCES incident_causes(id),
+    root_cause              TEXT NOT NULL DEFAULT '',
+    corrective_action       TEXT NOT NULL DEFAULT '',
+    due_date                TEXT,
+    closing_note            TEXT NOT NULL DEFAULT '',
+    reject_reason           TEXT NOT NULL DEFAULT '',
+    lost_days               INTEGER,
+    related_hazard_id       INTEGER REFERENCES hazards(id),
+    version                 INTEGER NOT NULL DEFAULT 0,
+    updated_at              TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status);
+CREATE INDEX IF NOT EXISTS idx_incidents_area ON incidents(risk_area_id);
+CREATE INDEX IF NOT EXISTS idx_incidents_reporter ON incidents(reported_by);
+CREATE TABLE IF NOT EXISTS incident_people (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    incident_id INTEGER NOT NULL REFERENCES incidents(id),
+    role        TEXT NOT NULL CHECK (role IN ('injured','witness','involved')),
+    name        TEXT NOT NULL,
+    employee_no TEXT NOT NULL DEFAULT '',
+    note        TEXT NOT NULL DEFAULT '',
+    created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+CREATE INDEX IF NOT EXISTS idx_incident_people_inc ON incident_people(incident_id);
+CREATE TABLE IF NOT EXISTS incident_events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    incident_id INTEGER NOT NULL REFERENCES incidents(id),
+    at          TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    actor_id    INTEGER REFERENCES safety_users(id),
+    kind        TEXT NOT NULL,
+    from_status TEXT,
+    to_status   TEXT,
+    note        TEXT NOT NULL DEFAULT '',
+    data        TEXT NOT NULL DEFAULT ''
+);
+CREATE TRIGGER IF NOT EXISTS incident_events_no_update BEFORE UPDATE ON incident_events
+BEGIN SELECT RAISE(ABORT, 'incident_events is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS incident_events_no_delete BEFORE DELETE ON incident_events
+BEGIN SELECT RAISE(ABORT, 'incident_events is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS incident_events_no_replace BEFORE INSERT ON incident_events
+WHEN EXISTS (SELECT 1 FROM incident_events WHERE id = NEW.id)
+BEGIN SELECT RAISE(ABORT, 'incident_events is append-only'); END;
+CREATE TABLE IF NOT EXISTS incident_attachments (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    incident_id INTEGER NOT NULL REFERENCES incidents(id),
+    kind        TEXT NOT NULL CHECK (kind IN ('before','after')),
+    stored_name TEXT NOT NULL,
+    orig_name   TEXT NOT NULL,
+    size        INTEGER NOT NULL,
+    uploaded_by INTEGER REFERENCES safety_users(id),
+    uploaded_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+"""
+
+# (รหัส, ชื่อ, ลำดับ, นับเป็นอุบัติเหตุหยุดงาน) — มาตรฐานโรงงานทั่วไป แอดมินแก้ได้
+DEFAULT_INJURY_SEVERITIES = (
+    ("property_only", "ทรัพย์สินเสียหาย (ไม่บาดเจ็บ)", 0, 0), ("first_aid", "ปฐมพยาบาล", 1, 0),
+    ("medical", "รักษาพยาบาล (ไม่หยุดงาน)", 2, 0), ("lost_time", "หยุดงาน", 3, 1),
+    ("permanent", "ทุพพลภาพถาวร", 4, 1), ("fatality", "เสียชีวิต", 5, 1),
+)
+DEFAULT_INCIDENT_CAUSES = (("PEOPLE", "คน"), ("MACHINE", "เครื่องจักร/อุปกรณ์"), ("METHOD", "วิธีการทำงาน"),
+                           ("MATERIAL", "วัสดุ"), ("ENV", "สภาพแวดล้อม"))
+
+
+def seed_incidents(con) -> None:
+    """ค่าตั้งต้นของโมดูลอุบัติเหตุ — ใส่ครั้งเดียว ไม่ทับ/ไม่เติมกลับสิ่งที่แอดมินแก้หรือลบ"""
+    if con.execute("SELECT 1 FROM app_settings WHERE key='injury_severities_seeded'").fetchone() is None:
+        con.executemany("INSERT OR IGNORE INTO injury_severities(code, name_th, rank, counts_lost_time) VALUES(?,?,?,?)",
+                        DEFAULT_INJURY_SEVERITIES)
+        con.execute("INSERT INTO app_settings(key, value) VALUES('injury_severities_seeded', '1')")
+    if con.execute("SELECT 1 FROM app_settings WHERE key='incident_causes_seeded'").fetchone() is None:
+        con.executemany("INSERT OR IGNORE INTO incident_causes(code, name_th) VALUES(?,?)", DEFAULT_INCIDENT_CAUSES)
+        con.execute("INSERT INTO app_settings(key, value) VALUES('incident_causes_seeded', '1')")
+    con.commit()
+
+
 DEFAULT_LIKELIHOOD = ("แทบไม่เกิด", "เกิดได้ยาก", "เกิดได้บางครั้ง", "เกิดบ่อย", "เกิดบ่อยมาก")
 DEFAULT_SEVERITY = ("เล็กน้อย", "ปานกลาง", "ร้ายแรง", "รุนแรง", "รุนแรงมาก")
 DEFAULT_LEVELS = (("ต่ำ", 1, 4, "#2ecc71", 30, 0), ("ปานกลาง", 5, 9, "#f1c40f", 14, 0),
@@ -277,11 +385,13 @@ def ensure_schema(con) -> None:
     _add_column(con, "safety_users", "line_user_id", "TEXT")
     _add_column(con, "safety_users", "email", "TEXT")
     _add_column(con, "safety_users", "notify_channels", "TEXT NOT NULL DEFAULT 'inapp'")
-    con.executescript(MASTER_DDL + ROLES_DDL + RISK_DDL + HAZARD_DDL + CUSTOM_DDL + NOTIFY_DDL)
+    con.executescript(MASTER_DDL + ROLES_DDL + RISK_DDL + HAZARD_DDL + CUSTOM_DDL + NOTIFY_DDL + INCIDENT_DDL)
+    _add_column(con, "notifications", "incident_id", "INTEGER")
     seed_roles(con)
     seed_risk(con)
     _add_column(con, "hazards", "level_requires_approval", "INTEGER NOT NULL DEFAULT 0")
     _add_column(con, "hazards", "version", "INTEGER NOT NULL DEFAULT 0")
     _add_column(con, "job_runs", "started_at", "TEXT")
     seed_notify(con)
+    seed_incidents(con)
     con.commit()

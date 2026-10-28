@@ -1,0 +1,20 @@
+{% extends "layout.html" %}
+{% block title %}ระดับความรุนแรงการบาดเจ็บ · Safety 4.0{% endblock %}
+{% block body %}
+<h1>ระดับความรุนแรงการบาดเจ็บ</h1>
+<p class="muted">ใช้กับการแจ้งอุบัติเหตุ ระดับที่ติ๊ก "นับเป็นหยุดงาน" จะรีเซ็ตตัวนับ "วันปลอดอุบัติเหตุ" ปรับชื่อ/ลำดับได้ ลบไม่ได้ (ปิดใช้งานแทน) ข้อมูลเดิมยังอ้างอิงระดับเดิม</p>
+<div class="card" style="max-width:none;margin:0"><div class="table-wrap">
+<table class="table-stack" style="width:100%">
+  <tr><th>รหัส</th><th>ชื่อ</th><th>ลำดับ</th><th>นับเป็นหยุดงาน</th><th>ใช้งาน</th><th>ดำเนินการ</th></tr>
+  {% for r in rows %}
+  <tr>
+    <td>{{ r['code'] }}</td>
+    <td><input form="sv{{ r['id'] }}" name="name_th" value="{{ r['name_th'] }}" required maxlength="200"></td>
+    <td><input form="sv{{ r['id'] }}" name="rank" value="{{ r['rank'] }}" size="3" inputmode="numeric"></td>
+    <td><input form="sv{{ r['id'] }}" type="checkbox" name="counts_lost_time" value="1" {{ 'checked' if r['counts_lost_time'] }} aria-label="นับเป็นหยุดงาน {{ r['name_th'] }}"></td>
+    <td><input form="sv{{ r['id'] }}" type="checkbox" name="active" value="1" {{ 'checked' if r['active'] }} aria-label="ใช้งาน {{ r['name_th'] }}"></td>
+    <td><form id="sv{{ r['id'] }}" method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ r['id'] }}"><button type="submit">บันทึก</button></form></td>
+  </tr>
+  {% endfor %}
+</table></div></div>
+{% endblock %}
