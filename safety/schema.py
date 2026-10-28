@@ -162,10 +162,24 @@ CREATE TABLE IF NOT EXISTS custom_fields (
 CREATE UNIQUE INDEX IF NOT EXISTS uq_custom_fields_key ON custom_fields(COALESCE(hazard_type_id, 0), key);
 """
 
-NOTIFY_EVENTS = ("hazard_reported", "hazard_assessed", "hazard_assigned", "hazard_closed", "hazard_rejected", "due_soon", "overdue")
+NOTIFY_EVENTS = ("hazard_reported", "hazard_assessed", "hazard_assigned", "hazard_closed", "hazard_rejected", "due_soon", "overdue",
+                 "incident_reported", "incident_assigned", "incident_closed")
 NOTIFY_CHANNELS = ("inapp", "telegram", "line", "teams", "email")
 OUTBOX_CHANNELS = ("telegram", "line", "teams", "email")
 OUTBOX_STATUSES = ("pending", "sent", "failed", "dead", "cancelled")
+
+def _rules_table(name: str) -> str:
+    return f"""CREATE TABLE IF NOT EXISTS {name} (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    event       TEXT NOT NULL CHECK (event IN ({",".join(repr(e) for e in NOTIFY_EVENTS)})),
+    recipients  TEXT NOT NULL DEFAULT '',
+    channels    TEXT NOT NULL DEFAULT 'inapp',
+    offset_days INTEGER NOT NULL DEFAULT 0,
+    min_score   INTEGER,
+    enabled     INTEGER NOT NULL DEFAULT 1
+);
+"""
+
 
 NOTIFY_DDL = f"""
 CREATE TABLE IF NOT EXISTS notifications (
@@ -182,15 +196,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     UNIQUE (user_id, dedupe_key)
 );
 CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at);
-CREATE TABLE IF NOT EXISTS notify_rules (
-    id          INTEGER PRIMARY KEY AUTOINCREMENT,
-    event       TEXT NOT NULL CHECK (event IN ({",".join(repr(e) for e in NOTIFY_EVENTS)})),
-    recipients  TEXT NOT NULL DEFAULT '',
-    channels    TEXT NOT NULL DEFAULT 'inapp',
-    offset_days INTEGER NOT NULL DEFAULT 0,
-    min_score   INTEGER,
-    enabled     INTEGER NOT NULL DEFAULT 1
-);
+{_rules_table('notify_rules')}
 CREATE TABLE IF NOT EXISTS notify_outbox (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     channel         TEXT NOT NULL CHECK (channel IN ({",".join(repr(c) for c in OUTBOX_CHANNELS)})),
@@ -237,6 +243,25 @@ DEFAULT_RULES = (
 )
 
 
+def rebuild_notify_rules_if_needed(con) -> None:
+    """ตารางกฎเก่ามี CHECK ของรายชื่อเหตุการณ์เดิม — สร้างใหม่ให้รับเหตุการณ์อุบัติเหตุ โดยคงรหัส/ค่าที่แอดมินแก้ไว้ (ทำในธุรกรรมเดียว รันซ้ำได้)"""
+    sql = con.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='notify_rules'").fetchone()
+    if sql is None or "incident_reported" in sql[0]:
+        return
+    con.commit()
+    con.executescript("BEGIN;" + _rules_table("notify_rules_new")
+                      + "INSERT INTO notify_rules_new(id,event,recipients,channels,offset_days,min_score,enabled) "
+                        "SELECT id,event,recipients,channels,offset_days,min_score,enabled FROM notify_rules;"
+                        "DROP TABLE notify_rules; ALTER TABLE notify_rules_new RENAME TO notify_rules; COMMIT;")
+
+
+INCIDENT_RULES = (
+    ("incident_reported", "role:assessor", "inapp,telegram", 0, None),
+    ("incident_assigned", "owner", _ALL, 0, None),
+    ("incident_closed", "reporter", "inapp", 0, None),
+)
+
+
 def seed_notify(con) -> None:
     """ค่าตั้งต้นของการแจ้งเตือน — ใส่ครั้งเดียว ไม่ทับ/ไม่เติมกลับสิ่งที่แอดมินแก้หรือลบ"""
     con.executemany("INSERT OR IGNORE INTO app_settings(key, value) VALUES(?,?)", DEFAULT_SETTINGS)
@@ -244,6 +269,9 @@ def seed_notify(con) -> None:
         con.executemany("INSERT INTO notify_rules(event, recipients, channels, offset_days, min_score) VALUES(?,?,?,?,?)",
                         DEFAULT_RULES)
         con.execute("INSERT INTO app_settings(key, value) VALUES('notify_rules_seeded', '1')")
+    if con.execute("SELECT 1 FROM app_settings WHERE key='incident_rules_seeded'").fetchone() is None:
+        con.executemany("INSERT INTO notify_rules(event, recipients, channels, offset_days, min_score) VALUES(?,?,?,?,?)", INCIDENT_RULES)
+        con.execute("INSERT INTO app_settings(key, value) VALUES('incident_rules_seeded', '1')")
     con.commit()
 
 
@@ -387,6 +415,7 @@ def ensure_schema(con) -> None:
     _add_column(con, "safety_users", "notify_channels", "TEXT NOT NULL DEFAULT 'inapp'")
     con.executescript(MASTER_DDL + ROLES_DDL + RISK_DDL + HAZARD_DDL + CUSTOM_DDL + NOTIFY_DDL + INCIDENT_DDL)
     _add_column(con, "notifications", "incident_id", "INTEGER")
+    rebuild_notify_rules_if_needed(con)
     seed_roles(con)
     seed_risk(con)
     _add_column(con, "hazards", "level_requires_approval", "INTEGER NOT NULL DEFAULT 0")

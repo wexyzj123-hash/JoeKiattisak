@@ -44,3 +44,17 @@ def add_hazard(con, area_id, reporter_id, code=None, status="reported", **kw) ->
     cur = con.execute(f"INSERT INTO hazards({','.join(cols)}) VALUES({','.join('?' * len(cols))})", list(cols.values()))
     con.commit()
     return cur.lastrowid
+
+
+def add_incident(con, area_id, reporter_id, code=None, **kw) -> int:
+    """เหตุการณ์อุบัติเหตุ/Near Miss ตรง ๆ (ไม่ผ่านหน้าจอ)"""
+    code = code or f"IN-TEST-{con.execute('SELECT COUNT(*)+1 FROM incidents').fetchone()[0]:04d}"
+    cols = {"code": code, "kind": "accident", "occurred_at": "2026-03-01 09:00", "risk_area_id": area_id, "title": "เหตุทดสอบ",
+            "reported_by": reporter_id, **kw}
+    cur = con.execute(f"INSERT INTO incidents({','.join(cols)}) VALUES({','.join('?' * len(cols))})", list(cols.values()))
+    con.commit()
+    return cur.lastrowid
+
+
+def severity_id(con, code: str) -> int:
+    return con.execute("SELECT id FROM injury_severities WHERE code=?", (code,)).fetchone()[0]

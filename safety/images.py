@@ -66,22 +66,30 @@ def sanitize_name(filename: str) -> str:
     return name[:100]
 
 
-def save_attachment(db, upload_root: str, hazard_id: int, kind: str, filename: str, data: bytes, user_id: int) -> int:
+# ตาราง/คอลัมน์ที่อนุญาตเท่านั้น (ชื่อ scope ไม่เคยถูกต่อเข้า SQL ตรง ๆ)
+SCOPES = {"hazard": ("hazard_attachments", "hazard_id", ""), "incident": ("incident_attachments", "incident_id", "incident-")}
+
+
+def save_attachment(db, upload_root: str, owner_id: int, kind: str, filename: str, data: bytes, user_id: int,
+                    scope: str = "hazard") -> int:
+    if scope not in SCOPES:
+        raise ValueError("unknown attachment scope")
+    table, fk, prefix = SCOPES[scope]
     if kind not in KINDS:
         raise ImageError("ประเภทรูปภาพไม่ถูกต้อง")
-    used = db.execute("SELECT COUNT(*) FROM hazard_attachments WHERE hazard_id=? AND kind=?", (hazard_id, kind)).fetchone()[0]
+    used = db.execute(f"SELECT COUNT(*) FROM {table} WHERE {fk}=? AND kind=?", (owner_id, kind)).fetchone()[0]
     if used >= MAX_PER_KIND:
         raise ImageError(f"แนบรูปได้ไม่เกิน {MAX_PER_KIND} รูปต่อประเภท")
     jpeg = process_image(data)
-    folder = os.path.join(upload_root, str(int(hazard_id)))
+    folder = os.path.join(upload_root, f"{prefix}{int(owner_id)}")
     os.makedirs(folder, exist_ok=True)
     stored = uuid.uuid4().hex + ".jpg"
     path = os.path.join(folder, stored)
     with open(path, "xb") as fh:
         fh.write(jpeg)
     try:
-        cur = db.execute("INSERT INTO hazard_attachments(hazard_id, kind, stored_name, orig_name, size, uploaded_by) "
-                         "VALUES(?,?,?,?,?,?)", (hazard_id, kind, stored, sanitize_name(filename), len(jpeg), user_id))
+        cur = db.execute(f"INSERT INTO {table}({fk}, kind, stored_name, orig_name, size, uploaded_by) "
+                         "VALUES(?,?,?,?,?,?)", (owner_id, kind, stored, sanitize_name(filename), len(jpeg), user_id))
         db.commit()
     except Exception:
         db.rollback()

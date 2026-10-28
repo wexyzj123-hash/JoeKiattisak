@@ -6,7 +6,8 @@ from safety.db import connect
 from safety.schema import ensure_schema, seed_notify
 from tests.safety.factories import add_chain, add_hazard, add_user
 
-EVENTS = {"hazard_reported", "hazard_assessed", "hazard_assigned", "hazard_closed", "hazard_rejected", "due_soon", "overdue"}
+EVENTS = {"hazard_reported", "hazard_assessed", "hazard_assigned", "hazard_closed", "hazard_rejected", "due_soon", "overdue",
+          "incident_reported", "incident_assigned", "incident_closed"}
 
 
 @pytest.fixture
@@ -50,7 +51,7 @@ def test_outbox_unique_per_channel_target_key(db):
 
 def test_default_rules_seeded_once_and_not_overwritten(db):
     rules = db.execute("SELECT * FROM notify_rules ORDER BY id").fetchall()
-    assert {r["event"] for r in rules} == EVENTS and len(rules) == 9
+    assert {r["event"] for r in rules} == EVENTS and len(rules) == 12
     by = {(r["event"], r["offset_days"]): r for r in rules}
     assert by[("hazard_reported", 0)]["recipients"] == "role:assessor" and by[("hazard_reported", 0)]["channels"] == "inapp,telegram"
     assert by[("hazard_assessed", 0)]["min_score"] == 17 and by[("hazard_assessed", 0)]["recipients"] == "role:dept_head,role:admin"
@@ -95,7 +96,7 @@ def test_existing_phase3_database_upgrades_in_place(tmp_path):
     ensure_schema(con)
     row = con.execute("SELECT name, email, notify_channels FROM safety_users WHERE id=?", (u,)).fetchone()
     assert (row["name"], row["email"], row["notify_channels"]) == ("เดิม", None, "inapp")
-    assert con.execute("SELECT COUNT(*) FROM notify_rules").fetchone()[0] == 9
+    assert con.execute("SELECT COUNT(*) FROM notify_rules").fetchone()[0] == 12
 
 
 def test_ensure_schema_idempotent(db):

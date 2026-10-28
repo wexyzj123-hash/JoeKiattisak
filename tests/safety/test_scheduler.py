@@ -213,7 +213,7 @@ def test_backup_creates_valid_database_and_prunes_to_14(s, tmp_path):
     path = backup_database(str(tmp_path / "s.db"), str(backups), date(2026, 3, 20), keep=14)
     assert os.path.basename(path) == "safety-20260320.db"
     con = sqlite3.connect(path)
-    assert con.execute("SELECT COUNT(*) FROM notify_rules").fetchone()[0] == 9 and con.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
+    assert con.execute("SELECT COUNT(*) FROM notify_rules").fetchone()[0] == 12 and con.execute("PRAGMA integrity_check").fetchone()[0] == "ok"
     con.close()
     assert sorted(os.listdir(backups)).count("safety-20260320.db-wal") == 0                     # ไม่มีไฟล์ข้างเคียง
     files = sorted(f for f in os.listdir(backups) if f.startswith("safety-") and f.endswith(".db"))

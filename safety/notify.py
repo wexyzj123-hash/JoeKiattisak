@@ -111,10 +111,41 @@ def _queue_external(db, channel: str, target: str, title: str, body: str, urgent
                "VALUES(?,?,?,?,?,?,?, datetime('now','localtime'))", (channel, target, title, body, urgent, notification_id, key))
 
 
+def _write_rows(db, event: str, rec, title: str, body: str, stage: str, ref: str, link: str, hazard_id, incident_id,
+                actor_id, offset_days, urgent_base: bool) -> int:
+    """เขียนแถวแจ้งเตือน/คิวส่งตามกฎของเหตุการณ์ (ใช้ร่วมกันระหว่างอันตรายและอุบัติเหตุ); คืนจำนวนแถวในระบบที่สร้างใหม่"""
+    created = 0
+    for rule in db.execute("SELECT * FROM notify_rules WHERE event=? AND enabled=1 ORDER BY id", (event,)).fetchall():
+        if not _rule_matches(rule, event, rec, offset_days):
+            continue
+        key = f"{event}:{ref}:{rule['id']}:{stage}"
+        channels = set(_split(rule["channels"]))
+        urgent = int(urgent_base or (event == "overdue" and rule["offset_days"] >= 3))
+        for user in recipients_for(db, rule, rec, actor_id):
+            note_id = None
+            if "inapp" in channels:
+                cur = db.execute("INSERT OR IGNORE INTO notifications(user_id, event, title, body, link, hazard_id, incident_id, dedupe_key) "
+                                 "VALUES(?,?,?,?,?,?,?,?)", (user["id"], event, title, body, link, hazard_id, incident_id, key))
+                if cur.rowcount != 1:
+                    continue                                   # เคยแจ้งผู้ใช้คนนี้สำหรับขั้นนี้แล้ว — ไม่ซ้ำ ทั้งในระบบและช่องทางอื่น
+                created += 1
+                note_id = cur.lastrowid
+            opted = set(_split(user["notify_channels"]))
+            for channel in OUTBOX_CHANNELS:
+                if channel == "teams" or channel not in channels or channel not in opted:
+                    continue
+                target = valid_contact(channel, user)
+                if target:
+                    _queue_external(db, channel, target, title, body, urgent, note_id, key)
+        if "teams" in channels:                                # ประกาศกลุ่มหนึ่งข้อความต่อกฎ+รายการ+ขั้น
+            _queue_external(db, "teams", "teams", title, body, urgent, None, key)
+    return created
+
+
 def emit(db, event: str, hazard_id: int, actor_id: int | None, *, offset_days: int | None = None,
          today: date | None = None, stage: str | None = None, days: int | None = None) -> int:
     """เขียนการแจ้งเตือนตามกฎของเหตุการณ์นี้ คืนจำนวนแถวแจ้งเตือนในระบบที่สร้างใหม่; ไม่ throw ไม่ commit"""
-    if event not in NOTIFY_EVENTS:
+    if event not in NOTIFY_EVENTS or event.startswith("incident_"):
         return 0
     db.execute("SAVEPOINT notify")
     try:
@@ -125,35 +156,55 @@ def emit(db, event: str, hazard_id: int, actor_id: int | None, *, offset_days: i
         area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (hazard["risk_area_id"],)).fetchone()
         title, body = render_message(event, hazard, {"area": area[0] if area else "", "days": days if days is not None else offset_days})
         stage = stage if stage is not None else _stage(event, hazard, offset_days)
-        created = 0
-        for rule in db.execute("SELECT * FROM notify_rules WHERE event=? AND enabled=1 ORDER BY id", (event,)).fetchall():
-            if not _rule_matches(rule, event, hazard, offset_days):
-                continue
-            key = f"{event}:{hazard_id}:{rule['id']}:{stage}"
-            channels = set(_split(rule["channels"]))
-            urgent = int(bool(hazard["level_requires_approval"]) or (event == "overdue" and rule["offset_days"] >= 3))
-            for user in recipients_for(db, rule, hazard, actor_id):
-                note_id = None
-                if "inapp" in channels:
-                    cur = db.execute("INSERT OR IGNORE INTO notifications(user_id, event, title, body, link, hazard_id, dedupe_key) "
-                                     "VALUES(?,?,?,?,?,?,?)", (user["id"], event, title, body, f"/hazards/{hazard_id}", hazard_id, key))
-                    if cur.rowcount != 1:
-                        continue                                   # เคยแจ้งผู้ใช้คนนี้สำหรับขั้นนี้แล้ว — ไม่ซ้ำ ทั้งในระบบและช่องทางอื่น
-                    created += 1
-                    note_id = cur.lastrowid
-                opted = set(_split(user["notify_channels"]))
-                for channel in OUTBOX_CHANNELS:
-                    if channel == "teams" or channel not in channels or channel not in opted:
-                        continue
-                    target = valid_contact(channel, user)
-                    if target:
-                        _queue_external(db, channel, target, title, body, urgent, note_id, key)
-            if "teams" in channels:                                # ประกาศกลุ่มหนึ่งข้อความต่อกฎ+รายการ+ขั้น
-                _queue_external(db, "teams", "teams", title, body, urgent, None, key)
+        created = _write_rows(db, event, hazard, title, body, stage, str(hazard_id), f"/hazards/{hazard_id}", hazard_id, None,
+                              actor_id, offset_days, bool(hazard["level_requires_approval"]))
         db.execute("RELEASE notify")
         return created
     except Exception:                                              # noqa: BLE001 — การแจ้งเตือนต้องไม่ทำให้ขั้นตอนหลักล้ม
         log.exception("emit(%s, hazard=%s) failed; rolled back", event, hazard_id)
+        db.execute("ROLLBACK TO notify")
+        db.execute("RELEASE notify")
+        return 0
+
+
+KIND_TH = {"accident": "อุบัติเหตุ", "near_miss": "Near Miss"}
+
+
+def render_incident_message(event: str, incident, extra: Mapping | None = None) -> tuple[str, str]:
+    """ข้อความแจ้งเตือนอุบัติเหตุ: รหัส ประเภท หัวข้อ พื้นที่ เท่านั้น — ไม่มีชื่อ/รหัสพนักงานของผู้เกี่ยวข้องเด็ดขาด"""
+    extra = extra or {}
+    code, title = clean(incident["code"], 40), clean(incident["title"], FIELD_MAX)
+    kind = KIND_TH.get(incident["kind"], "อุบัติเหตุ")
+    where = f" · พื้นที่ {clean(extra.get('area'), FIELD_MAX)}" if extra.get("area") else ""
+    due = f" · ครบกำหนด {clean(incident['due_date'], 10)}" if incident["due_date"] else ""
+    head, tail = {
+        "incident_reported": (f"แจ้ง{kind}ใหม่ {code}", f"{title}{where}"),
+        "incident_assigned": (f"มอบหมายสอบสวน{kind} {code}", f"{title}{due}{where}"),
+        "incident_closed": (f"ปิดรายการ{kind} {code}", f"{title} · ผลการแก้ไข: {clean(incident['closing_note'], 200)}"),
+    }.get(event, (f"แจ้งเตือน {code}", title))
+    return clean(head, TITLE_MAX), clean(tail, BODY_MAX)
+
+
+def emit_incident(db, event: str, incident_id: int, actor_id: int | None) -> int:
+    """แจ้งเตือนเหตุการณ์อุบัติเหตุตามกฎ; สัญญาเดียวกับ emit (SAVEPOINT, ไม่ throw, ไม่ commit)"""
+    if event not in NOTIFY_EVENTS or not event.startswith("incident_"):
+        return 0
+    db.execute("SAVEPOINT notify")
+    try:
+        inc = db.execute("SELECT i.*, COALESCE(s.counts_lost_time, 0) AS lost_time FROM incidents i "
+                         "LEFT JOIN injury_severities s ON s.id = i.injury_severity_id WHERE i.id=?", (incident_id,)).fetchone()
+        if inc is None:
+            db.execute("RELEASE notify")
+            return 0
+        area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (inc["risk_area_id"],)).fetchone()
+        title, body = render_incident_message(event, inc, {"area": area[0] if area else ""})
+        stage = str(inc["owner_id"]) if event == "incident_assigned" else "1"
+        created = _write_rows(db, event, inc, title, body, stage, f"i{incident_id}", f"/incidents/{incident_id}", None, incident_id,
+                              actor_id, None, bool(inc["lost_time"] or inc["level_requires_approval"]))
+        db.execute("RELEASE notify")
+        return created
+    except Exception:                                              # noqa: BLE001
+        log.exception("emit_incident(%s, incident=%s) failed; rolled back", event, incident_id)
         db.execute("ROLLBACK TO notify")
         db.execute("RELEASE notify")
         return 0

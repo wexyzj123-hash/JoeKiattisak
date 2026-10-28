@@ -19,7 +19,8 @@ bp = Blueprint("notify_admin", __name__, url_prefix="/admin")
 HHMM_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 ROLE_RE = re.compile(r"^role:[a-z][a-z0-9_]{1,31}$")
 EVENT_TH = {"hazard_reported": "แจ้งอันตรายใหม่", "hazard_assessed": "ประเมินความเสี่ยงแล้ว", "hazard_assigned": "มอบหมายผู้รับผิดชอบ",
-            "hazard_closed": "ปิดรายการ", "hazard_rejected": "ปฏิเสธรายการ", "due_soon": "ใกล้ครบกำหนด", "overdue": "เกินกำหนด"}
+            "hazard_closed": "ปิดรายการ", "hazard_rejected": "ปฏิเสธรายการ", "due_soon": "ใกล้ครบกำหนด", "overdue": "เกินกำหนด",
+            "incident_reported": "แจ้งอุบัติเหตุใหม่", "incident_assigned": "มอบหมายผู้สอบสวน", "incident_closed": "ปิดรายการอุบัติเหตุ"}
 CHANNEL_TH = {"inapp": "ในระบบ", "telegram": "Telegram", "line": "LINE", "teams": "Teams", "email": "อีเมล"}
 STATUS_TH = {"pending": "รอส่ง", "failed": "ล้มเหลว (จะลองใหม่)", "dead": "ส่งไม่สำเร็จถาวร", "sent": "ส่งแล้ว", "cancelled": "ยกเลิก"}
 MAX_RULES = 200
