@@ -1,6 +1,9 @@
 {% extends "layout.html" %}
 {% block title %}ภาพรวมดำเนินงาน · AIAT Safety{% endblock %}
 {% block body %}
+<link rel="stylesheet" href="/static/safety/premium.css">
+<div class="premium-stage">
+<div class="orbs" aria-hidden="true"><span class="orb orb-a"></span><span class="orb orb-b"></span></div>
 <h1>ภาพรวมดำเนินงาน</h1>
 {% if overdue %}<div class="banner">{{ mascot('alert', 72) }}<div><strong>มีรายการเกินกำหนด {{ overdue }} รายการ</strong><br><a href="/hazards?sort=due_date&dir=asc">ดูรายการที่ต้องติดตาม</a></div></div>{% endif %}
 <div class="tiles" style="margin-bottom:16px">
@@ -50,4 +53,6 @@
   </div>
   <small><span style="color:var(--warn-text)">■</span> แจ้ง · <span style="color:var(--ok-text)">■</span> ปิด (ตัวเลข: แจ้ง/ปิด)</small>
 </div>
+</div>
 {% endblock %}
+{% block scripts %}{{ super() }}<script src="/static/safety/premium.js" defer></script>{% endblock %}

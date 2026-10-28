@@ -202,3 +202,18 @@ def test_no_widgets_without_real_data(safety_app):
     html = login(safety_app, "admin").get("/").get_data(as_text=True)
     for fake in ("สภาพอากาศ", "e-Learning", "ข่าวสาร"):
         assert fake not in html
+
+
+def test_overview_pages_use_the_premium_stage_and_assets(safety_app):
+    from tests.safety.helpers import login
+    c = login(safety_app, "admin")
+    for path in ("/", "/overview"):
+        html = c.get(path).get_data(as_text=True)
+        assert 'class="premium-stage"' in html and 'href="/static/safety/premium.css"' in html and 'src="/static/safety/premium.js"' in html, path
+        assert html.count("</div>") >= html.count("<div"), path
+    r = c.get("/static/safety/premium.css")
+    assert r.status_code == 200 and r.mimetype == "text/css" and "prefers-reduced-motion: reduce" in r.get_data(as_text=True)
+    j = c.get("/static/safety/premium.js")
+    assert j.status_code == 200 and j.mimetype == "text/javascript" and "prefers-reduced-motion" in j.get_data(as_text=True)
+    assert c.get("/static/safety/evil.js").status_code == 404
+    assert 'data-kpi="open"' in c.get("/").get_data(as_text=True)                                        # ค่าจริงยังอยู่ใน HTML (ไม่พึ่ง JS)

@@ -1,6 +1,9 @@
 {% extends "layout.html" %}
 {% block title %}หน้าหลัก · Safety 4.0{% endblock %}
 {% block body %}
+<link rel="stylesheet" href="/static/safety/premium.css">
+<div class="premium-stage">
+<div class="orbs" aria-hidden="true"><span class="orb orb-a"></span><span class="orb orb-b"></span></div>
 <section class="hero">
   <div class="hero-text">
     <p class="hero-kicker">สวัสดี {{ g.user['name'] }}</p>
@@ -91,4 +94,6 @@
     {% if notes %}<a href="/notifications">ดูทั้งหมด →</a>{% endif %}
   </section>
 </div>
+</div>
 {% endblock %}
+{% block scripts %}{{ super() }}<script src="/static/safety/premium.js" defer></script>{% endblock %}

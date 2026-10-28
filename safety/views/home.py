@@ -28,6 +28,16 @@ def theme_css():
     return send_file(THEME_CSS, mimetype="text/css", max_age=3600)
 
 
+SAFETY_ASSETS = {"premium.css": "text/css", "premium.js": "text/javascript"}
+
+
+@bp.route("/static/safety/<name>")
+def safety_asset(name):
+    if name not in SAFETY_ASSETS:
+        abort(404)
+    return send_file(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets", name), mimetype=SAFETY_ASSETS[name], max_age=300)
+
+
 @bp.route("/static/mascot/<name>")
 def mascot_file(name):
     """ภาพมาสคอตจริง (ถ้ามี) — เฉพาะชื่อท่าที่รู้จักและนามสกุล png/webp เท่านั้น"""
