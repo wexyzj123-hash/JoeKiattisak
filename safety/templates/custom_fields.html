@@ -1,0 +1,36 @@
+{% extends "layout.html" %}
+{% block title %}ฟิลด์เพิ่มเติม · AIAT Safety{% endblock %}
+{% block body %}
+<h1>ฟิลด์เพิ่มเติม</h1>
+<p style="color:var(--muted)">กำหนดข้อมูลเพิ่มเติมที่ต้องกรอกตอนบันทึกอันตราย แยกตามประเภทอันตราย (หรือใช้กับทุกประเภท) — รหัสและชนิดแก้ไม่ได้หลังสร้าง ปิดใช้งานได้ ข้อมูลเดิมยังแสดงอยู่</p>
+<div class="card" style="max-width:none;margin:0 0 16px;overflow-x:auto">
+<table style="width:100%;border-collapse:collapse">
+  <tr><th>ประเภทอันตราย</th><th>รหัส</th><th>ชื่อ</th><th>ชนิด</th><th>ตัวเลือก</th><th>บังคับ</th><th>ลำดับ</th><th>สถานะ</th><th>ดำเนินการ</th></tr>
+  {% for f in fields %}
+  <tr>
+    <td>{{ f['type_name'] or 'ทุกประเภท' }}</td><td>{{ f['key'] }}</td>
+    <td><input form="cf{{ f['id'] }}" name="label_th" value="{{ f['label_th'] }}" required maxlength="100"></td>
+    <td>{{ types[f['type']] }}</td>
+    <td>{% if f['type'] == 'select' %}<textarea form="cf{{ f['id'] }}" name="options" rows="3">{{ f['options'] }}</textarea>{% else %}-{% endif %}</td>
+    <td><input form="cf{{ f['id'] }}" type="checkbox" name="required" value="1" {{ 'checked' if f['required'] }}></td>
+    <td><input form="cf{{ f['id'] }}" name="sort" value="{{ f['sort'] }}" size="3"></td>
+    <td>{{ 'ใช้งาน' if f['active'] else 'ปิดใช้งาน' }}</td>
+    <td><form id="cf{{ f['id'] }}" method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ f['id'] }}">
+      <button name="action" value="update">บันทึก</button> <button name="action" value="toggle">{{ 'ปิดใช้งาน' if f['active'] else 'เปิดใช้งาน' }}</button></form></td>
+  </tr>
+  {% else %}<tr><td colspan="9">ยังไม่มีฟิลด์เพิ่มเติม</td></tr>{% endfor %}
+</table></div>
+<form method="post" class="card" style="max-width:520px;margin:0">
+  <h2>เพิ่มฟิลด์</h2>
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="create">
+  <label>ใช้กับประเภทอันตราย <select name="hazard_type_id"><option value="">ทุกประเภท</option>
+    {% for t in hazard_types %}<option value="{{ t['id'] }}">{{ t['name_th'] }} ({{ t['code'] }})</option>{% endfor %}</select></label>
+  <label>รหัสฟิลด์ (a-z 0-9 _) <input name="key" required pattern="[a-z][a-z0-9_]{1,31}"></label>
+  <label>ชื่อฟิลด์ <input name="label_th" required maxlength="100"></label>
+  <label>ชนิด <select name="type">{% for k, v in types.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
+  <label>ตัวเลือก (ชนิดตัวเลือก — บรรทัดละข้อ อย่างน้อย 2) <textarea name="options" rows="3"></textarea></label>
+  <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="required" value="1"> บังคับกรอก</label>
+  <label>ลำดับ <input name="sort" value="0" size="4"></label>
+  <button type="submit">เพิ่มฟิลด์</button>
+</form>
+{% endblock %}

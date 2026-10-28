@@ -141,6 +141,21 @@ CREATE TRIGGER IF NOT EXISTS hazard_events_no_delete BEFORE DELETE ON hazard_eve
 BEGIN SELECT RAISE(ABORT, 'hazard_events is append-only'); END;
 """
 
+CUSTOM_DDL = """
+CREATE TABLE IF NOT EXISTS custom_fields (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    hazard_type_id INTEGER REFERENCES hazard_types(id),
+    key            TEXT NOT NULL,
+    label_th       TEXT NOT NULL,
+    type           TEXT NOT NULL CHECK (type IN ('text','number','select','date','checkbox')),
+    options        TEXT NOT NULL DEFAULT '',
+    required       INTEGER NOT NULL DEFAULT 0,
+    sort           INTEGER NOT NULL DEFAULT 0,
+    active         INTEGER NOT NULL DEFAULT 1
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_custom_fields_key ON custom_fields(COALESCE(hazard_type_id, 0), key);
+"""
+
 DEFAULT_LIKELIHOOD = ("แทบไม่เกิด", "เกิดได้ยาก", "เกิดได้บางครั้ง", "เกิดบ่อย", "เกิดบ่อยมาก")
 DEFAULT_SEVERITY = ("เล็กน้อย", "ปานกลาง", "ร้ายแรง", "รุนแรง", "รุนแรงมาก")
 DEFAULT_LEVELS = (("ต่ำ", 1, 4, "#2ecc71", 30, 0), ("ปานกลาง", 5, 9, "#f1c40f", 14, 0),
@@ -168,7 +183,7 @@ def ensure_schema(con) -> None:
     con.executescript(DDL)
     _add_column(con, "safety_users", "factory_id", "INTEGER")
     _add_column(con, "safety_users", "department_id", "INTEGER")
-    con.executescript(MASTER_DDL + ROLES_DDL + RISK_DDL + HAZARD_DDL)
+    con.executescript(MASTER_DDL + ROLES_DDL + RISK_DDL + HAZARD_DDL + CUSTOM_DDL)
     seed_roles(con)
     seed_risk(con)
     con.commit()
