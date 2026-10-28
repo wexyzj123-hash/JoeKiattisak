@@ -99,7 +99,6 @@ const MEASURE = () => {
             const page = await ctx.newPage();
             const errs = []; page.on('pageerror', (e) => errs.push(String(e)));
             const resp = await page.goto(p.url, { waitUntil: 'load' });
-            if (p.waitMs) await page.waitForTimeout(p.waitMs);        // รอแอนิเมชันจบก่อนวัดสี/ถ่ายภาพ
             const m = await page.evaluate(MEASURE);
             if (job.shotDir) await page.screenshot({ path: `${job.shotDir}/${p.name}-${theme}-${vp.width}.png`, fullPage: true });
             out.pages.push({ name: p.name, theme, width: vp.width, status: resp ? resp.status() : 0, pageErrors: errs, ...m });

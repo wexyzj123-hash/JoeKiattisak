@@ -11,7 +11,6 @@ from flask import Blueprint, abort, current_app, g, redirect, render_template, r
 from shared.sso import sign_token
 from shared.urls import public_url
 
-from .. import dashboard
 from ..db import get_db
 from ..security import login_required
 
@@ -72,45 +71,16 @@ def brand_file(name):
     return send_file(brand.ASSET_DIR / name, mimetype="image/png", max_age=3600)
 
 
-ASSETS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
-ASSET_TYPES = {"dashboard.css": "text/css", "dashboard.js": "text/javascript"}
-
-
-@bp.route("/static/hub/<name>")
-def hub_asset(name):
-    if name not in ASSET_TYPES:
-        abort(404)
-    return send_file(os.path.join(ASSETS, name), mimetype=ASSET_TYPES[name], max_age=300)
-
-
-def _board_context():
-    db = get_db()
-    rows = db.execute("SELECT * FROM app_registry WHERE enabled=1 ORDER BY sort, id").fetchall()
-    apps, safety_row = [], None
+@bp.route("/")
+@login_required
+def home():
+    rows = get_db().execute("SELECT * FROM app_registry WHERE enabled=1 ORDER BY sort, id").fetchall()
+    apps = []
     for r in rows:
         if _allowed(r):
             badge = fetch_badge(r, current_app.config["SERVICE_TOKEN"]) if r["key"] in BADGE_APPS else None
             apps.append({"key": r["key"], "name_th": r["name_th"], "badge": badge, "link": r["link_mode"] == "link"})
-            if r["key"] == "safety":
-                safety_row = r
-    data = dashboard.build(db, apps, safety_row, current_app.config["SERVICE_TOKEN"])
-    return {"d": data, "apps": apps, "any_badge": any(a["badge"] for a in apps), "spark": dashboard.spark,
-            "can_enter": g.user["role"] in ("admin", "supervisor"), "is_admin": g.user["role"] == "admin"}
-
-
-@bp.route("/")
-@login_required
-def home():
-    return render_template("launcher.html", **_board_context())
-
-
-@bp.route("/dashboard/fragment")
-@login_required
-def board_fragment():
-    """ส่วนตัวเลขของแดชบอร์ดอย่างเดียว — หน้าเว็บเรียกซ้ำทุก 60 วินาทีเพื่อรีเฟรชโดยไม่โหลดทั้งหน้า"""
-    resp = current_app.response_class(render_template("_board.html", **_board_context()), mimetype="text/html")
-    resp.headers["Cache-Control"] = "no-store"
-    return resp
+    return render_template("launcher.html", apps=apps, any_badge=any(a["badge"] for a in apps))
 
 
 @bp.route("/go/<key>")

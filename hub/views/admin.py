@@ -6,7 +6,6 @@ import sqlite3
 
 from flask import Blueprint, flash, g, redirect, render_template, request
 
-from .. import metrics
 from ..db import get_db
 from ..security import MIN_PASSWORD, ROLE_TH, hash_password, role_required
 
@@ -106,30 +105,3 @@ def users():
         return redirect("/admin/users")
     rows = db.execute("SELECT * FROM users ORDER BY id").fetchall()
     return render_template("admin_users.html", users=rows, roles=ROLE_TH)
-
-
-@bp.route("/metrics", methods=["GET", "POST"])
-@role_required("admin", "supervisor")
-def metrics_admin():
-    """ตัวชี้วัดสิ่งแวดล้อม/Utility: แอดมินจัดการตัวชี้วัด; แอดมินและหัวหน้างานบันทึกค่า/นำเข้า CSV"""
-    db = get_db()
-    if request.method == "POST":
-        f, action = request.form, request.form.get("action")
-        is_admin = g.user["role"] == "admin"
-        if action == "reading":
-            errors = metrics.save_reading(db, g.user, f.get("key", ""), f.get("date", ""), f.get("value", ""))
-            flash(errors[0] if errors else "บันทึกค่าแล้ว")
-        elif action == "import":
-            upload = request.files.get("file")
-            text = (upload.read(metrics.CSV_MAX + 1).decode("utf-8-sig", "replace") if upload and upload.filename else f.get("csv", ""))
-            ok, errors = metrics.import_csv(db, g.user, text)
-            flash(f"นำเข้าสำเร็จ {ok} ค่า" + (f" · ข้าม {len(errors)} บรรทัด: " + " / ".join(errors[:5]) if errors else ""))
-        elif action in ("save", "toggle") and is_admin:
-            errors = metrics.save_metric(db, f) if action == "save" else metrics.toggle_metric(db, f.get("key", ""))
-            flash(errors[0] if errors else "บันทึกแล้ว")
-        else:
-            flash("คุณไม่มีสิทธิ์ทำรายการนี้")
-        return redirect("/admin/metrics")
-    rows = db.execute("SELECT m.*, (SELECT COUNT(*) FROM metric_readings r WHERE r.metric_id = m.id) AS n, "
-                      "(SELECT MAX(read_date) FROM metric_readings r WHERE r.metric_id = m.id) AS last FROM metrics m ORDER BY zone DESC, sort, id").fetchall()
-    return render_template("admin_metrics.html", rows=rows, zones=metrics.ZONES, is_admin=g.user["role"] == "admin", today=__import__("datetime").date.today().isoformat())

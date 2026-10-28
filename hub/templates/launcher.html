@@ -1,8 +1,7 @@
 {% extends "base.html" %}
-{% block title %}แดชบอร์ดโรงงาน · AIAT Hub{% endblock %}
+{% block title %}ระบบทั้งหมด · AIAT Hub{% endblock %}
 {% block toggle %}{% endblock %}
 {% block shell %}
-<link rel="stylesheet" href="/static/hub/dashboard.css">
 <header class="hub-top">
   <a class="brand" href="/">{{ shield_logo(40) }}<span><strong>{{ BRAND_TITLE }}</strong><small>{{ BRAND_TAGLINE }}</small></span></a>
   <button type="button" class="icon-btn" data-theme-toggle aria-label="สลับธีมสว่าง/มืด" title="สลับธีมสว่าง/มืด">{{ icon('sun-moon', 20) }}</button>
@@ -10,24 +9,30 @@
     <summary aria-label="เมนูผู้ใช้: {{ g.user['name_th'] }}">{{ icon('user', 18) }}<span class="who">{{ g.user['name_th'] }}</span>{{ icon('chevron-down', 16) }}</summary>
     <div class="menu-pop">
       <div class="menu-head"><strong>{{ g.user['name_th'] }}</strong><small>{{ g.user['role'] }}</small></div>
-      {% if can_enter %}<a href="/admin/metrics">{{ icon('sliders', 16) }} ตัวชี้วัดสิ่งแวดล้อม/Utility</a>{% endif %}
       {% if g.user['role'] == 'admin' %}<a href="/admin/apps">{{ icon('layers', 16) }} ทะเบียนระบบ</a><a href="/admin/users">{{ icon('users', 16) }} ผู้ใช้</a>{% endif %}
       <form method="post" action="/logout"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button type="submit" class="link-btn">{{ icon('logout', 16) }} ออกจากระบบ</button></form>
     </div>
   </details>
 </header>
-<main class="board-wrap">
+<main class="wrap">
 {% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
-<section class="greet">
-  <div class="greet-art">{{ mascot('alert' if any_badge else 'default', 76, decorative=True) }}</div>
-  <div>
-    <p class="greet-hi">สวัสดี {{ g.user['name_th'] }}</p>
-    <h1>ภาพรวมโรงงานวันนี้</h1>
-    <p class="greet-sub">{{ 'มีรายการที่ต้องติดตาม — ดูไฟสัญญาณและตัวเลขด้านล่าง' if any_badge else 'เข้าสู่ระบบครั้งเดียว ใช้ได้ทุกระบบที่คุณมีสิทธิ์' }}</p>
+<section class="hero">
+  <div class="hero-text">
+    <p class="hero-kicker">สวัสดี {{ g.user['name_th'] }}</p>
+    <h1>เลือกระบบที่ต้องการใช้งาน</h1>
+    <p>{{ 'มีรายการที่ต้องติดตาม — เปิดระบบที่มีตัวเลขแจ้งเตือนเพื่อดูรายละเอียด' if any_badge else 'เข้าสู่ระบบครั้งเดียว ใช้ได้ทุกระบบที่คุณมีสิทธิ์' }}</p>
   </div>
-  <p class="clock" aria-hidden="true"><time id="clock" data-tz="Asia/Bangkok"></time></p>
+  <div class="hero-art">{{ mascot('alert' if any_badge else 'default', 150, decorative=True) }}</div>
 </section>
-<div id="board" data-fragment="/dashboard/fragment" data-refresh="60">{% include "_board.html" %}</div>
+<div class="tiles">
+  {% for a in apps %}
+  <a class="tile" href="/go/{{ a['key'] }}"{% if a['link'] %} target="_blank" rel="noopener noreferrer"{% endif %}>
+    {% if a['badge'] %}<span class="badge">{{ a['badge'] }}<span class="sr-only"> รายการที่ต้องติดตาม</span></span>{% endif %}
+    <span class="kpi-ic">{{ icon('shield' if a['key'] == 'safety' else 'layers', 24) }}</span>
+    <strong>{{ a['name_th'] }}</strong>
+    <span class="muted">{{ 'เปิดระบบ (แท็บใหม่)' if a['link'] else 'เข้าสู่ระบบ' }}</span>
+  </a>
+  {% else %}<p>ยังไม่มีระบบที่คุณเข้าถึงได้</p>{% endfor %}
+</div>
 </main>
-<script src="/static/hub/dashboard.js" defer></script>
 {% endblock %}
