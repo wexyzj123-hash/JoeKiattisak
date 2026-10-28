@@ -71,3 +71,115 @@ def validate_levels(levels: list[dict], max_score: int) -> list[str]:
     if ranges and expect <= max_score:
         errors.append(f"มีช่องว่างของคะแนน {expect}-{max_score} ที่ไม่มีระดับความเสี่ยง")
     return errors
+
+
+# ---------- หน้าจอเกณฑ์ความเสี่ยง: บันทึกทั้งฟอร์มในครั้งเดียว (atomic) ----------
+MAX_SCALE_ROWS = 10
+EXTRA_LEVEL_ROWS = 3
+_INT_RE = re.compile(r"^\s*-?\d+\s*$")
+
+
+def _int(raw) -> int | None:
+    return int(raw) if raw is not None and _INT_RE.match(str(raw)) else None
+
+
+def criteria_form_values(db) -> dict[str, str]:
+    """ค่าเริ่มต้นของฟอร์มจากฐานข้อมูล (ชื่อฟิลด์เดียวกับที่ apply_criteria อ่าน) — แถวมาตราส่วนครบ 10 แถว + แถวระดับว่างให้เพิ่ม"""
+    f: dict[str, str] = {"likelihood_size": str(scale_size(db, "likelihood")),
+                         "severity_size": str(scale_size(db, "severity"))}
+    for kind in ("likelihood", "severity"):
+        rows = {r["level"]: r for r in db.execute("SELECT * FROM risk_scales WHERE kind=?", (kind,))}
+        for n in range(1, MAX_SCALE_ROWS + 1):
+            f[f"{kind}_label_{n}"] = rows[n]["label_th"] if n in rows else ""
+            f[f"{kind}_desc_{n}"] = rows[n]["description"] if n in rows else ""
+    levels = list_levels(db)
+    f["level_count"] = str(len(levels) + EXTRA_LEVEL_ROWS)
+    for i in range(len(levels) + EXTRA_LEVEL_ROWS):
+        lv = levels[i] if i < len(levels) else None
+        f[f"level_id_{i}"] = str(lv["id"]) if lv else ""
+        f[f"level_name_{i}"] = lv["name_th"] if lv else ""
+        f[f"level_min_{i}"] = str(lv["min_score"]) if lv else ""
+        f[f"level_max_{i}"] = str(lv["max_score"]) if lv else ""
+        f[f"level_color_{i}"] = lv["color"] if lv else ""
+        f[f"level_sla_{i}"] = str(lv["sla_days"]) if lv else ""
+        f[f"level_approval_{i}"] = "1" if lv and lv["requires_approval"] else ""
+    return f
+
+
+def apply_criteria(db, form) -> list[str]:
+    errors: list[str] = []
+    sizes: dict[str, int | None] = {}
+    labels: list[tuple[str, int, str, str]] = []
+    for kind, th in (("likelihood", "โอกาส"), ("severity", "ความรุนแรง")):
+        size = _int(form.get(f"{kind}_size"))
+        if size is None or not 2 <= size <= MAX_SCALE_ROWS:
+            errors.append(f"ขนาดมาตราส่วน{th}ต้องเป็นจำนวนเต็ม 2-{MAX_SCALE_ROWS}")
+            sizes[kind] = None
+            continue
+        sizes[kind] = size
+        for n in range(1, size + 1):
+            label = (form.get(f"{kind}_label_{n}") or "").strip()
+            desc = (form.get(f"{kind}_desc_{n}") or "").strip()
+            if not label:
+                errors.append(f"กรุณากรอกชื่อระดับ{th}ที่ {n}")
+            elif len(label) > 100 or len(desc) > 300:
+                errors.append(f"ชื่อ/คำอธิบายระดับ{th}ที่ {n} ยาวเกินกำหนด (ชื่อ ≤ 100, คำอธิบาย ≤ 300)")
+            labels.append((kind, n, label, desc))
+    count = _int(form.get("level_count"))
+    if count is None or not 0 <= count <= 30:
+        errors.append("จำนวนแถวระดับความเสี่ยงไม่ถูกต้อง")
+        count = 0
+    levels, deleted_ids, kept_ids = [], set(), set()
+    existing_ids = {r["id"] for r in db.execute("SELECT id FROM risk_levels")}
+    for i in range(count):
+        g = lambda k: (form.get(f"level_{k}_{i}") or "").strip()
+        lid = _int(g("id")) if g("id") else None
+        if g("id") and (lid is None or lid not in existing_ids):
+            errors.append("ไม่พบระดับความเสี่ยงที่ต้องการแก้ไข")
+            continue
+        if g("delete") not in ("", "0"):
+            if lid is not None:
+                deleted_ids.add(lid)
+            continue
+        if lid is None and not (g("name") or g("min") or g("max") or g("color") or g("sla")):
+            continue                                                       # แถวว่างสำหรับเพิ่มระดับ — ข้าม
+        if lid is not None:
+            kept_ids.add(lid)
+        levels.append({"id": lid, "name_th": g("name"), "min_score": _int(g("min")), "max_score": _int(g("max")),
+                       "color": g("color"), "sla_days": _int(g("sla")),
+                       "requires_approval": 1 if g("approval") not in ("", "0") else 0})
+    if all(sizes.values()):
+        errors += validate_levels(levels, sizes["likelihood"] * sizes["severity"])
+        used = db.execute("SELECT MAX(likelihood), MAX(severity) FROM hazards").fetchone()
+        for kind, v in (("likelihood", used[0]), ("severity", used[1])):
+            if v and v > sizes[kind]:
+                errors.append(f"ลดขนาดมาตราส่วนเหลือ {sizes[kind]} ไม่ได้ เพราะมีรายการอันตรายที่ใช้ค่า {v} อยู่")
+    if errors:
+        return errors
+    try:
+        for kind in ("likelihood", "severity"):
+            db.execute("DELETE FROM risk_scales WHERE kind=? AND level>?", (kind, sizes[kind]))
+        for kind, n, label, desc in labels:
+            db.execute("INSERT INTO risk_scales(kind, level, label_th, description) VALUES(?,?,?,?) "
+                       "ON CONFLICT(kind, level) DO UPDATE SET label_th=excluded.label_th, description=excluded.description",
+                       (kind, n, label, desc))
+        gone = existing_ids - kept_ids
+        for lid in gone:
+            db.execute("UPDATE hazards SET risk_level_id=NULL WHERE risk_level_id=?", (lid,))       # ประวัติยังอยู่ใน snapshot
+            db.execute("DELETE FROM risk_levels WHERE id=?", (lid,))
+        for lid in kept_ids:                                               # ชื่อชั่วคราวก่อน — กันชนกันตอนสลับชื่อ
+            db.execute("UPDATE risk_levels SET name_th=? WHERE id=?", (f"__tmp_{lid}", lid))
+        for pos, lv in enumerate(levels):
+            args = (lv["name_th"], lv["min_score"], lv["max_score"], lv["color"], lv["sla_days"],
+                    lv["requires_approval"], pos)
+            if lv["id"] is None:
+                db.execute("INSERT INTO risk_levels(name_th,min_score,max_score,color,sla_days,requires_approval,sort) "
+                           "VALUES(?,?,?,?,?,?,?)", args)
+            else:
+                db.execute("UPDATE risk_levels SET name_th=?, min_score=?, max_score=?, color=?, sla_days=?, "
+                           "requires_approval=?, sort=? WHERE id=?", args + (lv["id"],))
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return []
