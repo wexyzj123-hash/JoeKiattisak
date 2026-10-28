@@ -11,28 +11,32 @@ def labels(groups):
     return [[i.label for i in g.items] for g in groups]
 
 
-def test_admin_sees_all_three_groups_in_screenshot_order():
+HOME = ["หน้าหลัก"]
+
+
+def test_admin_sees_home_plus_all_three_groups_in_screenshot_order():
     groups = nav_items(ALL, "/")
-    assert [g.title for g in groups] == ["ระบบข้อมูลหลัก", "ข้อมูลองค์กร", "ผู้ดูแลระบบ"]
+    assert [g.title for g in groups] == ["เมนูหลัก", "ระบบข้อมูลหลัก", "ข้อมูลองค์กร", "ผู้ดูแลระบบ"]
     assert labels(groups) == [
+        HOME,
         ["ภาพรวมดำเนินงาน", "ภาพรวมตามหน่วยงาน", "พื้นที่เสี่ยง", "ลงทะเบียนบันทึกอันตราย", "แหล่งที่มา", "ประเภทอันตราย"],
         ["โรงงาน", "แผนก", "ไลน์/กลุ่มงาน"],
         ["ประเภทผู้ใช้งาน", "ผู้ใช้งาน", "เกณฑ์ความเสี่ยง", "ฟิลด์เพิ่มเติม", "การแจ้งเตือน"]]
     hrefs = [i.href for g in groups for i in g.items]
-    assert hrefs == ["/overview", "/overview/departments", "/master/risk-areas", "/hazards", "/master/hazard-sources",
+    assert hrefs == ["/", "/overview", "/overview/departments", "/master/risk-areas", "/hazards", "/master/hazard-sources",
                      "/master/hazard-types", "/master/factories", "/master/departments", "/master/lines",
                      "/admin/roles", "/admin/users", "/admin/criteria", "/admin/custom-fields", "/admin/notifications"]
 
 
 def test_nav_items_hide_unpermitted():
     viewer = nav_items({"master.view"}, "/")
-    assert [g.title for g in viewer] == ["ระบบข้อมูลหลัก", "ข้อมูลองค์กร"]
-    assert "ลงทะเบียนบันทึกอันตราย" not in labels(viewer)[0]
-    assert labels(nav_items({"hazard.report"}, "/")) == [["ลงทะเบียนบันทึกอันตราย"]]
+    assert [g.title for g in viewer] == ["เมนูหลัก", "ระบบข้อมูลหลัก", "ข้อมูลองค์กร"]
+    assert "ลงทะเบียนบันทึกอันตราย" not in labels(viewer)[1]
+    assert labels(nav_items({"hazard.report"}, "/")) == [HOME, ["ลงทะเบียนบันทึกอันตราย"]]
     assert nav_items(set(), "/") == []
-    assert labels(nav_items({"users.manage"}, "/")) == [["ผู้ใช้งาน", "การแจ้งเตือน"]]
-    assert labels(nav_items({"criteria.manage"}, "/")) == [["เกณฑ์ความเสี่ยง", "ฟิลด์เพิ่มเติม"]]
-    assert labels(nav_items({"roles.manage"}, "/")) == [["ประเภทผู้ใช้งาน"]]
+    assert labels(nav_items({"users.manage"}, "/")) == [HOME, ["ผู้ใช้งาน", "การแจ้งเตือน"]]
+    assert labels(nav_items({"criteria.manage"}, "/")) == [HOME, ["เกณฑ์ความเสี่ยง", "ฟิลด์เพิ่มเติม"]]
+    assert labels(nav_items({"roles.manage"}, "/")) == [HOME, ["ประเภทผู้ใช้งาน"]]
 
 
 @pytest.mark.parametrize("path, active", [
@@ -52,8 +56,16 @@ def test_nav_marks_exactly_one_active_item(path, active):
     assert marked == [active]
 
 
-def test_nav_marks_nothing_on_other_pages():
-    assert [i for g in nav_items(ALL, "/") for i in g.items if i.active] == []
+def test_nav_marks_home_active_only_on_root():
+    assert [i.label for g in nav_items(ALL, "/") for i in g.items if i.active] == HOME
+    assert [i.label for g in nav_items(ALL, "/nowhere") for i in g.items if i.active] == []
+
+
+def test_every_nav_item_has_a_known_icon():
+    from shared.icons import ICONS
+    for g in nav_items(ALL, "/"):
+        for i in g.items:
+            assert i.icon in ICONS, (i.label, i.icon)
 
 
 def test_rendered_sidebar_for_admin_and_viewer(safety_app):
@@ -63,6 +75,29 @@ def test_rendered_sidebar_for_admin_and_viewer(safety_app):
     assert 'class="nav-item active"' in html
     viewer = login(safety_app, "viewer").get("/master/factories").get_data(as_text=True)
     assert "ประเภทผู้ใช้งาน" not in viewer and "ผู้ดูแลระบบ" not in viewer and "ข้อมูลองค์กร" in viewer
+
+
+def test_shell_shows_brand_tagline_footer_and_wordmark(safety_app):
+    html = login(safety_app, "admin").get("/").get_data(as_text=True)
+    for text in ("Safety 4.0", "Safe People · Safe Workplace · Sustainable Future", "Safety Today, Better Tomorrow"):
+        assert text in html
+    assert 'class="wordmark"' in html
+
+
+def test_top_bar_has_search_bell_toggle_and_user_menu(safety_app):
+    html = login(safety_app, "admin").get("/").get_data(as_text=True)
+    assert 'class="topbar"' in html and 'action="/search"' in html and 'name="q"' in html
+    assert 'aria-label="ค้นหารายการอันตราย"' in html and 'data-theme-toggle' in html and 'id="bell-badge"' in html
+    assert '<details class="user-menu">' in html and 'href="/profile"' in html
+    assert 'action="/logout"' in html and 'name="_csrf"' in html
+
+
+def test_icon_only_controls_are_labelled(safety_app):
+    import re
+    html = login(safety_app, "admin").get("/").get_data(as_text=True)
+    for tag in re.findall(r"<(?:button|a|summary)\b[^>]*>(?:(?!</(?:button|a|summary)>).)*</(?:button|a|summary)>", html, re.S):
+        text = re.sub(r"<svg.*?</svg>|<[^>]+>", "", tag, flags=re.S).strip()
+        assert text or "aria-label" in tag.split(">")[0], tag[:120]
 
 
 def test_reporter_sees_only_hazard_registration_in_nav(safety_app):

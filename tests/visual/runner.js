@@ -9,7 +9,10 @@ const MEASURE = () => {
   const ratio = (a, b) => { const la = lum(a), lb = lum(b); return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05); };
   const bgOf = (el) => {
     const stack = [];
-    for (let n = el; n; n = n.parentElement) { const c = parse(getComputedStyle(n).backgroundColor); if (c && c.a > 0) { stack.push(c); if (c.a >= 0.99) break; } }
+    for (let n = el; n; n = n.parentElement) {
+      const bi = getComputedStyle(n).backgroundImage;
+      if (bi && bi.indexOf('gradient') >= 0) { const stops = (bi.match(/rgba?\([^)]+\)/g) || []).map(parse).filter(Boolean); if (stops.length) return { gradient: stops }; }
+      const c = parse(getComputedStyle(n).backgroundColor); if (c && c.a > 0) { stack.push(c); if (c.a >= 0.99) break; } }
     let base = { r: 255, g: 255, b: 255, a: 1 };
     const bodyBg = parse(getComputedStyle(document.body).backgroundColor); if (bodyBg && bodyBg.a > 0) base = bodyBg;
     for (let i = stack.length - 1; i >= 0; i--) base = blend(stack[i], base);
@@ -25,7 +28,10 @@ const MEASURE = () => {
     const cs = getComputedStyle(el); if (cs.visibility === 'hidden' || cs.display === 'none') continue;
     const rect = el.getBoundingClientRect(); if (rect.width === 0 || rect.height === 0) continue;
     const fg = parse(cs.color); if (!fg) continue;
-    const bg = bgOf(el); const fgc = fg.a < 1 ? blend(fg, bg) : fg;
+    const bgRaw = bgOf(el); const stops = bgRaw.gradient || [bgRaw];                 // พื้นหลังไล่เฉด: วัดกับทุกจุดสี ใช้ค่าที่แย่ที่สุด
+    let bg = stops[0], worst = Infinity;
+    for (const st of stops) { const f0 = fg.a < 1 ? blend(fg, st) : fg; const rr = ratio(f0, st); if (rr < worst) { worst = rr; bg = st; } }
+    const fgc = fg.a < 1 ? blend(fg, bg) : fg;
     const size = parseFloat(cs.fontSize), bold = parseInt(cs.fontWeight, 10) >= 700;
     const need = (size >= 24 || (size >= 18.66 && bold)) ? 3 : 4.5;
     const r = ratio(fgc, bg);

@@ -86,29 +86,55 @@ table th, table td { text-align: left; padding: 8px 10px; border-bottom: 1px sol
 /* ปุ่มสลับธีม */
 .theme-toggle { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 999px; width: 40px; height: 40px; padding: 0; display: inline-grid; place-items: center; flex: none; }
 .theme-toggle svg { width: 20px; height: 20px; }
+.icon { flex: none; vertical-align: middle; }
 .theme-fixed { position: fixed; top: 12px; right: 12px; z-index: 5; }
 
-/* โครงหน้า Safety: เมนูด้านข้าง + เนื้อหา (มือถือ: เมนูพับเก็บ) */
-.shell { display: grid; grid-template-columns: 250px minmax(0, 1fr); min-height: 100vh; }
-.sidebar { background: var(--panel-2); border-right: 1px solid var(--line); padding: 16px 0; display: flex; flex-direction: column; }
-.sidebar-top { display: flex; align-items: center; gap: 10px; padding: 4px 16px 12px 20px; }
-.brand { font-weight: 800; font-size: 1.15rem; color: var(--link); flex: 1; }
+/* โครงหน้า Safety 4.0: แถบข้างสีน้ำเงินไล่เฉด + แถบบน + เนื้อหา (มือถือ: เมนูพับเก็บ) */
+.shell { display: grid; grid-template-columns: 264px minmax(0, 1fr); min-height: 100vh; }
+.sidebar { background: linear-gradient(180deg, var(--shell-1), var(--shell-2)); color: var(--shell-text); padding: 16px 0; display: flex; flex-direction: column; }
+.sidebar-top { display: flex; align-items: center; gap: 10px; padding: 4px 16px 12px 18px; }
+.brand { display: flex; gap: 10px; align-items: center; color: var(--shell-text); text-decoration: none; flex: 1; min-width: 0; }
+.brand span { display: grid; line-height: 1.2; min-width: 0; }
+.brand strong { font-size: 1.25rem; font-weight: 800; }
+.brand small { font-size: .68rem; opacity: .92; }
 .nav-toggle { position: absolute; opacity: 0; pointer-events: none; }
-.nav-burger { display: none; cursor: pointer; border: 1px solid var(--line); border-radius: 10px; padding: 6px 12px; color: var(--text); background: var(--panel); font-weight: 700; }
+.nav-burger { display: none; cursor: pointer; border: 1px solid rgba(255,255,255,.5); border-radius: 10px; padding: 6px 12px; color: var(--shell-text); font-weight: 700; align-items: center; gap: 6px; }
 .nav-body { display: flex; flex-direction: column; flex: 1; }
-.nav-group { padding: 14px 20px 6px; color: var(--muted); font-size: .8rem; letter-spacing: .04em; }
-.nav-item { display: block; padding: 9px 20px 9px 32px; color: var(--text); text-decoration: none; border-left: 3px solid transparent; }
-.nav-item:hover { background: rgba(127,127,127,.12); }
-.nav-item.active { color: var(--link); border-left-color: var(--primary); background: rgba(11,79,184,.12); font-weight: 700; }
-.nav-user { margin-top: auto; padding: 16px 20px 0; display: grid; gap: 8px; color: var(--muted); }
+.nav-group { padding: 14px 20px 6px; color: var(--shell-text); opacity: .82; font-size: .78rem; letter-spacing: .05em; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 14px; margin: 2px 12px; color: var(--shell-text); text-decoration: none; border-radius: 12px; }
+.nav-item:hover { background: rgba(255,255,255,.14); }
+.nav-item.active { background: #ffffff; color: #0a3a8f; font-weight: 700; }
+.nav-item .icon { flex: none; }
+.nav-foot { margin-top: auto; padding: 18px 20px 4px; display: grid; gap: 4px; color: var(--shell-text); }
+.nav-foot small { opacity: .9; font-size: .75rem; }
+.main-col { min-width: 0; display: flex; flex-direction: column; }
+.topbar { display: flex; align-items: center; gap: 10px; padding: 10px 24px; background: var(--panel); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 4; }
+.search { flex: 1; display: flex; align-items: center; gap: 4px; max-width: 520px; margin-right: auto; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding-right: 4px; }
+.search input { border: 0; background: transparent; padding: 9px 16px; min-width: 0; }
+.search input:focus-visible { outline-offset: -2px; }
+.icon-btn { position: relative; display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--text); padding: 0; flex: none; text-decoration: none; }
+.icon-btn.flat { border: 0; background: transparent; width: 34px; height: 34px; }
+.icon-btn .badge { top: -4px; right: -4px; position: absolute; }
+.user-menu { position: relative; }
+.user-menu summary { list-style: none; display: flex; align-items: center; gap: 6px; cursor: pointer; border: 1px solid var(--line); border-radius: 999px; padding: 7px 12px; background: var(--panel); max-width: 220px; }
+.user-menu summary::-webkit-details-marker { display: none; }
+.user-menu .who { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu-pop { position: absolute; right: 0; top: calc(100% + 6px); min-width: 220px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 6px; display: grid; gap: 2px; z-index: 6; }
+.menu-head { display: grid; padding: 8px 10px; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+.menu-head small { color: var(--muted); }
+.menu-pop a, .link-btn { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 8px; color: var(--text); text-decoration: none; background: transparent; width: 100%; font-weight: 600; text-align: left; }
+.menu-pop a:hover, .link-btn:hover { background: var(--panel-2); filter: none; }
 .content { padding: 24px; min-width: 0; }
 @media (max-width: 800px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
-  .sidebar { padding: 8px 0; border-right: 0; border-bottom: 1px solid var(--line); }
-  .nav-burger { display: inline-block; }
-  .nav-body { display: none; }
+  .sidebar { padding: 8px 0; }
+  .nav-burger { display: inline-flex; }
+  .nav-body { display: none; padding-bottom: 12px; }
   .nav-toggle:checked ~ .nav-body { display: flex; }
-  .nav-toggle:focus-visible ~ .sidebar-top .nav-burger { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .nav-toggle:focus-visible ~ .sidebar-top .nav-burger { outline: 3px solid #ffffff; outline-offset: 2px; }
+  .topbar { padding: 8px 12px; flex-wrap: wrap; position: static; }
+  .search { order: 5; flex-basis: 100%; max-width: none; }
+  .user-menu .who { display: none; }
   .content { padding: 16px; }
   .scene { margin-top: 3vh; }
 }

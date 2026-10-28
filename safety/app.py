@@ -40,6 +40,9 @@ def create_app(test_config: dict | None = None) -> Flask:
     from shared.mascot import DEFAULT_LABEL, mascot_svg
     app.jinja_env.globals["mascot"] = lambda mood="default", size=120, label=DEFAULT_LABEL, decorative=False: Markup(mascot_svg(mood, size, label, decorative))
     from shared.icons import icon
+    from shared import brand
+    app.jinja_env.globals.update(aisin_wordmark=lambda *a, **k: Markup(brand.aisin_wordmark(*a, **k)), shield_logo=lambda *a, **k: Markup(brand.shield_logo(*a, **k)),
+                                 BRAND_TITLE=brand.TITLE, BRAND_TAGLINE=brand.TAGLINE, BRAND_FOOTER=brand.FOOTER)
     app.jinja_env.globals["icon"] = icon
     install_csrf(app)
     app.before_request(load_user)
