@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hmac
 import secrets
+from urllib.parse import urlsplit
 from functools import wraps
 
 from flask import abort, g, redirect, request, session, url_for
@@ -42,9 +43,14 @@ def install_csrf(app) -> None:
 
 def safe_next(target: str | None) -> str:
     """รับเฉพาะ path ภายในเว็บ — กัน open redirect"""
-    if target and target.startswith("/") and not target.startswith("//") and "\\" not in target:
-        return target
-    return "/"
+    if not target or not target.startswith("/") or target.startswith("//") or "\\" in target:
+        return "/"
+    if any(ord(ch) <= 0x20 or ord(ch) == 0x7F for ch in target):     # tab/newline/space/NUL — เบราว์เซอร์ตัดทิ้งแล้วกลายเป็น //host
+        return "/"
+    parts = urlsplit(target)
+    if parts.scheme or parts.netloc:
+        return "/"
+    return target
 
 
 def load_user() -> None:

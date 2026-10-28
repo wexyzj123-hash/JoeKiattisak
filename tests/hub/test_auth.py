@@ -91,6 +91,36 @@ def test_get_logout_clears_session_for_safety_redirect(hub_app):
     c = hub_app.test_client()
     login(c)
     r = c.get("/logout")
-    assert r.status_code == 302 and r.headers["Location"].endswith("/login")
+    assert r.status_code == 302 and r.headers["Location"] == "http://safety.test/signout"
     with c.session_transaction() as s:
         assert "uid" not in s
+
+
+@pytest.mark.parametrize("nxt", ["/%09/evil.example", "/%0a/x", "/%0d/x", "/%5C/evil.example", "/%2F/evil.example",
+                                 "/ x", "/\x00x"])
+def test_login_rejects_control_chars_and_encoded_slashes_in_next(hub_app, nxt):
+    add_user(hub_app)
+    r = login(hub_app.test_client(), next_url=nxt)
+    assert r.status_code == 302
+    assert r.headers["Location"] in ("/", "http://localhost/")
+
+
+def test_cookie_names_are_app_specific(hub_app, safety_app):
+    assert hub_app.config["SESSION_COOKIE_NAME"] == "aiat_hub_session"
+    assert safety_app.config["SESSION_COOKIE_NAME"] == "aiat_safety_session"
+
+
+@pytest.mark.parametrize("field", ["SSO_SECRET", "SERVICE_TOKEN"])
+def test_create_app_rejects_shipped_placeholder_secrets(tmp_path, field):
+    cfg = {"DATABASE": str(tmp_path / "h.db"), "SECRET_KEY": "k", "SSO_SECRET": "t" * 40,
+           "SERVICE_TOKEN": "s", "SAFETY_URL": "http://x", field: "change-me-to-a-random-string-of-32+chars"}
+    with pytest.raises(RuntimeError):
+        create_app(cfg)
+
+
+def test_hub_logout_also_signs_out_of_safety(hub_app):
+    add_user(hub_app)
+    c = hub_app.test_client()
+    login(c)
+    r = c.post("/logout", data={"_csrf": csrf(c)})
+    assert r.headers["Location"] == "http://safety.test/signout"

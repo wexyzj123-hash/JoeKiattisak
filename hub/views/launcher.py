@@ -64,5 +64,5 @@ def go(key: str):
     if not _allowed(row):
         abort(403)
     token = sign_token(current_app.config["SSO_SECRET"],
-                       {"uid": g.user["id"], "name": g.user["name_th"], "roles": [g.user["role"]]})
+                       {"uid": g.user["id"], "name": g.user["name_th"], "roles": [g.user["role"]], "aud": row["key"]})
     return redirect(row["url"].rstrip("/") + "/sso?" + urlencode({"token": token}))

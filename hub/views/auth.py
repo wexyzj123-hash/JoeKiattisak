@@ -44,4 +44,6 @@ def login():
 @bp.route("/logout", methods=["GET", "POST"])   # GET: Safety ส่งผู้ใช้มาออกจากระบบกลาง
 def logout():
     session.clear()
-    return redirect("/login")
+    safety = get_db().execute("SELECT url FROM app_registry WHERE key='safety' AND enabled=1").fetchone()
+    # ออกจาก Safety ด้วย (Safety ล้าง session ของตัวเองแล้วส่งกลับ /login ของ Hub)
+    return redirect(safety["url"].rstrip("/") + "/signout" if safety else "/login")

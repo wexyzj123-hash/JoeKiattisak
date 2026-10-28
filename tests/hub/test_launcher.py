@@ -61,6 +61,7 @@ def test_go_redirects_with_verifiable_token(hub_app):
     assert f"{u.scheme}://{u.netloc}{u.path}" == "http://safety.test/sso"
     claims = verify_token(SECRET, parse_qs(u.query)["token"][0])
     assert claims["name"] == "สมชาย" and claims["roles"] == ["supervisor"] and claims["uid"] >= 1
+    assert claims["aud"] == "safety"
 
 
 def test_go_forbidden_for_wrong_role(hub_app):

@@ -3,14 +3,16 @@ from __future__ import annotations
 
 import hashlib
 import os
+from datetime import timedelta
 
 from flask import Flask
+
+from shared.envfile import validate_secrets
 
 from . import db as safetydb
 from .security import install_csrf, load_user
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-MIN_SECRET = 32
 
 
 def create_app(test_config: dict | None = None) -> Flask:
@@ -20,13 +22,13 @@ def create_app(test_config: dict | None = None) -> Flask:
         SSO_SECRET=os.environ.get("SSO_SECRET", ""),
         SERVICE_TOKEN=os.environ.get("SERVICE_TOKEN", ""),
         HUB_URL=os.environ.get("HUB_URL", "http://localhost:5000"),
-        SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_NAME="aiat_safety_session", PERMANENT_SESSION_LIFETIME=timedelta(hours=8), SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
     )
     if test_config:
         app.config.update(test_config)
-    if len(app.config["SSO_SECRET"]) < MIN_SECRET:
-        raise RuntimeError(f"SSO_SECRET ต้องยาวอย่างน้อย {MIN_SECRET} ตัวอักษร (ตั้งในไฟล์ .env)")
-    if not app.config.get("SECRET_KEY"):
+    validate_secrets(app.config["SSO_SECRET"], app.config["SERVICE_TOKEN"])
+    app.config.setdefault("SECRET_KEY", os.environ.get("SAFETY_SECRET_KEY"))
+    if not app.config["SECRET_KEY"]:
         app.config["SECRET_KEY"] = hashlib.sha256(("safety-session:" + app.config["SSO_SECRET"]).encode()).hexdigest()
 
     safetydb.init_app(app)

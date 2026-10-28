@@ -6,11 +6,12 @@ import os
 
 from flask import Flask, g
 
+from shared.envfile import validate_secrets
+
 from . import db as hubdb
 from .security import install_csrf, load_user
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-MIN_SECRET = 32
 
 
 def create_app(test_config: dict | None = None) -> Flask:
@@ -20,14 +21,13 @@ def create_app(test_config: dict | None = None) -> Flask:
         SSO_SECRET=os.environ.get("SSO_SECRET", ""),
         SERVICE_TOKEN=os.environ.get("SERVICE_TOKEN", ""),
         SAFETY_URL=os.environ.get("SAFETY_URL", "http://localhost:5200"),
-        SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_NAME="aiat_hub_session", SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
     )
     if test_config:
         app.config.update(test_config)
-    if len(app.config["SSO_SECRET"]) < MIN_SECRET:
-        raise RuntimeError(f"SSO_SECRET ต้องยาวอย่างน้อย {MIN_SECRET} ตัวอักษร (ตั้งในไฟล์ .env)")
-    app.config.setdefault("SECRET_KEY", None)
-    if not app.config["SECRET_KEY"]:
+    validate_secrets(app.config["SSO_SECRET"], app.config["SERVICE_TOKEN"])
+    app.config.setdefault("SECRET_KEY", os.environ.get("HUB_SECRET_KEY"))
+    if not app.config["SECRET_KEY"]:      # แนะนำให้ตั้ง HUB_SECRET_KEY แยกจาก SSO_SECRET (ผู้ถือ SSO_SECRET จะปลอมคุกกี้ไม่ได้)
         app.config["SECRET_KEY"] = hashlib.sha256(("hub-session:" + app.config["SSO_SECRET"]).encode()).hexdigest()
 
     hubdb.init_app(app)

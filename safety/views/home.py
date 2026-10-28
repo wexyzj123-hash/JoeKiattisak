@@ -23,6 +23,13 @@ def index():
     return render_template("home.html")
 
 
+@bp.route("/signout")
+def signout():
+    """Hub เรียกหลังผู้ใช้ออกจากระบบกลาง — ล้าง session ของ Safety แล้วกลับหน้าล็อกอินของ Hub"""
+    session.clear()
+    return redirect(current_app.config["HUB_URL"].rstrip("/") + "/login")
+
+
 @bp.route("/logout", methods=["POST"])
 def logout():
     session.clear()

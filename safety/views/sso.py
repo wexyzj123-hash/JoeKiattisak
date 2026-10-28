@@ -22,6 +22,8 @@ def sso():
     try:
         claims = verify_token(current_app.config["SSO_SECRET"], request.args.get("token", ""))
         hub_uid = int(claims["uid"])
+        if claims.get("aud") != "safety":      # token ที่ออกให้ระบบอื่นห้ามใช้ที่นี่
+            return _deny()
     except (SsoError, KeyError, TypeError, ValueError):
         return _deny()
     db = get_db()
@@ -42,5 +44,6 @@ def sso():
         db.execute("UPDATE safety_users SET name=? WHERE id=?", (str(claims["name"]), user["id"]))
     db.commit()
     session.clear()
+    session.permanent = True            # อายุตาม PERMANENT_SESSION_LIFETIME (8 ชั่วโมง)
     session["suid"] = user["id"]
     return redirect("/")
