@@ -64,7 +64,7 @@ def test_default_rules_seeded_once_and_not_overwritten(db):
     db.commit()
     ensure_schema(db); seed_notify(db)
     assert db.execute("SELECT enabled, channels FROM notify_rules WHERE event='hazard_closed'").fetchone()[:] == (0, "inapp")
-    assert db.execute("SELECT COUNT(*) FROM notify_rules").fetchone()[0] == 8                       # ไม่เติมกฎที่ลบไปกลับมา
+    assert db.execute("SELECT COUNT(*) FROM notify_rules").fetchone()[0] == 11                      # ไม่เติมกฎที่ลบไปกลับมา
 
 
 def test_default_settings_present_and_kept(db):
