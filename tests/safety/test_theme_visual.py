@@ -130,6 +130,11 @@ def world(tmp_path_factory):
     cp_done, _ = capa_mod.create(con, adm, {"title": "ทำเสร็จแล้ว", "owner_id": str(reporter), "due_date": "2026-12-05", "action_type": "preventive", "risk_area_id": str(ch["a"])},
                                  None)
     capa_mod.complete(con, user_row(con, reporter), cp_done, "ดำเนินการแล้ว")
+    from safety import report_due as rd_mod
+    for key, freq, extra in (("monthly", "monthly", {"department_id": str(ch["d"])}), ("annual", "yearly", {"due_month": "2"}), ("capa", "monthly", {})):
+        assert rd_mod.save_rule(con, adm, {"report_key": key, "frequency": freq, "due_day": "5", **extra}) == []
+    con.execute("UPDATE report_due SET created_at='2025-01-01 00:00:00'")
+    con.commit()
     h, sv = Live(hub), Live(saf)
     yield {"hub": h, "safety": sv, "hub_cookie": h.cookie({"uid": hub_uid}), "safe_cookie": sv.cookie({"suid": admin}), "hz": hz, "inc": inc, "checklist": clid, "d_round": d_round, "s_round": s_round, "cp_open": cp_open, "cp_done": cp_done, "chain": ch}
     h.close(); sv.close()
@@ -157,6 +162,8 @@ def pages(world):
         P("sf-patrols", s, "/patrols", sc), P("sf-patrol-draft", s, f"/patrols/{world['d_round']}", sc), P("sf-patrol-submitted", s, f"/patrols/{world['s_round']}", sc),
         P("sf-capas", s, "/capas", sc), P("sf-capa-new", s, "/capas/new", sc), P("sf-capa-open", s, f"/capas/{world['cp_open']}", sc),
         P("sf-capa-done", s, f"/capas/{world['cp_done']}", sc), P("sf-capa-settings", s, "/admin/capa-settings", sc),
+        P("sf-reports", s, "/reports", sc), P("sf-report-monthly", s, "/reports/monthly", sc), P("sf-report-annual", s, "/reports/annual", sc),
+        P("sf-report-incidents", s, "/reports/incidents", sc), P("sf-report-capa", s, "/reports/capa", sc), P("sf-report-due", s, "/admin/report-due", sc),
         P("sf-sso-error", s, "/sso?token=bad"),
     ]
 
@@ -194,7 +201,7 @@ def test_stacked_tables_are_labelled_and_controls_usable_on_narrow_screens(resul
     bad = [(r["name"], r["theme"], r["width"], r["stack"]) for r in results
            if r["stack"]["unlabeled"] or r["stack"]["narrowControls"] or r["stack"]["outside"]]
     assert not bad, json.dumps(bad, ensure_ascii=False)[:3000]
-    assert {r["name"] for r in results if r["stack"]["tables"]} >= {"sf-notify-admin", "sf-checklists", "sf-checklist-items", "sf-patrol-plans", "sf-patrols", "sf-capas", "sf-users", "sf-custom-fields", "sf-criteria", "sf-incidents", "sf-injury-admin",
+    assert {r["name"] for r in results if r["stack"]["tables"]} >= {"sf-notify-admin", "sf-checklists", "sf-checklist-items", "sf-patrol-plans", "sf-patrols", "sf-capas", "sf-report-due", "sf-report-monthly", "sf-users", "sf-custom-fields", "sf-criteria", "sf-incidents", "sf-injury-admin",
                                                                     "sf-hazards", "sf-factories", "hub-admin-users", "hub-admin-apps"}
 
 
