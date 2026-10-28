@@ -70,7 +70,7 @@ def test_new_events_rules_and_settings_seeded_once(db):
     assert by["capa_verified"] == [("owner", 0)] and by["capa_reopened"] == [("owner", 0)] and by["capa_due_soon"] == [("owner", 2)]
     assert by["capa_overdue"] == [("owner", 1), ("owner,role:dept_head", 3), ("role:admin,role:dept_head", 7)]
     assert by["patrol_due"] == [("owner", 0)] and by["patrol_overdue"] == [("owner,role:dept_head", 1), ("owner,role:dept_head", 5)]
-    assert db.execute("SELECT COUNT(*) FROM notify_rules").fetchone()[0] == 23
+    assert db.execute("SELECT COUNT(*) FROM notify_rules").fetchone()[0] == 26
     assert db.execute("SELECT value FROM app_settings WHERE key='require_capa_verified'").fetchone()[0] == "0"
     db.execute("DELETE FROM notify_rules WHERE event LIKE 'capa_%' OR event LIKE 'patrol_%'")
     db.execute("UPDATE app_settings SET value='1' WHERE key='require_capa_verified'"); db.commit()

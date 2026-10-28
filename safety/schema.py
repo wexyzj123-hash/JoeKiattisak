@@ -55,7 +55,7 @@ DEFAULT_ROLES = (
     ("dept_head", "หัวหน้าหน่วยงาน", "master.view,hazard.report,hazard.assign,hazard.close,incident.report,incident.investigate,"
                                      "patrol.view,capa.create,report.view,report.export"),
     ("reporter", "ผู้แจ้ง", "hazard.report,incident.report"),
-    ("viewer", "ผู้ดูข้อมูล", "master.view,report.view"),
+    ("viewer", "ผู้ดูข้อมูล", "master.view"),
 )
 
 
@@ -195,7 +195,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_custom_fields_key ON custom_fields(COALESCE
 
 NOTIFY_EVENTS = ("hazard_reported", "hazard_assessed", "hazard_assigned", "hazard_closed", "hazard_rejected", "due_soon", "overdue",
                  "incident_reported", "incident_assigned", "incident_closed",
-                 "capa_assigned", "capa_done", "capa_verified", "capa_reopened", "capa_due_soon", "capa_overdue", "patrol_due", "patrol_overdue")
+                 "capa_assigned", "capa_done", "capa_verified", "capa_reopened", "capa_due_soon", "capa_overdue", "patrol_due", "patrol_overdue",
+                 "report_due_soon", "report_overdue")
 NOTIFY_CHANNELS = ("inapp", "telegram", "line", "teams", "email")
 OUTBOX_CHANNELS = ("telegram", "line", "teams", "email")
 OUTBOX_STATUSES = ("pending", "sent", "failed", "dead", "cancelled")
@@ -311,6 +312,9 @@ def seed_notify(con) -> None:
     if con.execute("SELECT 1 FROM app_settings WHERE key='patrol_rules_seeded'").fetchone() is None:
         con.executemany("INSERT INTO notify_rules(event, recipients, channels, offset_days, min_score) VALUES(?,?,?,?,?)", PATROL_RULES)
         con.execute("INSERT INTO app_settings(key, value) VALUES('patrol_rules_seeded', '1')")
+    if con.execute("SELECT 1 FROM app_settings WHERE key='report_rules_seeded'").fetchone() is None:
+        con.executemany("INSERT INTO notify_rules(event, recipients, channels, offset_days, min_score) VALUES(?,?,?,?,?)", REPORT_RULES)
+        con.execute("INSERT INTO app_settings(key, value) VALUES('report_rules_seeded', '1')")
     if con.execute("SELECT 1 FROM app_settings WHERE key='incident_rules_seeded'").fetchone() is None:
         con.executemany("INSERT INTO notify_rules(event, recipients, channels, offset_days, min_score) VALUES(?,?,?,?,?)", INCIDENT_RULES)
         con.execute("INSERT INTO app_settings(key, value) VALUES('incident_rules_seeded', '1')")
@@ -574,6 +578,12 @@ CREATE TRIGGER IF NOT EXISTS capa_events_no_replace BEFORE INSERT ON capa_events
 WHEN EXISTS (SELECT 1 FROM capa_events WHERE id = NEW.id)
 BEGIN SELECT RAISE(ABORT, 'capa_events is append-only'); END;
 """
+
+REPORT_RULES = (
+    ("report_due_soon", "role:dept_head", "inapp,telegram", 3, None),
+    ("report_overdue", "role:dept_head", "inapp,telegram", 1, None),
+    ("report_overdue", "role:assessor", "inapp,telegram", 3, None),
+)
 
 PATROL_RULES = (
     ("capa_assigned", "owner", _ALL, 0, None),

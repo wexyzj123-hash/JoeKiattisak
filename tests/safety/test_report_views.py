@@ -20,6 +20,9 @@ def env(safety_app):
     head = login(safety_app, "dept_head", name="หัวหน้า", factory_id=a["f"])
     rep = login(safety_app, "reporter", name="ผู้แจ้ง")
     viewer = login(safety_app, "viewer", name="ผู้ดู")
+    con = connect(safety_app.config["DATABASE"])
+    con.execute("UPDATE safety_roles SET permissions='master.view,report.view' WHERE key='viewer'")
+    con.commit(); con.close()
     return type("E", (), dict(app=safety_app, a=a, b=b, admin=admin, head=head, rep=rep, viewer=viewer))
 
 
@@ -76,5 +79,5 @@ def test_new_permissions_apply_to_default_roles_only_for_new_installs(safety_app
     con = connect(safety_app.config["DATABASE"])
     assert {"report.view", "report.export", "report.manage"} <= role_permissions(con, "assessor")
     assert {"report.view", "report.export"} <= role_permissions(con, "dept_head") and "report.manage" not in role_permissions(con, "dept_head")
-    assert role_permissions(con, "viewer") >= {"report.view"} and "report.export" not in role_permissions(con, "viewer")
+    assert not {"report.view", "report.export"} & role_permissions(con, "viewer")             # แอดมินให้สิทธิ์เองที่ /admin/roles
     assert "report.view" not in role_permissions(con, "reporter")

@@ -20,7 +20,12 @@ HHMM_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
 ROLE_RE = re.compile(r"^role:[a-z][a-z0-9_]{1,31}$")
 EVENT_TH = {"hazard_reported": "แจ้งอันตรายใหม่", "hazard_assessed": "ประเมินความเสี่ยงแล้ว", "hazard_assigned": "มอบหมายผู้รับผิดชอบ",
             "hazard_closed": "ปิดรายการ", "hazard_rejected": "ปฏิเสธรายการ", "due_soon": "ใกล้ครบกำหนด", "overdue": "เกินกำหนด",
-            "incident_reported": "แจ้งอุบัติเหตุใหม่", "incident_assigned": "มอบหมายผู้สอบสวน", "incident_closed": "ปิดรายการอุบัติเหตุ"}
+            "incident_reported": "แจ้งอุบัติเหตุใหม่", "incident_assigned": "มอบหมายผู้สอบสวน", "incident_closed": "ปิดรายการอุบัติเหตุ",
+            "capa_assigned": "มอบหมาย CAPA", "capa_done": "CAPA ดำเนินการเสร็จ", "capa_verified": "CAPA ยืนยันผลแล้ว", "capa_reopened": "CAPA ถูกตีกลับ",
+            "capa_due_soon": "CAPA ใกล้ครบกำหนด", "capa_overdue": "CAPA เกินกำหนด", "patrol_due": "ถึงรอบตรวจความปลอดภัย", "patrol_overdue": "เลยรอบตรวจความปลอดภัย",
+            "report_due_soon": "ใกล้ครบกำหนดส่งรายงาน", "report_overdue": "เกินกำหนดส่งรายงาน"}
+SOON_EVENTS = ("due_soon", "capa_due_soon", "report_due_soon")                       # offset = จำนวนวันก่อนครบกำหนด (0-60)
+LATE_EVENTS = ("overdue", "capa_overdue", "patrol_overdue", "report_overdue")         # offset = จำนวนวันหลังครบกำหนด (ตั้งแต่ 1)
 CHANNEL_TH = {"inapp": "ในระบบ", "telegram": "Telegram", "line": "LINE", "teams": "Teams", "email": "อีเมล"}
 STATUS_TH = {"pending": "รอส่ง", "failed": "ล้มเหลว (จะลองใหม่)", "dead": "ส่งไม่สำเร็จถาวร", "sent": "ส่งแล้ว", "cancelled": "ยกเลิก"}
 MAX_RULES = 200
@@ -56,9 +61,9 @@ def validate_rule(db, form, rule_id: int | None = None) -> tuple[dict | None, li
     offset = _int(form.get("offset_days", "0"))
     if offset is None or not 0 <= offset <= 60:
         errors.append("จำนวนวัน (offset) ต้องเป็นจำนวนเต็ม 0-60")
-    elif event == "overdue" and offset < 1:
+    elif event in LATE_EVENTS and offset < 1:
         errors.append("กฎ 'เกินกำหนด' ต้องกำหนดจำนวนวันหลังครบกำหนดตั้งแต่ 1")
-    elif event not in ("due_soon", "overdue") and offset != 0:
+    elif event not in SOON_EVENTS + LATE_EVENTS and offset != 0:
         errors.append("เหตุการณ์นี้ไม่ใช้จำนวนวัน (ต้องเป็น 0)")
     min_raw = (form.get("min_score") or "").strip()
     min_score = None

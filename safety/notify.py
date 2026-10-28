@@ -48,6 +48,22 @@ def _split(text) -> list[str]:
     return [p.strip() for p in str(text or "").split(",") if p.strip()]
 
 
+def _covers(db, user, rec) -> bool:
+    """ขอบเขตของผู้ใช้ครอบคลุมรายการหรือไม่ — รายงานมี department_id (ว่าง = ทั้งบริษัท: เฉพาะผู้ไม่มีขอบเขต), รายการอื่นใช้พื้นที่เสี่ยง"""
+    try:
+        dept = rec["department_id"]
+    except (KeyError, IndexError):
+        return user_in_scope(db, user, rec["risk_area_id"])
+    if dept is None:
+        return user["factory_id"] is None and user["department_id"] is None
+    conds, args = ["d.id = ?"], [dept]
+    if user["factory_id"] is not None:
+        conds.append("d.factory_id = ?"); args.append(user["factory_id"])
+    if user["department_id"] is not None:
+        conds.append("d.id = ?"); args.append(user["department_id"])
+    return db.execute(f"SELECT 1 FROM departments d WHERE {' AND '.join(conds)}", args).fetchone() is not None
+
+
 def recipients_for(db, rule, hazard, actor_id: int | None, owner_fallback_role: str | None = None) -> list:
     """ผู้ใช้ที่ใช้งานอยู่ตามกฎ: reporter / owner / role:<key> (เฉพาะผู้ที่ขอบเขตครอบคลุมรายการ); ไม่รวมผู้กระทำเอง ไม่ซ้ำ"""
     found: dict[int, object] = {}
@@ -64,13 +80,13 @@ def recipients_for(db, rule, hazard, actor_id: int | None, owner_fallback_role: 
             owner = get(hazard["owner_id"])
             if owner is None and owner_fallback_role:                        # ไม่มีผู้ตรวจประจำแผน → ผู้ที่มีบทบาทนี้ในขอบเขต
                 for u in db.execute("SELECT * FROM safety_users WHERE role=? AND active=1 ORDER BY id", (owner_fallback_role,)):
-                    if user_in_scope(db, u, hazard["risk_area_id"]):
+                    if _covers(db, u, hazard):
                         add(u)
             else:
                 add(owner)
         elif kind.startswith("role:"):
             for u in db.execute("SELECT * FROM safety_users WHERE role=? AND active=1 ORDER BY id", (kind[5:],)):
-                if user_in_scope(db, u, hazard["risk_area_id"]):
+                if _covers(db, u, hazard):
                     add(u)
     return list(found.values())
 
@@ -106,7 +122,7 @@ def _stage(event: str, hazard, offset_days: int | None) -> str:
 
 
 def _rule_matches(rule, event: str, hazard, offset_days: int | None) -> bool:
-    if event in ("due_soon", "overdue", "capa_due_soon", "capa_overdue", "patrol_due", "patrol_overdue") and rule["offset_days"] != offset_days:
+    if event in ("due_soon", "overdue", "capa_due_soon", "capa_overdue", "patrol_due", "patrol_overdue", "report_due_soon", "report_overdue") and rule["offset_days"] != offset_days:
         return False
     if event == "hazard_assessed" and rule["min_score"] is not None:
         return hazard["score"] is not None and hazard["score"] >= rule["min_score"]
@@ -128,7 +144,7 @@ def _write_rows(db, event: str, rec, title: str, body: str, stage: str, ref: str
             continue
         key = f"{event}:{ref}:{rule['id']}:{stage}"
         channels = set(_split(rule["channels"]))
-        urgent = int(urgent_base or (event in ("overdue", "capa_overdue") and rule["offset_days"] >= 3))
+        urgent = int(urgent_base or (event in ("overdue", "capa_overdue", "report_overdue") and rule["offset_days"] >= 3))
         for user in recipients_for(db, rule, rec, actor_id, owner_fallback_role):
             if require_any and user["id"] not in allow_ids and not (require_any & user_permissions(db, user)):
                 continue                                       # ไม่แจ้งคนที่เปิดรายการนี้ไม่ได้ (ลิงก์จะ 404)
@@ -304,6 +320,43 @@ def emit_patrol(db, event: str, plan_id: int, actor_id: int | None, *, offset_da
         return created
     except Exception:                                              # noqa: BLE001
         log.exception("emit_patrol(%s, plan=%s) failed; rolled back", event, plan_id)
+        db.execute("ROLLBACK TO notify")
+        db.execute("RELEASE notify")
+        return 0
+
+
+def render_report_message(event: str, extra: Mapping | None = None) -> tuple[str, str]:
+    extra = extra or {}
+    name = clean(extra.get("report"), FIELD_MAX)
+    days = extra.get("days")
+    where = f" · แผนก {clean(extra.get('department'), FIELD_MAX)}" if extra.get("department") else ""
+    tail = f"งวด {clean(extra.get('period'), 10)}{where} · ครบกำหนด {clean(extra.get('due'), 10)}"
+    head = {"report_due_soon": f"ใกล้ครบกำหนดส่งรายงาน (อีก {days} วัน): {name}",
+            "report_overdue": f"เกินกำหนดส่งรายงาน {days} วัน: {name}"}.get(event, f"แจ้งเตือนการส่งรายงาน: {name}")
+    return clean(head, TITLE_MAX), clean(tail, BODY_MAX)
+
+
+def emit_report(db, event: str, rule_id: int, actor_id: int | None, *, period: str, due: str, offset_days: int, days: int) -> int:
+    """แจ้งเตือนกำหนดส่งรายงาน (ผู้รับตามกฎ ในขอบเขตของแผนกที่รายงานเกี่ยวข้อง); สัญญาเดียวกับ emit (SAVEPOINT, ไม่ throw, ไม่ commit)"""
+    if event not in NOTIFY_EVENTS or not event.startswith("report_"):
+        return 0
+    from .reports import REPORTS
+    db.execute("SAVEPOINT notify")
+    try:
+        rule = db.execute("SELECT * FROM report_due WHERE id=?", (rule_id,)).fetchone()
+        if rule is None:
+            db.execute("RELEASE notify")
+            return 0
+        dept = db.execute("SELECT name_th FROM departments WHERE id=?", (rule["department_id"],)).fetchone() if rule["department_id"] else None
+        title, body = render_report_message(event, {"report": REPORTS.get(rule["report_key"], rule["report_key"]), "period": period,
+                                                    "department": dept[0] if dept else "", "due": due, "days": days})
+        rec = {"department_id": rule["department_id"], "risk_area_id": None, "reported_by": rule["created_by"], "owner_id": None}
+        created = _write_rows(db, event, rec, title, body, f"{period}:{due}:{offset_days}", f"rd{rule_id}", f"/reports/{rule['report_key']}", None, None, actor_id,
+                              offset_days, False, frozenset({"report.export", "report.manage"}))
+        db.execute("RELEASE notify")
+        return created
+    except Exception:                                              # noqa: BLE001
+        log.exception("emit_report(%s, rule=%s) failed; rolled back", event, rule_id)
         db.execute("ROLLBACK TO notify")
         db.execute("RELEASE notify")
         return 0

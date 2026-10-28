@@ -12,7 +12,7 @@ import sqlite3
 import threading
 from datetime import date, datetime, timedelta
 
-from . import notify, patrol, timeutil
+from . import notify, patrol, report_due, timeutil
 from .db import connect
 
 log = logging.getLogger("safety.scheduler")
@@ -128,6 +128,29 @@ def _patrol_reminders(db, today: date) -> tuple[int, int]:
     return total, errors
 
 
+def _report_reminders(db, today: date) -> tuple[int, int]:
+    offsets = _offsets(db, ("report_due_soon", "report_overdue"))
+    total = errors = 0
+    for rule in db.execute("SELECT * FROM report_due WHERE active=1 ORDER BY id").fetchall():
+        def work(rule=rule):
+            st, n = report_due.status(db, rule, today), 0
+            if st["submitted"]:
+                return 0
+            due = st["due"].isoformat()
+            if st["state"] in ("upcoming", "due"):
+                for off in offsets["report_due_soon"]:
+                    if off >= st["days"]:
+                        n += notify.emit_report(db, "report_due_soon", rule["id"], None, period=st["period"], due=due, offset_days=off, days=st["days"])
+            else:
+                for off in offsets["report_overdue"]:
+                    if off <= st["days"]:
+                        n += notify.emit_report(db, "report_overdue", rule["id"], None, period=st["period"], due=due, offset_days=off, days=st["days"])
+            return n
+        n, e = _guarded(db, "report rule", rule["id"], work)
+        total, errors = total + n, errors + e
+    return total, errors
+
+
 def run_daily(db, today: date | None = None, force: bool = False, backup_dir: str | None = None,
               now: datetime | None = None) -> dict:
     today, now = today or timeutil.today(), now or datetime.now()
@@ -176,7 +199,8 @@ def run_daily(db, today: date | None = None, force: bool = False, backup_dir: st
                 db.rollback()
     capa_notifications, capa_errors = _capa_reminders(db, today)
     patrol_notifications, patrol_errors = _patrol_reminders(db, today)
-    errors += capa_errors + patrol_errors
+    report_notifications, report_errors = _report_reminders(db, today)
+    errors += capa_errors + patrol_errors + report_errors
     outbox = db.execute("SELECT COUNT(*) FROM notify_outbox").fetchone()[0] - outbox_before
     path = None
     try:
@@ -188,7 +212,7 @@ def run_daily(db, today: date | None = None, force: bool = False, backup_dir: st
     db.execute("UPDATE job_runs SET finished_at=datetime('now','localtime') WHERE job='daily' AND run_date=?", (today.isoformat(),))
     db.commit()
     return {"skipped": False, "notifications": notifications, "outbox": outbox, "errors": errors, "backup": path,
-            "capa_notifications": capa_notifications, "patrol_notifications": patrol_notifications}
+            "capa_notifications": capa_notifications, "patrol_notifications": patrol_notifications, "report_notifications": report_notifications}
 
 
 def start_scheduler(app, interval: float = 60.0) -> threading.Thread:

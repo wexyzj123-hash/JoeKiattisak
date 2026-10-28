@@ -235,3 +235,13 @@ def test_page_html_has_no_form_directly_under_tr(safety_app):
                 while self.stack and self.stack.pop() != t: pass
     p = P(); p.feed(html)
     assert p.bad == 0
+
+
+@pytest.mark.parametrize("event,offset,ok", [("capa_due_soon", "2", True), ("capa_overdue", "3", True), ("capa_overdue", "0", False), ("patrol_overdue", "5", True),
+                                              ("report_due_soon", "3", True), ("report_overdue", "1", True), ("report_overdue", "0", False),
+                                              ("capa_done", "2", False), ("patrol_due", "1", False)])
+def test_offset_events_of_later_phases_are_editable(safety_app, event, offset, ok):
+    c = login(safety_app)
+    before = len(rules(safety_app))
+    post(c, **rule_form(event=event, recipients="role:assessor", offset_days=offset))
+    assert (len(rules(safety_app)) == before + 1) is ok
