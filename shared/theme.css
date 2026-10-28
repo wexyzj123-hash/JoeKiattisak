@@ -109,15 +109,14 @@ table th, table td { text-align: left; padding: 8px 10px; border-bottom: 1px sol
 
 /* มาสคอต: แอนิเมชันเบา ๆ เฉพาะผู้ใช้ที่ไม่ได้ปิดการเคลื่อนไหวในระบบ */
 .mascot { display: block; max-width: 100%; height: auto; }
-@keyframes m-wave { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-9deg); } }
-@keyframes m-wiggle { 0%, 100% { transform: rotate(-4deg); } 50% { transform: rotate(4deg); } }
+@keyframes m-wave { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-6deg); } }
 @keyframes m-pop { 0%, 100% { transform: translateY(0); opacity: 1; } 50% { transform: translateY(-5px); opacity: .85; } }
 @keyframes m-float { 0%, 100% { transform: translateY(0); opacity: .9; } 50% { transform: translateY(-6px); opacity: 1; } }
 @keyframes m-blink { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
 @media (prefers-reduced-motion: no-preference) {
-  .mascot-default .m-arm-r { transform-box: view-box; transform-origin: 132px 134px; animation: m-wave 2.6s ease-in-out infinite; }
-  .mascot-alert .m-sign { transform-box: view-box; transform-origin: 172px 74px; animation: m-wiggle 1.4s ease-in-out infinite; }
+  .mascot-default .m-arm-r, .mascot-alert .m-arm-r { transform-box: view-box; transform-origin: 134px 148px; animation: m-wave 2.6s ease-in-out infinite; }
+  .mascot-celebrate .m-arm-r { transform-box: view-box; transform-origin: 134px 148px; animation: m-wave 1.2s ease-in-out infinite; }
   .mascot-celebrate .m-confetti { animation: m-pop 1.6s ease-in-out infinite; }
   .mascot-sleeping .m-z { animation: m-float 3s ease-in-out infinite; }
-  .mascot-thinking .m-dots { animation: m-blink 2.2s ease-in-out infinite; }
+  .mascot-alert .m-glint { animation: m-blink 1.8s ease-in-out infinite; }
 }

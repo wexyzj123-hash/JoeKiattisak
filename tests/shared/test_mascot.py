@@ -19,14 +19,14 @@ def test_every_mood_is_well_formed_xml(mood):
     assert root.tag == SVG + "svg" and len(list(root.iter())) > 10
 
 
-def test_moods_are_the_expected_five():
-    assert MOODS == ("default", "alert", "celebrate", "sleeping", "thinking")
+def test_moods_are_the_expected_seven():
+    assert MOODS == ("default", "confident", "thinking", "celebrate", "earth", "alert", "sleeping")
 
 
 @pytest.mark.parametrize("mood", MOODS)
 def test_has_role_img_title_viewbox_and_class(mood):
     root = parse(mascot_svg(mood, 96))
-    assert root.get("role") == "img" and root.get("viewBox") == "0 0 200 200" and root.get("focusable") == "false"
+    assert root.get("role") == "img" and root.get("viewBox") == "0 0 200 240" and root.get("focusable") == "false"
     assert root.get("width") == "96" and root.get("height") == "96"
     assert root.get("class") == f"mascot mascot-{mood}"
     assert root.find(SVG + "title").text == DEFAULT_LABEL == "น้องเอเอียต"
@@ -89,6 +89,7 @@ def test_jinja_global_returns_markup_not_escaped_in_both_apps(which, hub_app, sa
     app = hub_app if which == "hub" else safety_app
     out = app.jinja_env.globals["mascot"]("alert", 48, "สวัสดี")
     assert isinstance(out, Markup) and out.startswith("<svg")
+    assert 'aria-hidden="true"' in app.jinja_env.globals["mascot"]("alert", 48, "x", True)
     from flask import render_template_string
     with app.test_request_context("/"):
         html = render_template_string("<p>{{ mascot('celebrate', 64) }}</p>")
@@ -96,3 +97,24 @@ def test_jinja_global_returns_markup_not_escaped_in_both_apps(which, hub_app, sa
     with app.test_request_context("/"):
         evil = render_template_string("{{ mascot('default', 64, label) }}", label="<script>alert(1)</script>")
     assert "<script>" not in evil and "&lt;script&gt;" in evil
+
+
+@pytest.mark.parametrize("mood", MOODS)
+def test_decorative_has_no_accessible_name(mood):
+    svg = mascot_svg(mood, 80, "x", decorative=True)
+    root = parse(svg)
+    assert root.get("aria-hidden") == "true" and root.get("role") is None and root.find(SVG + "title") is None
+
+
+@pytest.mark.parametrize("mood", MOODS)
+def test_cap_and_chest_carry_the_aisin_lettering(mood):
+    assert mascot_svg(mood, 100).count('class="m-logo"') == 2
+
+
+def test_wordmark_scales_and_uses_given_color():
+    from shared.brand import aisin_wordmark
+    root = parse(aisin_wordmark(200, "#0b3b99"))
+    assert root.get("role") == "img" and root.find(SVG + "title").text == "AISIN" and root.get("width") == "200"
+    assert 'stroke="#0b3b99"' in aisin_wordmark(200, "#0b3b99")
+    assert 'stroke="currentColor"' in aisin_wordmark(200, '"><script>')
+    assert parse(aisin_wordmark("bad")).get("width") == "120"

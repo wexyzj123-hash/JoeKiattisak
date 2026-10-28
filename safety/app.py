@@ -38,7 +38,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     safetydb.init_app(app)
     from markupsafe import Markup
     from shared.mascot import DEFAULT_LABEL, mascot_svg
-    app.jinja_env.globals["mascot"] = lambda mood="default", size=120, label=DEFAULT_LABEL: Markup(mascot_svg(mood, size, label))
+    app.jinja_env.globals["mascot"] = lambda mood="default", size=120, label=DEFAULT_LABEL, decorative=False: Markup(mascot_svg(mood, size, label, decorative))
     install_csrf(app)
     app.before_request(load_user)
     if app.config.get("HUB_STATUS_CHECK") is None:
