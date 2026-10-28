@@ -38,6 +38,22 @@ def create_app(test_config: dict | None = None) -> Flask:
     safetydb.init_app(app)
     install_csrf(app)
     app.before_request(load_user)
+    if app.config.get("HUB_STATUS_CHECK") is None:
+        app.config["HUB_STATUS_CHECK"] = not app.config.get("TESTING")      # ทดสอบปิดไว้ (ไม่ให้เรียกเครือข่าย) เว้นแต่ตั้งใจเปิด
+
+    @app.before_request
+    def _hub_status():
+        """ผู้ใช้ที่ถูกปิดที่ Hub ต้องหลุดจาก Safety (ตรวจแบบจำผลไว้ — ดู hubcheck.py)"""
+        if not app.config["HUB_STATUS_CHECK"] or not app.config["SERVICE_TOKEN"] or g.get("user") is None:
+            return None
+        if request.path.startswith(("/sso", "/api/", "/static/", "/signout")):
+            return None
+        from flask import redirect, session
+        from .hubcheck import hub_user_active
+        if not hub_user_active(app, g.user["hub_uid"]):
+            session.clear()
+            return redirect(app.config["HUB_URL"])
+        return None
 
     from .views import (api, criteria, custom_fields, hazards, home, master, notifications, notify_admin, overview, pages, profile,
                         roles, sso, users)

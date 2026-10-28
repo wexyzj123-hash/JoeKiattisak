@@ -19,9 +19,22 @@ def _int(value) -> int | None:
         return None
 
 
-def _other_active_admins(db, user_id: int) -> int:
-    return db.execute("SELECT COUNT(*) FROM safety_users WHERE role='admin' AND active=1 AND id<>?",
-                      (user_id,)).fetchone()[0]
+_OTHER_ACTIVE_ADMIN = ("EXISTS (SELECT 1 FROM safety_users o WHERE o.role='admin' AND o.active=1 AND o.id <> ?)")
+
+
+def safe_set_role(db, user_id: int, role: str) -> bool:
+    """เปลี่ยนบทบาทด้วยคำสั่งเดียวแบบ atomic: ห้ามทำให้ไม่เหลือผู้ดูแลระบบที่ใช้งานอยู่ (กันสองคนลดสิทธิ์กันพร้อมกัน)"""
+    cur = db.execute(f"UPDATE safety_users SET role=? WHERE id=? AND (role <> 'admin' OR ? = 'admin' OR active = 0 OR {_OTHER_ACTIVE_ADMIN})",
+                     (role, user_id, role, user_id))
+    db.commit()
+    return cur.rowcount == 1
+
+
+def safe_disable(db, user_id: int) -> bool:
+    cur = db.execute(f"UPDATE safety_users SET active=0 WHERE id=? AND (role <> 'admin' OR active = 0 OR {_OTHER_ACTIVE_ADMIN})",
+                     (user_id, user_id))
+    db.commit()
+    return cur.rowcount == 1
 
 
 def _set_scope(db, user, form) -> None:
@@ -65,21 +78,18 @@ def users():
         elif action == "set_role" and not role_permissions(db, f.get("role", "")) <= actor:
             flash("กำหนดบทบาทที่มีสิทธิ์มากกว่าที่คุณมีไม่ได้")
         elif action == "toggle":
-            if user["active"] and user["role"] == "admin" and _other_active_admins(db, user["id"]) == 0:
-                flash("ปิดใช้งานผู้ดูแลระบบคนสุดท้ายไม่ได้")
+            if user["active"]:
+                if not safe_disable(db, user["id"]):
+                    flash("ปิดใช้งานผู้ดูแลระบบคนสุดท้ายไม่ได้")
             else:
-                db.execute("UPDATE safety_users SET active = 1 - active WHERE id=?", (user["id"],))
+                db.execute("UPDATE safety_users SET active=1 WHERE id=?", (user["id"],))
                 db.commit()
         elif action == "set_role":
             role = f.get("role", "")
             if db.execute("SELECT 1 FROM safety_roles WHERE key=?", (role,)).fetchone() is None:
                 flash("ไม่พบบทบาทที่เลือก")
-            elif user["role"] == "admin" and role != "admin" and user["active"] \
-                    and _other_active_admins(db, user["id"]) == 0:
+            elif not safe_set_role(db, user["id"], role):
                 flash("ลดสิทธิ์ผู้ดูแลระบบคนสุดท้ายไม่ได้")
-            else:
-                db.execute("UPDATE safety_users SET role=? WHERE id=?", (role, user["id"]))
-                db.commit()
         elif action == "set_scope":
             _set_scope(db, user, f)
         return redirect("/admin/users")

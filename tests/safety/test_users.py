@@ -219,3 +219,38 @@ def test_scope_pointing_at_a_later_deactivated_factory_stays_selected_and_resubm
     assert f'<option value="{d1}" selected>โรงงาน F1 › แผนก D1</option>' in html
     post(c, action="set_scope", id=str(uid), factory_id=str(f1), department_id=str(d1))     # ส่งค่าเดิมกลับ ไม่ขยายขอบเขต
     assert tuple(sql(safety_app, "SELECT factory_id, department_id FROM safety_users WHERE id=?", (uid,))[0]) == (f1, d1)
+
+
+# ---------- ผู้ดูแลระบบคนสุดท้าย: คำสั่งเดียวแบบ atomic ----------
+def test_last_admin_guard_single_statement_blocks_second_demotion(tmp_path):
+    from safety.db import connect
+    from safety.schema import ensure_schema
+    from safety.views.users import safe_disable, safe_set_role
+    path = str(tmp_path / "g.db")
+    a, b = connect(path), connect(path)
+    ensure_schema(a)
+    x = a.execute("INSERT INTO safety_users(hub_uid,name,role) VALUES(1,'X','admin')").lastrowid
+    y = a.execute("INSERT INTO safety_users(hub_uid,name,role) VALUES(2,'Y','admin')").lastrowid
+    a.commit()
+    # สองผู้ดูแลลดสิทธิ์กันและกันพร้อมกัน (ต่างการเชื่อมต่อ ต่างอ่านสถานะเดิมมาก่อน)
+    assert safe_set_role(a, x, "viewer") is True
+    assert safe_set_role(b, y, "viewer") is False
+    roles = dict(a.execute("SELECT name, role FROM safety_users").fetchall())
+    assert roles == {"X": "viewer", "Y": "admin"}
+    assert safe_disable(b, y) is False and a.execute("SELECT active FROM safety_users WHERE id=?", (y,)).fetchone()[0] == 1
+    assert safe_set_role(b, y, "admin") is True                                              # ตั้งเป็น admin เท่าเดิมได้
+    z = a.execute("INSERT INTO safety_users(hub_uid,name,role) VALUES(3,'Z','admin')").lastrowid; a.commit()
+    assert safe_disable(b, y) is True and safe_set_role(a, z, "viewer") is False             # เหลือ Z คนเดียว
+
+
+def test_inactive_admin_is_not_counted_and_non_admin_changes_unaffected(tmp_path):
+    from safety.db import connect
+    from safety.schema import ensure_schema
+    from safety.views.users import safe_disable, safe_set_role
+    db = connect(str(tmp_path / "g.db")); ensure_schema(db)
+    x = db.execute("INSERT INTO safety_users(hub_uid,name,role) VALUES(1,'X','admin')").lastrowid
+    db.execute("INSERT INTO safety_users(hub_uid,name,role,active) VALUES(2,'Gone','admin',0)")
+    r = db.execute("INSERT INTO safety_users(hub_uid,name,role) VALUES(3,'R','reporter')").lastrowid
+    db.commit()
+    assert safe_set_role(db, x, "viewer") is False and safe_disable(db, x) is False
+    assert safe_set_role(db, r, "assessor") is True and safe_disable(db, r) is True
