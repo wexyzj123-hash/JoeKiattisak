@@ -9,10 +9,10 @@ Date: 2026-10-28 · Builds on `2026-10-28-aiat-safety-hub-design.md` (Phases 1�
 3. Next modules, in this order: **incident/accident + Near Miss**, **Safety Patrol + CAPA**, **reports/statistics (PDF/Excel monthly–yearly) + due-date reminders**.
 
 ### Decisions already made (from user answers)
-- Mascot: **use real image files the user will send** (the supplied sheet is a composite with a background — not cut from it). SVG library stays as a fallback until files arrive.
+- Mascot: **redraw it as vector SVG to look like the supplied AISIN mascot sheet** (decision updated on the user's latest message; no image files needed). Poses of the sheet: ยิ้มแย้ม, มั่นใจ, ใส่ใจงาน, สู้ไปด้วยกัน, รักษ์โลก, ปลอดภัยไว้ก่อน (white hard hat) — plus a sleeping variant for empty states. Checked visually against the reference at several sizes.
 - Dashboard: **only widgets backed by real data**. No fake numbers. News, weather, e-Learning, factory map are **not drawn at all** (not even empty boxes) until their modules exist.
-- Branding: **"Safety 4.0"** header + tagline "Safe People · Safe Workplace · Sustainable Future" + **AISIN** wordmark (text wordmark until a logo file is supplied).
-- Phase 4 stays as built; its review fix pass lands before Phase 5 starts.
+- Branding: **"Safety 4.0"** header + tagline "Safe People · Safe Workplace · Sustainable Future" + **AISIN** wordmark (drawn as vector lettering until a logo file is supplied).
+- Phase 4 stays as built; its review fix pass has landed.
 
 ### Assumptions (correct if wrong)
 - Light theme becomes the default (reference is light); dark stays available via the toggle. Brand colours: AISIN blue `#0a3a8f` family + green accent `#2e9e4f` for success; orange stays for warnings/actions.
@@ -39,10 +39,10 @@ Date: 2026-10-28 · Builds on `2026-10-28-aiat-safety-hub-design.md` (Phases 1�
 | Risk heat-map link / `/overview` stays as the detailed view | existing |
 "วันปลอดอุบัติเหตุ" (days without accidents) **appears only after Phase 6** (needs the incident module and a definition — see §6 Q1).
 
-**Mascot assets**
-- `mascot(mood, size, label)` keeps its API. If an image file exists for the mood it renders `<img>` (alt text, `width`/`height`, lazy, `decoding=async`); otherwise the SVG fallback. Files live in `shared/static/mascot/`, served through an allow-listed route (no path traversal), cached.
-- Pose ↔ mood mapping (6 poses in the sheet): `smile`=default (ยิ้มแย้ม) · `confident`=extra (มั่นใจ) · `careful`=thinking (ใส่ใจงาน, clipboard) · `fight`=celebrate (สู้ไปด้วยกัน) · `earth`=extra (รักษ์โลก) · `safety-first`=alert (ปลอดภัยไว้ก่อน, white hard hat). `sleeping` has no pose in the sheet → SVG fallback or a pose the user adds.
-- **What the user needs to supply:** one transparent PNG or WebP per pose (≥ 600 px tall, character only — no text tiles/background), file names above, plus the AISIN logo (SVG preferred) if it should replace the text wordmark.
+**Mascot (vector)**
+- `mascot(mood, size, label, decorative=False)` keeps its API; moods: `default` (ยิ้มแย้ม, thumbs-up), `confident` (มั่นใจ, wink), `thinking` (ใส่ใจงาน, clipboard), `celebrate` (สู้ไปด้วยกัน, raised fist), `earth` (รักษ์โลก, holding a globe), `alert` (ปลอดภัยไว้ก่อน, white hard hat), `sleeping`. Character: chibi worker, navy cap with AISIN lettering, blue uniform with silver reflective stripes and chest patch, boots.
+- `decorative=True` renders `aria-hidden` (no `role="img"`/title) for placements next to text (closes a Phase 4 accessibility finding).
+- If real transparent image files are supplied later they can replace the vectors behind the same API; not part of Phase 5.
 
 ## 3. Phase 6 — Incident / accident and Near Miss
 
@@ -77,7 +77,7 @@ New module beside the hazard register (a hazard is a *condition*; an incident is
 | Phase | Scope | Depends on |
 |---|---|---|
 | 4 fixes | Review findings of Phase 4 | — |
-| 5 | Safety 4.0 shell, light theme, dashboard, global search, mascot image support, icon set | mascot/logo files (optional; SVG fallback) |
+| 5 | Safety 4.0 shell, light theme, dashboard, global search, redrawn mascot, icon set, responsive tables | — |
 | 6 | Incident + Near Miss, days-without-accident KPI | answers to §6 |
 | 7 | Safety Patrol + CAPA | Phase 6 (incident source) |
 | 8 | Reports/statistics, PDF/Excel, report deadlines | Phases 6–7 data |
