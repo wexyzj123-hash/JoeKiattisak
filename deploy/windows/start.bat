@@ -1,6 +1,7 @@
 @echo off
 chcp 65001 >nul
 setlocal
+set "PYTHONUTF8=1"
 cd /d "%~dp0"
 if not exist ".venv\Scripts\python.exe" goto :noinstall
 if not exist ".env" goto :noinstall

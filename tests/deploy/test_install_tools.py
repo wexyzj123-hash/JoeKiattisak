@@ -93,3 +93,26 @@ def test_make_env_writes_legacy_link_urls_and_validates(tmp_path):
         d = tmp_path / "b"; d.mkdir(exist_ok=True)
         r2, env2 = make_env(d, "localhost", "5001", "5201", bad, "")
         assert r2.returncode == 2 and not env2.exists(), bad
+
+
+def test_apply_timezone_works_without_time_tzset_like_windows(monkeypatch):
+    import time
+    from shared import timezone
+    monkeypatch.delattr(time, "tzset", raising=False)
+    monkeypatch.setenv("SAFETY_TIMEZONE", "Asia/Bangkok")
+    assert timezone.apply_timezone() == "Asia/Bangkok"
+
+
+def test_no_posix_only_calls_in_app_code():
+    import re
+    bad = re.compile(r"\b(os\.fork|os\.getuid|os\.geteuid|fcntl|termios|signal\.SIGKILL|os\.O_NOFOLLOW)\b")
+    for base in ("hub", "safety", "shared", "tools"):
+        for dirpath, _, names in os.walk(os.path.join(ROOT, base)):
+            for n in names:
+                if n.endswith(".py"):
+                    assert not bad.search(open(os.path.join(dirpath, n), encoding="utf-8").read()), os.path.join(dirpath, n)
+
+
+def test_bat_scripts_that_run_python_force_utf8():
+    for n in ("install.bat", "start.bat", "backup.bat"):
+        assert 'set "PYTHONUTF8=1"' in open(os.path.join(ROOT, "deploy", "windows", n), encoding="utf-8").read(), n

@@ -17,5 +17,6 @@ def apply_timezone() -> str:
     except (ZoneInfoNotFoundError, ValueError, OSError):
         name = DEFAULT_TZ
     os.environ["TZ"] = name
-    time.tzset()
+    if hasattr(time, "tzset"):                      # Windows ไม่มี time.tzset — ใช้โซนเวลาของเครื่อง (ตั้ง Windows เป็นเวลาไทย)
+        time.tzset()
     return name
