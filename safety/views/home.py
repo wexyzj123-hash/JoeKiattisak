@@ -41,7 +41,8 @@ def index():
         closed_month=stats.closed_this_month(db, user), high_risk=stats.high_risk_open(db, user),
         donut=donut_svg, legend=legend, trend_svg=charts.trend(trend_rows), trend_rows=trend_rows,
         latest=stats.latest_hazards(db, user), status_th=STATUS_TH, notes=latest_notes,
-        can_report="hazard.report" in user_permissions(db, user))
+        can_report="hazard.report" in user_permissions(db, user),
+        can_list=bool(user_permissions(db, user) & {"hazard.report", "hazard.assess", "hazard.assign", "hazard.close", "master.view"}))
 
 
 @bp.route("/signout")

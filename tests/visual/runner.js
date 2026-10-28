@@ -67,7 +67,13 @@ const MEASURE = () => {
   const browser = await chromium.launch();
   const out = { pages: [], errors: [] };
   try {
-    if (job.mode === 'toggle') {
+    if (job.mode === 'labels') {
+      const page = await browser.newPage();
+      await page.setContent(job.html);
+      await page.addScriptTag({ path: job.script });
+      out.pages.push(await page.evaluate(() => Array.from(document.querySelectorAll('table.table-stack')).map((t) => Array.from(t.querySelectorAll('td')).map((td) => td.getAttribute('data-label')))));
+      out.hrows = await page.evaluate(() => document.querySelectorAll('tr.hrow').length);
+    } else if (job.mode === 'toggle') {
       for (const variant of ['normal', 'blocked']) {
         const ctx = await browser.newContext({ viewport: { width: 1000, height: 700 }, colorScheme: job.system || 'dark' });
         const page = await ctx.newPage();

@@ -57,7 +57,7 @@ def test_dashboard_renders_with_empty_database_without_errors(safety_app):
 
 def test_donut_percentages_sum_and_single_slice_and_empty():
     svg, legend = charts.donut([("ก", 1), ("ข", 1), ("ค", 1)])
-    assert sum(l["pct"] for l in legend) in (99, 100, 101) and svg.count("<path") == 3
+    assert sum(l["pct"] for l in legend) == 100 and svg.count("<path") == 3
     one, leg = charts.donut([("เดียว", 4)])
     assert "<circle" in one and leg[0]["pct"] == 100 and "<path d=\"M" not in one
     empty, leg2 = charts.donut([])
@@ -86,9 +86,50 @@ def test_donut_and_latest_table_show_real_rows(safety_app):
     assert html.index("HZ-D-2") < html.index("HZ-D-1")                                       # ใหม่สุดก่อน
 
 
-def test_kpi_links_apply_filters(safety_app):
-    html = login(safety_app, "admin").get("/").get_data(as_text=True)
-    assert 'href="/hazards?status=closed"' in html and "sort=due_date&amp;dir=asc" in html and "sort=score&amp;dir=desc" in html
+def codes(html):
+    return sorted(set(re.findall(r"HZ-D-\d", html)))
+
+
+def test_kpi_links_open_lists_that_match_the_numbers(safety_app):
+    seed(safety_app)
+    c = login(safety_app, "admin")
+    home = c.get("/").get_data(as_text=True)
+    for param in ("open=1", "overdue=1", "high=1", "closed_month=1"):
+        assert f'href="/hazards?{param}"' in home, param
+    got = {p: codes(c.get(f"/hazards?{p}").get_data(as_text=True)) for p in ("open=1", "overdue=1", "high=1", "closed_month=1")}
+    assert got == {"open=1": ["HZ-D-1", "HZ-D-2"], "overdue=1": ["HZ-D-1"], "high=1": ["HZ-D-1"], "closed_month=1": ["HZ-D-3"]}
+    assert (kpi(home, "open"), kpi(home, "overdue"), kpi(home, "high-risk"), kpi(home, "closed-month")) == (2, 1, 1, 1)
+
+
+def test_kpi_cards_are_not_links_without_hazard_permission(safety_app):
+    html = login(safety_app, "no-such-role").get("/").get_data(as_text=True)
+    assert 'data-kpi="open"' in html and 'href="/hazards?' not in html
+
+
+def test_pagination_keeps_the_kpi_filters(safety_app):
+    con = connect(safety_app.config["DATABASE"])
+    ch = add_chain(con, "P")
+    rep = add_user(con, "reporter", "ผู้แจ้ง")
+    for i in range(25):
+        add_hazard(con, ch["a"], rep, code=f"HZ-P-{i:02d}", status="assigned", due_date="2026-03-01")
+    con.close()
+    html = login(safety_app, "admin").get("/hazards?overdue=1").get_data(as_text=True)
+    assert "overdue=1" in html[html.index("<nav"):]
+
+
+def test_high_risk_matches_the_departments_overview_definition(safety_app):
+    con = connect(safety_app.config["DATABASE"])
+    ch = add_chain(con, "H")
+    rep = add_user(con, "reporter", "ผู้แจ้ง")
+    top = con.execute("SELECT * FROM risk_levels ORDER BY max_score DESC LIMIT 1").fetchone()
+    add_hazard(con, ch["a"], rep, status="assigned", likelihood=5, severity=5, score=25, risk_level_id=top["id"], level_name=top["name_th"],
+               level_color=top["color"], level_requires_approval=0)                                   # ระดับสูงสุดแต่ snapshot ไม่ต้องอนุมัติ
+    con.commit(); con.close()
+    from safety import stats
+    con = connect(safety_app.config["DATABASE"])
+    from tests.safety.factories import user_row
+    admin = user_row(con, add_user(con, "admin"))
+    assert stats.high_risk_open(con, admin) == sum(r["high_or_above"] for r in stats.by_department(con, admin)) == 1
 
 
 def test_quick_menu_only_permitted_items(safety_app):

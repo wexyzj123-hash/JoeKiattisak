@@ -105,6 +105,7 @@ table th, table td { text-align: left; padding: 8px 10px; border-bottom: 1px sol
 
 /* โครงหน้า Safety 4.0: แถบข้างสีน้ำเงินไล่เฉด + แถบบน + เนื้อหา (มือถือ: เมนูพับเก็บ) */
 .shell { display: grid; grid-template-columns: 264px minmax(0, 1fr); min-height: 100vh; }
+.sidebar, .hero, .hub-top, .auth-brand { --focus: #ffd36a; }
 .sidebar { background: linear-gradient(180deg, var(--shell-1), var(--shell-2)); color: var(--shell-text); padding: 16px 0; display: flex; flex-direction: column; }
 .sidebar-top { display: flex; align-items: center; gap: 10px; padding: 4px 16px 12px 18px; }
 .brand { display: flex; gap: 10px; align-items: center; color: var(--shell-text); text-decoration: none; flex: 1; min-width: 0; }
@@ -139,6 +140,7 @@ table th, table td { text-align: left; padding: 8px 10px; border-bottom: 1px sol
 .menu-pop a, .link-btn { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border-radius: 8px; color: var(--text); text-decoration: none; background: transparent; width: 100%; font-weight: 600; text-align: left; }
 .menu-pop a:hover, .link-btn:hover { background: var(--panel-2); filter: none; }
 .content { padding: 24px; min-width: 0; }
+@media (min-width: 801px) { .nav-toggle { display: none; } }
 @media (max-width: 800px) {
   .shell { grid-template-columns: minmax(0, 1fr); }
   .sidebar { padding: 8px 0; }

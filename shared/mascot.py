@@ -225,7 +225,7 @@ def mascot_svg(mood: str = "default", size: int = 120, label: str = DEFAULT_LABE
     label ถูก escape ใน <title>; decorative=True → aria-hidden (ไม่มี role/title) สำหรับวางข้างข้อความ"""
     mood = mood if mood in MOODS else "default"
     px = _clamp_size(size)
-    head = (f'<svg xmlns="http://www.w3.org/2000/svg" class="mascot mascot-{mood}" viewBox="0 0 200 240" width="{px}" height="{px}" ')
+    head = (f'<svg xmlns="http://www.w3.org/2000/svg" class="mascot mascot-{mood}" viewBox="0 0 200 240" width="{px}" height="{round(px * 1.2)}" ')
     if decorative:
         return head + f'aria-hidden="true" focusable="false">{_scene(mood)}</svg>'
     title = escape(str(label if label is not None else DEFAULT_LABEL), {'"': "&quot;", "'": "&#39;"})

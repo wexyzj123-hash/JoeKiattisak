@@ -65,4 +65,5 @@ def test_launcher_renders_when_badge_fails(hub_app, monkeypatch):
 
 def test_launcher_shows_badge_when_positive(hub_app, monkeypatch):
     monkeypatch.setattr(launcher, "urlopen", lambda req, timeout: FakeResp({"open_hazards": 4, "overdue": 1}))
-    assert '<span class="badge">5</span>' in login_as(hub_app).get("/").get_data(as_text=True)
+    html = login_as(hub_app).get("/").get_data(as_text=True)
+    assert '<span class="badge">5<span class="sr-only"> รายการที่ต้องติดตาม</span></span>' in html

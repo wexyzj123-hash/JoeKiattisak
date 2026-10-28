@@ -110,3 +110,14 @@ def test_reporter_search_is_limited_to_own_hazards(safety_app):
     con.close()
     html = mine.get("/search?q=ร่วม").get_data(as_text=True)
     assert "HZ-M-1" in html and "HZ-O-1" not in html
+
+
+def test_cap_message_says_there_may_be_more(safety_app):
+    con = connect(safety_app.config["DATABASE"])
+    ch = add_chain(con, "M")
+    rep = add_user(con, "reporter", "ผู้แจ้ง")
+    for i in range(55):
+        add_hazard(con, ch["a"], rep, code=f"HZ-M-{i:03d}", title="มากมาย")
+    con.close()
+    html = login(safety_app, "admin").get("/search?q=มากมาย").get_data(as_text=True)
+    assert "แสดง 50 รายการล่าสุด" in html and "พบ 50 รายการ" not in html

@@ -18,10 +18,13 @@
 </section>
 
 <div class="kpis">
-  <a class="kpi" href="/hazards"><span class="kpi-ic">{{ icon('clipboard', 22) }}</span><span class="kpi-n" data-kpi="open">{{ open_total }}</span><span class="kpi-l">รายการเปิดอยู่</span></a>
-  <a class="kpi kpi-danger" href="/hazards?sort=due_date&amp;dir=asc"><span class="kpi-ic">{{ icon('clock', 22) }}</span><span class="kpi-n" data-kpi="overdue">{{ overdue }}</span><span class="kpi-l">เกินกำหนด</span></a>
-  <a class="kpi kpi-ok" href="/hazards?status=closed"><span class="kpi-ic">{{ icon('check', 22) }}</span><span class="kpi-n" data-kpi="closed-month">{{ closed_month }}</span><span class="kpi-l">ปิดแล้วเดือนนี้</span></a>
-  <a class="kpi kpi-warn" href="/hazards?sort=score&amp;dir=desc"><span class="kpi-ic">{{ icon('alert', 22) }}</span><span class="kpi-n" data-kpi="high-risk">{{ high_risk }}</span><span class="kpi-l">ความเสี่ยงสูงที่เปิดอยู่</span></a>
+  {% macro kpi_card(cls, href, ic, key, n, text) -%}
+  {% if can_list %}<a class="kpi {{ cls }}" href="{{ href }}">{% else %}<div class="kpi {{ cls }}">{% endif %}<span class="kpi-ic">{{ icon(ic, 22) }}</span><span class="kpi-n" data-kpi="{{ key }}">{{ n }}</span><span class="kpi-l">{{ text }}</span>{% if can_list %}</a>{% else %}</div>{% endif %}
+  {%- endmacro %}
+  {{ kpi_card('', '/hazards?open=1', 'clipboard', 'open', open_total, 'รายการเปิดอยู่') }}
+  {{ kpi_card('kpi-danger', '/hazards?overdue=1', 'clock', 'overdue', overdue, 'เกินกำหนด') }}
+  {{ kpi_card('kpi-ok', '/hazards?closed_month=1', 'check', 'closed-month', closed_month, 'ปิดแล้วเดือนนี้') }}
+  {{ kpi_card('kpi-warn', '/hazards?high=1', 'alert', 'high-risk', high_risk, 'ความเสี่ยงสูงที่เปิดอยู่') }}
 </div>
 
 <div class="dash-grid">

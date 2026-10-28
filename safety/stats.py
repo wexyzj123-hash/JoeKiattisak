@@ -20,6 +20,12 @@ def _visible(db, user) -> tuple[str, list]:
     return sql, args
 
 
+def _high_sql(db) -> tuple[str, list]:
+    """ระดับสูงขึ้นไป: ต้องอนุมัติ (snapshot) หรือคะแนนระดับ ≥ 75% ของคะแนนสูงสุด — ใช้ร่วมกันทุกหน้าให้ตัวเลขตรงกัน"""
+    return ("(h.level_requires_approval = 1 OR h.risk_level_id IN (SELECT id FROM risk_levels WHERE max_score >= ?))",
+            [0.75 * max_score(db)])
+
+
 def counts_by_status(db, user) -> dict[str, int]:
     where, args = _visible(db, user)
     out = {k: 0 for k in STATUS_TH}
@@ -79,18 +85,17 @@ def by_department(db, user) -> list:
         dconds.append("d.factory_id = ?"); dargs.append(user["factory_id"])
     if user["department_id"] is not None:
         dconds.append("d.id = ?"); dargs.append(user["department_id"])
-    threshold = 0.75 * max_score(db)
+    high_sql, high_args = _high_sql(db)
     return db.execute(
         f"SELECT f.name_th AS factory, d.name_th AS department, "
         f"COALESCE(SUM(CASE WHEN {OPEN_SQL} THEN 1 ELSE 0 END), 0) AS open, "
         f"COALESCE(SUM(CASE WHEN {OPEN_SQL} AND h.due_date < ? THEN 1 ELSE 0 END), 0) AS overdue, "
-        f"COALESCE(SUM(CASE WHEN {OPEN_SQL} AND (h.level_requires_approval = 1 OR h.risk_level_id IN "
-        f"(SELECT id FROM risk_levels WHERE max_score >= ?)) THEN 1 ELSE 0 END), 0) AS high_or_above "
+        f"COALESCE(SUM(CASE WHEN {OPEN_SQL} AND {high_sql} THEN 1 ELSE 0 END), 0) AS high_or_above "
         f"FROM departments d JOIN factories f ON f.id = d.factory_id "
         f"LEFT JOIN lines l ON l.department_id = d.id LEFT JOIN risk_areas ra ON ra.line_id = l.id "
         f"LEFT JOIN hazards h ON h.risk_area_id = ra.id AND {vis} "
         f"WHERE {' AND '.join(dconds) or '1=1'} GROUP BY d.id ORDER BY f.code, d.code",
-        [timeutil.today().isoformat(), threshold] + vargs + dargs).fetchall()
+        [timeutil.today().isoformat()] + high_args + vargs + dargs).fetchall()
 
 
 def global_summary(db) -> tuple[int, int]:
@@ -119,9 +124,10 @@ def closed_this_month(db, user, today: date | None = None) -> int:
 
 
 def high_risk_open(db, user) -> int:
-    """รายการเปิดอยู่ที่ระดับความเสี่ยงต้องอนุมัติ (ตาม snapshot ที่บันทึกตอนประเมิน)"""
+    """รายการเปิดอยู่ที่ระดับสูงขึ้นไป (นิยามเดียวกับตารางตามหน่วยงาน)"""
     where, args = _visible(db, user)
-    return db.execute(f"SELECT COUNT(*) FROM hazards h WHERE {where} AND {OPEN_SQL} AND h.level_requires_approval = 1", args).fetchone()[0]
+    high_sql, high_args = _high_sql(db)
+    return db.execute(f"SELECT COUNT(*) FROM hazards h WHERE {where} AND {OPEN_SQL} AND {high_sql}", args + high_args).fetchone()[0]
 
 
 def latest_hazards(db, user, limit: int = 6) -> list:

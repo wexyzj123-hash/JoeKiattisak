@@ -6,7 +6,7 @@
   <a class="brand" href="/">{{ shield_logo(40) }}<span><strong>{{ BRAND_TITLE }}</strong><small>{{ BRAND_TAGLINE }}</small></span></a>
   <button type="button" class="icon-btn" data-theme-toggle aria-label="สลับธีมสว่าง/มืด" title="สลับธีมสว่าง/มืด">{{ icon('sun-moon', 20) }}</button>
   <details class="user-menu">
-    <summary>{{ icon('user', 18) }}<span class="who">{{ g.user['name_th'] }}</span>{{ icon('chevron-down', 16) }}</summary>
+    <summary aria-label="เมนูผู้ใช้: {{ g.user['name_th'] }}">{{ icon('user', 18) }}<span class="who">{{ g.user['name_th'] }}</span>{{ icon('chevron-down', 16) }}</summary>
     <div class="menu-pop">
       <div class="menu-head"><strong>{{ g.user['name_th'] }}</strong><small>{{ g.user['role'] }}</small></div>
       {% if g.user['role'] == 'admin' %}<a href="/admin/apps">{{ icon('layers', 16) }} ทะเบียนระบบ</a><a href="/admin/users">{{ icon('users', 16) }} ผู้ใช้</a>{% endif %}
@@ -27,7 +27,7 @@
 <div class="tiles">
   {% for a in apps %}
   <a class="tile" href="/go/{{ a['key'] }}">
-    {% if a['badge'] %}<span class="badge">{{ a['badge'] }}</span>{% endif %}
+    {% if a['badge'] %}<span class="badge">{{ a['badge'] }}<span class="sr-only"> รายการที่ต้องติดตาม</span></span>{% endif %}
     <span class="kpi-ic">{{ icon('shield' if a['key'] == 'safety' else 'layers', 24) }}</span>
     <strong>{{ a['name_th'] }}</strong>
     <span class="muted">เข้าสู่ระบบ</span>

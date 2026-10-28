@@ -7,7 +7,7 @@
   <button type="submit">ค้นหา</button>
 </form>
 {% if q %}
-<p class="muted">พบ {{ rows|length }} รายการสำหรับ “{{ q }}”{% if rows|length >= 50 %} (แสดงสูงสุด 50 รายการล่าสุด){% endif %}</p>
+<p class="muted">{% if rows|length >= 50 %}แสดง 50 รายการล่าสุดที่ตรงกับ “{{ q }}” (อาจมีมากกว่านี้ — ลองใช้คำค้นเฉพาะขึ้น){% else %}พบ {{ rows|length }} รายการสำหรับ “{{ q }}”{% endif %}</p>
 {% if rows %}
 <div class="card" style="max-width:none;margin:0"><div class="table-wrap"><table class="table-stack" style="width:100%">
   <thead><tr><th>รหัส</th><th>หัวข้อ</th><th>พื้นที่</th><th>ความเสี่ยง</th><th>สถานะ</th><th>แจ้งเมื่อ</th></tr></thead>

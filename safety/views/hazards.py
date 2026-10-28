@@ -100,6 +100,18 @@ def index():
     q = request.args.get("q", "").strip()
     if q:
         conds.append("(h.code LIKE ? ESCAPE '\\' OR h.title LIKE ? ESCAPE '\\')"); args += [_like(q)] * 2
+    flags = {k: request.args.get(k) == "1" for k in ("open", "overdue", "high", "closed_month")}      # ลิงก์จากการ์ดตัวเลขหน้าหลัก
+    if flags["open"] or flags["overdue"] or flags["high"]:
+        conds.append("h.status IN ('reported','assessed','assigned')")
+    if flags["overdue"]:
+        conds.append("h.due_date < ?"); args.append(today)
+    if flags["high"]:
+        from ..stats import _high_sql
+        high_sql, high_args = _high_sql(db)
+        conds.append(high_sql); args += high_args
+    if flags["closed_month"]:
+        conds.append("h.id IN (SELECT hazard_id FROM hazard_events WHERE kind = 'closed' AND substr(at,1,7) = ?)")
+        args.append(today[:7])
     if request.args.get("mine") == "1":
         conds.append("(h.reported_by = ? OR h.owner_id = ?)"); args += [g.user["id"]] * 2
     sort = request.args.get("sort", "reported_at")
@@ -119,7 +131,7 @@ def index():
     return render_template("hazard_list.html", rows=rows, page=page, pages=pages, total=total, status_th=STATUS_TH,
                            levels=list_levels(db), areas=risk_area_options(db, g.user), f={
                                "status": status, "level": level, "area": area or "", "q": q, "mine": request.args.get("mine", ""),
-                               "sort": sort, "dir": direction},
+                               "sort": sort, "dir": direction, **{k: "1" if v else "" for k, v in flags.items()}},
                            can_report="hazard.report" in perms)
 
 

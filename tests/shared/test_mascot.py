@@ -27,7 +27,7 @@ def test_moods_are_the_expected_seven():
 def test_has_role_img_title_viewbox_and_class(mood):
     root = parse(mascot_svg(mood, 96))
     assert root.get("role") == "img" and root.get("viewBox") == "0 0 200 240" and root.get("focusable") == "false"
-    assert root.get("width") == "96" and root.get("height") == "96"
+    assert root.get("width") == "96" and root.get("height") == "115"
     assert root.get("class") == f"mascot mascot-{mood}"
     assert root.find(SVG + "title").text == DEFAULT_LABEL == "น้องเอเอียต"
 
@@ -53,7 +53,7 @@ def test_unknown_mood_falls_back_to_default():
                                             ("abc", 120), (None, 120), (True, 120), ([], 120), ("1e3", 120)])
 def test_size_clamped_and_bad_size_defaults(size, expected):
     root = parse(mascot_svg("default", size))
-    assert root.get("width") == root.get("height") == str(expected)
+    assert root.get("width") == str(expected) and root.get("height") == str(round(expected * 1.2))
 
 
 def test_label_is_escaped_and_xml_stays_valid():

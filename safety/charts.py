@@ -18,9 +18,13 @@ def donut(items: list[tuple[str, int]], size: int = 180) -> tuple[Markup, list[d
     total = sum(n for _, n in items)
     c, r, w = size / 2, size / 2 - 14, 22
     legend, paths, angle = [], "", -math.pi / 2
+    pcts = [n * 100 // total if total else 0 for _, n in items]                         # เศษที่เหลือแจกให้ช่องที่เศษมากสุด ให้รวมเป็น 100 พอดี
+    order = sorted(range(len(items)), key=lambda i: -((items[i][1] * 100) % total if total else 0))
+    for i in order[:(100 - sum(pcts)) if total else 0]:
+        pcts[i] += 1
     for i, (name, n) in enumerate(items):
         color = PALETTE[i % len(PALETTE)]
-        legend.append({"name": name, "n": n, "pct": round(n * 100 / total) if total else 0, "color": color})
+        legend.append({"name": name, "n": n, "pct": pcts[i], "color": color})
         if not total or n <= 0:
             continue
         if n == total:

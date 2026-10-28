@@ -164,3 +164,13 @@ def test_theme_toggle_persists_and_survives_blocked_storage(world):
     normal, blocked = out
     assert normal["before"] is None and normal["after"] == "light" and normal["afterReload"] == "light" and not normal["errors"]
     assert blocked["after"] == "light" and blocked["afterReload"] is None and not blocked["errors"]             # จำค่าไม่ได้ แต่ไม่พังและยังสลับได้
+
+
+def test_table_labels_follow_columns_across_colspan_and_ignore_sort_arrows():
+    html = ("<table class='table-stack'><tr><th>รหัส ▲</th><th colspan='2'>ชื่อ</th><th>สถานะ ▼</th></tr>"
+            "<tr><td>a</td><td>b</td><td>c</td><td>d</td></tr>"
+            "<tr><td colspan='2'>รวม</td><td>x</td><td>y</td></tr>"
+            "<tr><td colspan='4'>ว่าง</td></tr></table>")
+    out = run_job({"mode": "labels", "html": html, "script": os.path.join(os.path.dirname(__file__), "..", "..", "shared", "theme.js")})
+    assert out["pages"][0] == [["รหัส", "ชื่อ", "ชื่อ", "สถานะ", None, "ชื่อ", "สถานะ", None]]
+    assert out["hrows"] == 1

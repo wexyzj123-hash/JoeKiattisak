@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from safety.nav import nav_items
@@ -89,6 +91,8 @@ def test_top_bar_has_search_bell_toggle_and_user_menu(safety_app):
     assert 'class="topbar"' in html and 'action="/search"' in html and 'name="q"' in html
     assert 'aria-label="ค้นหารายการอันตราย"' in html and 'data-theme-toggle' in html and 'id="bell-badge"' in html
     assert '<details class="user-menu">' in html and 'href="/profile"' in html
+    assert re.search(r"<summary aria-label=\"เมนูผู้ใช้", html)
+    assert "ผู้ดูแลระบบ" in html[html.index('class="menu-head"'):html.index('class="menu-head"') + 300]       # ชื่อบทบาทภาษาไทย ไม่ใช่รหัส
     assert 'action="/logout"' in html and 'name="_csrf"' in html
 
 

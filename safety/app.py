@@ -95,6 +95,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         from .perms import user_permissions
         from .views.notifications import unread_count
         db = get_db()
-        return {"nav": nav_items(user_permissions(db, g.user), request.path), "unread_count": unread_count(db, g.user["id"])}
+        role = db.execute("SELECT name_th FROM safety_roles WHERE key = ?", (g.user["role"],)).fetchone()
+        return {"nav": nav_items(user_permissions(db, g.user), request.path), "unread_count": unread_count(db, g.user["id"]),
+                "role_name": role["name_th"] if role else g.user["role"]}
 
     return app

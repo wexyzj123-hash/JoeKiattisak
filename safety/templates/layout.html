@@ -25,9 +25,9 @@
       <a class="icon-btn" href="/notifications" aria-label="การแจ้งเตือน">{{ icon('bell', 20) }}<span class="badge" id="bell-badge"{{ ' style="display:none"'|safe if not unread_count }}>{{ unread_count }}</span></a>
       <button type="button" class="icon-btn" data-theme-toggle aria-label="สลับธีมสว่าง/มืด" title="สลับธีมสว่าง/มืด">{{ icon('sun-moon', 20) }}</button>
       <details class="user-menu">
-        <summary>{{ icon('user', 18) }}<span class="who">{{ g.user['name'] }}</span>{{ icon('chevron-down', 16) }}</summary>
+        <summary aria-label="เมนูผู้ใช้: {{ g.user['name'] }}">{{ icon('user', 18) }}<span class="who">{{ g.user['name'] }}</span>{{ icon('chevron-down', 16) }}</summary>
         <div class="menu-pop">
-          <div class="menu-head"><strong>{{ g.user['name'] }}</strong><small>{{ g.user['role'] }}</small></div>
+          <div class="menu-head"><strong>{{ g.user['name'] }}</strong><small>{{ role_name }}</small></div>
           <a href="/profile">{{ icon('user', 16) }} โปรไฟล์ของฉัน</a>
           <form method="post" action="/logout"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button type="submit" class="link-btn">{{ icon('logout', 16) }} ออกจากระบบ</button></form>
         </div>

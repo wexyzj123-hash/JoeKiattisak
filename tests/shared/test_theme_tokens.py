@@ -98,3 +98,11 @@ def test_reduced_motion_disables_mascot_animation_and_motion_is_opt_in():
 
 def test_focus_visible_outline_defined():
     assert ":focus-visible" in CSS
+
+
+def test_focus_ring_inside_blue_shell_has_contrast_and_desktop_hides_the_burger_checkbox():
+    assert re.search(r"\.sidebar[^{]*\.hero[^{]*\.hub-top[^{]*\.auth-brand[^{]*\{[^}]*--focus: #ffd36a", CSS)
+    for theme in (LIGHT, DARK):
+        for shell in ("shell-1", "shell-2"):
+            assert contrast("#ffd36a", theme[shell]) >= 3, (shell, theme[shell])
+    assert re.search(r"@media \(min-width: 801px\) \{[^}]*\.nav-toggle \{ display: none", CSS)

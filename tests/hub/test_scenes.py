@@ -68,7 +68,7 @@ def test_launcher_user_menu_has_logout_with_csrf_and_labelled_icon_buttons(hub_a
     for tag in re.findall(r"<button\b[^>]*>(?:(?!</button>).)*</button>", html, re.S):
         text = re.sub(r"<svg.*?</svg>|<[^>]+>", "", tag, flags=re.S).strip()
         assert text or "aria-label" in tag.split(">")[0], tag[:120]
-    assert "Safety 4.0" in html
+    assert "Safety 4.0" in html and re.search(r"<summary aria-label=\"เมนูผู้ใช้", html)
 
 
 def test_hub_login_has_visible_labelled_fields_and_no_fixed_toggle_overlap(hub_app):
