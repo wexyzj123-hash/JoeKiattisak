@@ -65,6 +65,44 @@ def seed_roles(con) -> None:
     con.commit()
 
 
+RISK_DDL = """
+CREATE TABLE IF NOT EXISTS risk_scales (
+    kind        TEXT NOT NULL CHECK (kind IN ('likelihood','severity')),
+    level       INTEGER NOT NULL CHECK (level >= 1),
+    label_th    TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (kind, level)
+);
+CREATE TABLE IF NOT EXISTS risk_levels (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    name_th           TEXT NOT NULL UNIQUE,
+    min_score         INTEGER NOT NULL,
+    max_score         INTEGER NOT NULL,
+    color             TEXT NOT NULL,
+    sla_days          INTEGER NOT NULL DEFAULT 0,
+    requires_approval INTEGER NOT NULL DEFAULT 0,
+    sort              INTEGER NOT NULL DEFAULT 0
+);
+"""
+
+DEFAULT_LIKELIHOOD = ("แทบไม่เกิด", "เกิดได้ยาก", "เกิดได้บางครั้ง", "เกิดบ่อย", "เกิดบ่อยมาก")
+DEFAULT_SEVERITY = ("เล็กน้อย", "ปานกลาง", "ร้ายแรง", "รุนแรง", "รุนแรงมาก")
+DEFAULT_LEVELS = (("ต่ำ", 1, 4, "#2ecc71", 30, 0), ("ปานกลาง", 5, 9, "#f1c40f", 14, 0),
+                  ("สูง", 10, 16, "#ff9f1c", 7, 0), ("สูงมาก", 17, 25, "#ff4d4f", 3, 1))
+
+
+def seed_risk(con) -> None:
+    """เกณฑ์ตั้งต้น 5x5 + 4 ระดับ ใส่เฉพาะตารางที่ยังว่าง (ไม่ทับที่แอดมินแก้แล้ว)"""
+    if con.execute("SELECT COUNT(*) FROM risk_scales").fetchone()[0] == 0:
+        for kind, labels in (("likelihood", DEFAULT_LIKELIHOOD), ("severity", DEFAULT_SEVERITY)):
+            con.executemany("INSERT INTO risk_scales(kind, level, label_th) VALUES(?,?,?)",
+                            [(kind, i, label) for i, label in enumerate(labels, 1)])
+    if con.execute("SELECT COUNT(*) FROM risk_levels").fetchone()[0] == 0:
+        con.executemany("INSERT INTO risk_levels(name_th,min_score,max_score,color,sla_days,requires_approval,sort) "
+                        "VALUES(?,?,?,?,?,?,?)", [(*lv, i) for i, lv in enumerate(DEFAULT_LEVELS)])
+    con.commit()
+
+
 def _add_column(con, table: str, column: str, ddl: str) -> None:
     if column not in {r[1] for r in con.execute(f"PRAGMA table_info({table})")}:
         con.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
@@ -74,6 +112,7 @@ def ensure_schema(con) -> None:
     con.executescript(DDL)
     _add_column(con, "safety_users", "factory_id", "INTEGER")
     _add_column(con, "safety_users", "department_id", "INTEGER")
-    con.executescript(MASTER_DDL + ROLES_DDL)
+    con.executescript(MASTER_DDL + ROLES_DDL + RISK_DDL)
     seed_roles(con)
+    seed_risk(con)
     con.commit()
