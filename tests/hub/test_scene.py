@@ -52,3 +52,16 @@ def test_login_card_markup_assets_and_a11y(hub_app):
     assert ".login-card" in css and "backdrop-filter" in css and "perspective" in css
     assert c.get("/static/hub/other.js").status_code == 404
     assert 'class="card login-card"' in c.get("/setup").get_data(as_text=True)
+
+
+def test_gate_page_has_depth_layers_accent_tiles_and_assets(hub_app, monkeypatch):
+    monkeypatch.setattr(launcher, "fetch_badge", lambda *a, **k: 5)
+    c = login_as(hub_app)
+    html = c.get("/").get_data(as_text=True)
+    assert 'id="gate-stage"' in html and 'id="gate-hero"' in html and 'class="orb orb-a"' in html and 'src="/static/hub/gate.js"' in html
+    tiles = re.findall(r'<a class="tile".*?</a>', html, re.S)
+    assert tiles and all('data-accent="' in t and "--i:" in t and "tile-go" in t and 'class="icon"' in t and "<strong>" in t for t in tiles)
+    assert 'data-accent="amber"' in tiles[0] and "รายการที่ต้องติดตาม" in tiles[0]                  # Safety = โซนความปลอดภัย (เหลือง) + ป้ายตัวเลข
+    r = c.get("/static/hub/gate.js")
+    assert r.status_code == 200 and r.mimetype == "text/javascript" and "prefers-reduced-motion" in r.get_data(as_text=True)
+    assert "perspective" in c.get("/static/hub/scene.css").get_data(as_text=True)

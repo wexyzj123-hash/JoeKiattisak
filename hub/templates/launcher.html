@@ -14,9 +14,12 @@
     </div>
   </details>
 </header>
-<main class="wrap wrap-wide">
+<div class="gate-shell" id="gate-stage">
+  <span class="orb orb-a" aria-hidden="true"></span><span class="orb orb-b" aria-hidden="true"></span><span class="orb orb-c" aria-hidden="true"></span>
+<main class="wrap wrap-wide gate">
 {% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
-<section class="hero hero-scene">
+<div class="hero-3d">
+<section class="hero hero-scene" id="gate-hero">
   <div class="hero-text">
     <p class="hero-kicker">สวัสดี {{ g.user['name_th'] }}</p>
     <h1>เลือกระบบที่ต้องการใช้งาน</h1>
@@ -25,15 +28,20 @@
   <div class="hero-art">{{ mascot('alert' if any_badge else 'default', 120, decorative=True) }}</div>
   {% include "_scene_block.html" %}
 </section>
-<div class="tiles">
+</div>
+{% set accents = {'safety': 'amber', 'utcmms': 'cyan', 'echeck': 'green'} %}
+<div class="tiles gate-tiles">
   {% for a in apps %}
-  <a class="tile" href="/go/{{ a['key'] }}"{% if a['link'] %} target="_blank" rel="noopener noreferrer"{% endif %}>
+  <a class="tile" data-accent="{{ accents.get(a['key'], 'blue') }}" style="--i: {{ loop.index0 }}" href="/go/{{ a['key'] }}"{% if a['link'] %} target="_blank" rel="noopener noreferrer"{% endif %}>
     {% if a['badge'] %}<span class="badge">{{ a['badge'] }}<span class="sr-only"> รายการที่ต้องติดตาม</span></span>{% endif %}
-    <span class="kpi-ic">{{ icon('shield' if a['key'] == 'safety' else 'layers', 24) }}</span>
+    <span class="kpi-ic">{{ icon('shield' if a['key'] == 'safety' else 'layers', 26) }}</span>
     <strong>{{ a['name_th'] }}</strong>
     <span class="muted">{{ 'เปิดระบบ (แท็บใหม่)' if a['link'] else 'เข้าสู่ระบบ' }}</span>
+    <span class="tile-go" aria-hidden="true">{{ icon('chevron-down', 18) }}</span>
   </a>
   {% else %}<p>ยังไม่มีระบบที่คุณเข้าถึงได้</p>{% endfor %}
 </div>
 </main>
+</div>
+<script src="/static/hub/gate.js" defer></script>
 {% endblock %}

@@ -53,7 +53,7 @@ def theme_css():
 ASSETS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
 
 
-HUB_ASSETS = {"scene.css": "text/css", "login.js": "text/javascript"}
+HUB_ASSETS = {"scene.css": "text/css", "login.js": "text/javascript", "gate.js": "text/javascript"}
 
 
 @bp.route("/static/hub/<name>")
