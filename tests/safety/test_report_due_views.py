@@ -49,5 +49,23 @@ def test_submit_from_report_page_records_once(env):
 def test_scoped_user_cannot_submit_other_department_or_all(env):
     r = post(env.head, "/reports/monthly/submit", year="2026", month="1", department_id=str(env.b["d"]))
     assert r.status_code == 404 or "ไม่พบ" in r.get_data(as_text=True)
-    assert "ต้องเลือกแผนกของตน" in post(env.head, "/reports/monthly/submit", year="2026", month="1").get_data(as_text=True)
+    mgr = login(env.app, "assessor", name="ผู้จัดการโรงงาน", factory_id=env.a["f"])                                     # ขอบเขตระดับโรงงาน ไม่มีแผนกของตนเอง
+    assert "ต้องเลือกแผนกของตน" in post(mgr, "/reports/monthly/submit", year="2026", month="1").get_data(as_text=True)
+    assert "บันทึกว่าส่งรายงานแล้ว" in post(env.head, "/reports/monthly/submit", year="2026", month="1").get_data(as_text=True)      # หัวหน้าแผนก: ใช้แผนกของตน
     assert env.rep.post("/reports/monthly/submit", data={"_csrf": csrf(env.rep)}).status_code == 403
+
+
+def test_report_page_submit_records_rule_period_and_scoped_user_can_clear_non_monthly(env):
+    from datetime import date
+    from safety import timeutil
+    con = env.con()
+    con.execute("INSERT INTO report_due(report_key, department_id, frequency, due_day, due_month, created_at) VALUES('annual',?, 'yearly', 5, 2, '2020-01-01')", (env.a["d"],))
+    con.commit()
+    r = post(env.head, "/reports/annual/submit", year=str(timeutil.today().year - 1), department_id=str(env.a["d"]))
+    assert "บันทึกว่าส่งรายงานแล้ว" in r.get_data(as_text=True)
+    assert con.execute("SELECT department_id, period FROM report_submissions").fetchone()[:] == (env.a["d"], str(timeutil.today().year - 1))
+    cur = post(env.admin, "/reports/annual/submit", year=str(timeutil.today().year))                                        # ปีปัจจุบันยังไม่จบ
+    assert "ยังไม่ถึงงวดรายงานนี้" in cur.get_data(as_text=True)
+    assert "ส่งรายงานแล้ว" in post(env.admin, "/reports/capa/submit").get_data(as_text=True)
+    prev = (timeutil.today().replace(day=1).toordinal() - 1)
+    assert con.execute("SELECT period FROM report_submissions WHERE report_key='capa'").fetchone()[0] == date.fromordinal(prev).strftime("%Y-%m")

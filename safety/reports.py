@@ -130,7 +130,7 @@ def monthly_department(db, user, year: int, month: int, department_id: int | Non
     rc, ra = _cond(user, "r", department_id)
     hi_sql, hi_args = _high_sql(db)
     as_of = min(timeutil.today(), date.fromisoformat(last))
-    reported = _n(db, f"SELECT COUNT(*) FROM hazards h WHERE {hc} AND h.reported_at LIKE ?", ha + [ym + "%"])
+    reported = _n(db, f"SELECT COUNT(*) FROM hazards h WHERE {hc} AND h.status != 'rejected' AND h.reported_at LIKE ?", ha + [ym + "%"])
     kpis = [
         Kpi("แจ้งอันตราย", reported),
         Kpi("ปิดแล้ว", _closed_in(db, hc, ha, ym)),
@@ -144,7 +144,7 @@ def monthly_department(db, user, year: int, month: int, department_id: int | Non
     ]
     pr = db.execute(f"SELECT COUNT(*), AVG(r.score_pct) FROM patrol_rounds r WHERE {rc} AND r.status='submitted' AND r.submitted_at LIKE ?", ra + [ym + "%"]).fetchone()
     kpis += [Kpi("รอบตรวจที่ส่งแล้ว", pr[0]), Kpi("คะแนนตรวจเฉลี่ย", f"{pr[1]:.0f}%" if pr[1] is not None else "-"),
-             Kpi("CAPA ที่เปิด", _n(db, f"SELECT COUNT(*) FROM capas c WHERE {cc} AND c.created_at LIKE ?", ca + [ym + "%"])),
+             Kpi("CAPA ที่เปิด", _n(db, f"SELECT COUNT(*) FROM capas c WHERE {cc} AND c.status != 'cancelled' AND c.created_at LIKE ?", ca + [ym + "%"])),
              Kpi("CAPA ที่ยืนยันผลแล้ว", _n(db, f"SELECT COUNT(*) FROM capas c WHERE {cc} AND c.verified_at LIKE ?", ca + [ym + "%"]))]
     by_type = db.execute(f"SELECT t.name_th, COUNT(*) FROM hazards h JOIN hazard_types t ON t.id = h.hazard_type_id WHERE {hc} AND h.reported_at LIKE ? "
                          "GROUP BY t.id ORDER BY 2 DESC, t.name_th", ha + [ym + "%"]).fetchall()
@@ -174,7 +174,7 @@ def annual_summary(db, user, year: int) -> Report:
     rows, tot = [], [0] * 5
     for m in range(1, 13):
         ym = f"{year:04d}-{m:02d}"
-        vals = [_n(db, f"SELECT COUNT(*) FROM hazards h WHERE {hc} AND h.reported_at LIKE ?", ha + [ym + "%"]),
+        vals = [_n(db, f"SELECT COUNT(*) FROM hazards h WHERE {hc} AND h.status != 'rejected' AND h.reported_at LIKE ?", ha + [ym + "%"]),
                 _closed_in(db, hc, ha, ym),
                 _n(db, f"SELECT COUNT(*) FROM incidents i WHERE {ic} AND i.kind='accident' AND i.status != 'rejected' AND i.occurred_at LIKE ?", ia + [ym + "%"]),
                 _n(db, f"SELECT COUNT(*) FROM incidents i WHERE {ic} AND i.kind='near_miss' AND i.status != 'rejected' AND i.occurred_at LIKE ?", ia + [ym + "%"]),

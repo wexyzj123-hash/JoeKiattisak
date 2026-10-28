@@ -18,6 +18,7 @@ from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table as Rl
 from . import report_fonts
 from .reports import Report
 
+CONTROL_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 INVALID_SHEET = re.compile(r"[\[\]:*?/\\]")
 BRAND = "1F4E8C"
 
@@ -26,8 +27,10 @@ def safe_cell(value):
     """ข้อความที่ขึ้นต้นด้วย = + - @ ถูกเขียนเป็นข้อความ (กัน formula injection ใน Excel)"""
     if value is None:
         return ""
-    if isinstance(value, str) and value[:1] in ("=", "+", "-", "@"):
-        return "'" + value
+    if isinstance(value, str):
+        value = CONTROL_RE.sub("", value)                       # openpyxl ปฏิเสธอักขระควบคุม — ตัดทิ้งแทนที่จะทำให้ส่งออกล้ม
+        if value[:1] in ("=", "+", "-", "@", "\t", "\r"):
+            return "'" + value
     return value
 
 

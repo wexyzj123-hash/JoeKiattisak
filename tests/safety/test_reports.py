@@ -135,3 +135,20 @@ def test_year_and_month_validation(w):
     with pytest.raises(ValueError):
         reports.annual_summary(w.db, w.admin, 3000)
     assert reports.build(w.db, w.admin, "nope", 2026, 3) is None
+
+
+def test_rejected_hazards_and_cancelled_capas_not_counted(w):
+    add_hazard(w.db, w.a["a"], w.rep["id"], status="rejected", reported_at="2026-03-08 08:00")
+    w.db.execute("INSERT INTO capas(code, source_kind, action_type, title, risk_area_id, owner_id, due_date, status, created_by, created_at) VALUES('CP-X','manual','corrective','t',?,?,?,?,?,?)",
+                 (w.a["a"], w.rep["id"], "2026-04-01", "cancelled", w.admin["id"], "2026-03-02 08:00"))
+    w.db.commit()
+    r = reports.monthly_department(w.db, w.admin, 2026, 3)
+    assert w.kpi(r, "แจ้งอันตราย") == 3 and w.kpi(r, "CAPA ที่เปิด") == 0
+
+
+def test_hazard_closed_in_later_month_counts_open_at_month_end(w):
+    assert w.kpi(reports.monthly_department(w.db, w.admin, 2026, 3, w.a["d"]), "ค้างปลายเดือน") == 1                 # h2 เท่านั้น; h1 ปิด 12 มี.ค.
+    w.db.execute("INSERT INTO hazard_events(hazard_id, at, kind, from_status, to_status) VALUES(?,?,?,?,?)", (w.h2, "2026-04-02 09:00", "closed", "assigned", "closed"))
+    w.db.commit()
+    assert w.kpi(reports.monthly_department(w.db, w.admin, 2026, 3, w.a["d"]), "ค้างปลายเดือน") == 1                 # ปิดเดือนเมษา → มีนายังค้าง
+    assert w.kpi(reports.monthly_department(w.db, w.admin, 2026, 4, w.a["d"]), "ค้างปลายเดือน") == 0

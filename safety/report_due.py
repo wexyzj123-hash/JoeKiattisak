@@ -18,6 +18,9 @@ PERIOD_RE = re.compile(r"^(\d{4})(?:-(0[1-9]|1[0-2]))?$")
 NOTE_MAX = 500
 
 
+FREQUENCY_FOR = {"monthly": "monthly", "capa": "monthly", "annual": "yearly", "incidents": "yearly"}      # ความถี่ที่รายงานแต่ละแบบใช้ (กำหนดรูปแบบงวด)
+
+
 def _int(v):
     try:
         return int(str(v).strip())
@@ -88,11 +91,13 @@ def mark_submitted(db, user, report_key: str, department_id, period: str, note: 
     if report_key not in reports.REPORTS:
         return ["ไม่พบรายงานนี้"]
     m = PERIOD_RE.match((period or "").strip())
-    if m is None:
+    if m is None or (m.group(2) is not None) != (FREQUENCY_FOR[report_key] == "monthly"):
         return ["งวดรายงานไม่ถูกต้อง"]
-    start = date(int(m.group(1)), int(m.group(2) or 1), 1)
-    if start > timeutil.today():
-        return ["ยังไม่ถึงงวดรายงานนี้"]
+    today = timeutil.today()
+    year = int(m.group(1))
+    elapsed = (year, int(m.group(2))) < (today.year, today.month) if m.group(2) else year < today.year
+    if not elapsed:
+        return ["ยังไม่ถึงงวดรายงานนี้"]                         # รับเฉพาะงวดที่จบครบแล้ว
     note = (note or "").strip()
     if len(note) > NOTE_MAX:
         return [f"หมายเหตุยาวเกิน {NOTE_MAX} ตัวอักษร"]
@@ -120,7 +125,7 @@ def rules(db, user) -> list:
 
 def submissions(db, user, limit: int = 30) -> list:
     rows = db.execute("SELECT s.*, u.name AS who, d.name_th AS dept_name FROM report_submissions s JOIN safety_users u ON u.id = s.submitted_by "
-                      "LEFT JOIN departments d ON d.id = s.department_id ORDER BY s.id DESC LIMIT 500").fetchall()
+                      "LEFT JOIN departments d ON d.id = s.department_id ORDER BY s.id DESC").fetchall()
     return [r for r in rows if _rule_visible(db, user, r)][:limit]
 
 
@@ -140,6 +145,8 @@ def save_rule(db, user, form) -> list[str]:
         return ["ไม่พบรายงานนี้"]
     if freq not in FREQUENCY_TH:
         return ["ความถี่ต้องเป็นรายเดือนหรือรายปี"]
+    if freq != FREQUENCY_FOR[key]:
+        return [f"รายงานนี้ใช้ความถี่{FREQUENCY_TH[FREQUENCY_FOR[key]]}เท่านั้น"]
     if day is None or not 1 <= day <= 28:
         return ["วันที่ครบกำหนดต้องอยู่ระหว่าง 1–28"]
     if freq == "yearly" and (month is None or not 1 <= month <= 12):
@@ -169,7 +176,10 @@ def toggle_rule(db, user, rule_id: int) -> list[str]:
     if rule is None or not _rule_visible(db, user, rule):
         return NOT_FOUND
     try:
-        db.execute("UPDATE report_due SET active = 1 - active WHERE id=?", (rule_id,))
+        if rule["active"]:
+            db.execute("UPDATE report_due SET active = 0 WHERE id=?", (rule_id,))
+        else:                                                        # เปิดใหม่ = เริ่มนับใหม่ ไม่ถือว่าค้างส่งย้อนหลังตอนปิดอยู่
+            db.execute("UPDATE report_due SET active = 1, created_at = datetime('now','localtime') WHERE id=?", (rule_id,))
         db.commit()
     except sqlite3.IntegrityError:
         db.rollback()

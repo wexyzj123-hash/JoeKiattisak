@@ -64,3 +64,10 @@ def test_pdf_paginates_300_rows_and_long_text():
 def test_empty_report_exports_both():
     empty = rep(kpis=[], tables=[])
     assert load_workbook(io.BytesIO(ex.to_xlsx(empty))).sheetnames == ["สรุป"] and ex.to_pdf(empty).startswith(b"%PDF")
+
+
+def test_xlsx_control_characters_and_tab_cr_are_neutralised():
+    import openpyxl
+    wb = load_workbook(io.BytesIO(ex.to_xlsx(rep(tables=[Table("t", ["a"], [["\x01bad\x0b"], ["\tx"], ["\ry"]])]))))
+    ws = wb[wb.sheetnames[1]]
+    assert ws["A2"].value == "bad" and ws["A3"].value.startswith("'") and ws["A4"].value.startswith("'")

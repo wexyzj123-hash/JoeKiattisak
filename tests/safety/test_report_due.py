@@ -113,7 +113,7 @@ def test_save_rule_validation_and_unique_active(w):
     for bad in ({"due_day": "0"}, {"due_day": "29"}, {"due_day": "x"}, {"frequency": "weekly"}, {"report_key": "zzz"}, {"frequency": "yearly", "due_month": ""}):
         assert rd.save_rule(w.db, w.admin, {**ok, "report_key": "annual", **bad}), bad
     assert rd.save_rule(w.db, w.admin, {"report_key": "annual", "frequency": "yearly", "due_day": "28", "due_month": "2"}) == []
-    assert rd.save_rule(w.db, w.admin, {**ok, "department_id": "9999", "report_key": "incidents"}) == rd.NOT_FOUND
+    assert rd.save_rule(w.db, w.admin, {**ok, "department_id": "9999", "report_key": "capa"}) == rd.NOT_FOUND
 
 
 def test_concurrent_double_submit_single_row(w, tmp_path):
@@ -123,9 +123,42 @@ def test_concurrent_double_submit_single_row(w, tmp_path):
     def go():
         con = connect(path)
         barrier.wait()
-        results.append(rd.mark_submitted(con, user_row(con, w.admin["id"]), "capa", None, "2026-03", "x"))
+        results.append(rd.mark_submitted(con, user_row(con, w.admin["id"]), "capa", None, "2026-02", "x"))
         con.close()
     ts = [threading.Thread(target=go) for _ in range(2)]
     [t.start() for t in ts]; [t.join() for t in ts]
     assert sorted(len(r) for r in results) == [0, 1]
     assert w.db.execute("SELECT COUNT(*) FROM report_submissions").fetchone()[0] == 1
+
+
+def test_only_fully_elapsed_periods_and_matching_format_accepted(w):
+    assert rd.mark_submitted(w.db, w.admin, "monthly", None, "2026-03", "") == ["ยังไม่ถึงงวดรายงานนี้"]        # เดือนปัจจุบันยังไม่จบ
+    assert rd.mark_submitted(w.db, w.admin, "annual", None, "2026", "") == ["ยังไม่ถึงงวดรายงานนี้"]
+    assert rd.mark_submitted(w.db, w.admin, "monthly", None, "2026", "") == ["งวดรายงานไม่ถูกต้อง"]            # รายเดือนต้อง YYYY-MM
+    assert rd.mark_submitted(w.db, w.admin, "annual", None, "2026-02", "") == ["งวดรายงานไม่ถูกต้อง"]            # รายปีต้อง YYYY
+    assert rd.mark_submitted(w.db, w.admin, "capa", None, "2026-02", "") == []
+
+
+def test_save_rule_frequency_must_match_report_type(w):
+    assert rd.save_rule(w.db, w.admin, {"report_key": "annual", "frequency": "monthly", "due_day": "5"}) == ["รายงานนี้ใช้ความถี่รายปีเท่านั้น"]
+    assert rd.save_rule(w.db, w.admin, {"report_key": "capa", "frequency": "yearly", "due_day": "5", "due_month": "2"}) == ["รายงานนี้ใช้ความถี่รายเดือนเท่านั้น"]
+
+
+def test_scoped_user_can_clear_non_monthly_rule_of_own_department(w):
+    r = w.rule(key="annual", dept=w.a["d"], freq="yearly", day=5, month=2)
+    assert rd.mark_submitted(w.db, w.head, "annual", w.a["d"], "2025", "") == []
+    assert rd.status(w.db, r, date(2026, 3, 20))["state"] == "upcoming"
+
+
+def test_reenabling_rule_resets_start_so_no_retroactive_overdue(w):
+    r = w.rule(day=5)
+    rd.toggle_rule(w.db, w.admin, r["id"]); rd.toggle_rule(w.db, w.admin, r["id"])
+    assert rd.status(w.db, w.db.execute("SELECT * FROM report_due WHERE id=?", (r["id"],)).fetchone(), date(2026, 3, 20))["state"] == "upcoming"
+
+
+def test_history_for_scoped_user_not_crowded_out_by_other_scopes(w):
+    w.db.execute("INSERT INTO report_submissions(report_key, department_id, period, submitted_by) VALUES('monthly',?,?,?)", (w.a["d"], "1990-01", w.admin["id"]))
+    for i in range(520):
+        w.db.execute("INSERT INTO report_submissions(report_key, department_id, period, submitted_by) VALUES('monthly',?,?,?)", (w.b["d"], f"{2000 + i // 12}-{i % 12 + 1:02d}", w.admin["id"]))
+    w.db.commit()
+    assert [s["period"] for s in rd.submissions(w.db, w.mgr_a)] == ["1990-01"]

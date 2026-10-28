@@ -44,7 +44,7 @@ def view(key):
     if rep is None:
         abort(404)
     perms = user_permissions(db, g.user)
-    return render_template("report_view.html", rep=rep, key=key, year=year, month=month, dept=dept, departments=_departments(db) if key == "monthly" else [],
+    return render_template("report_view.html", rep=rep, key=key, year=year, month=month, dept=dept, departments=_departments(db), unscoped=g.user["factory_id"] is None and g.user["department_id"] is None,
                            months=reports.MONTHS_TH, can_export=bool({"report.export"} & perms) or g.user["role"] == "admin",
                            years=list(range(timeutil.today().year, timeutil.today().year - 6, -1)))
 

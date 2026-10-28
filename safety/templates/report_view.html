@@ -21,9 +21,10 @@
 </div>{% endif %}
 {% if can_export %}
 <form method="post" action="/reports/{{ key }}/submit" class="card" style="max-width:none;margin:16px 0 0;display:flex;gap:10px;align-items:end;flex-wrap:wrap">
-  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="year" value="{{ year }}"><input type="hidden" name="month" value="{{ month }}"><input type="hidden" name="department_id" value="{{ dept or '' }}">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="year" value="{{ year }}"><input type="hidden" name="month" value="{{ month }}">{% if key == 'monthly' %}<input type="hidden" name="department_id" value="{{ dept or '' }}">
+  {% else %}<label>แผนกที่ส่งรายงาน <select name="department_id">{% if unscoped %}<option value="">ทั้งบริษัท</option>{% endif %}{% for d in departments %}<option value="{{ d['id'] }}">{{ d['factory'] }} / {{ d['name_th'] }}</option>{% endfor %}</select></label>{% endif %}
   <label style="flex:1;min-width:200px">หมายเหตุการส่งรายงาน (ไม่บังคับ) <input name="note" maxlength="500"></label>
-  <button type="submit">บันทึกว่าส่งรายงานงวดนี้แล้ว</button>
+  <button type="submit">บันทึกว่าส่งรายงานแล้ว{% if key == "capa" %} (เดือนที่แล้ว){% elif key == "monthly" %} (งวด {{ rep.period_label }}){% else %} (ปี {{ year }}){% endif %}</button>
 </form>
 {% endif %}
 {% for t in rep.tables %}

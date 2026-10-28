@@ -1,6 +1,8 @@
 """safety/views/report_due.py — กำหนดส่งรายงาน (ผู้ดูแล) และปุ่ม "บันทึกว่าส่งรายงานแล้ว" จากหน้ารายงาน"""
 from __future__ import annotations
 
+from datetime import timedelta
+
 from flask import Blueprint, abort, flash, g, redirect, render_template, request
 
 from .. import report_due as rd, reports, timeutil
@@ -46,8 +48,13 @@ def submit(key):
     if key not in reports.REPORTS:
         abort(404)
     f = request.form
-    year, month = _int(f.get("year")) or timeutil.today().year, _int(f.get("month")) or timeutil.today().month
-    dept = _int(f.get("department_id"))
-    period = f"{year:04d}-{month:02d}" if key in ("monthly", "capa") else f"{year:04d}"
-    _flash(rd.mark_submitted(get_db(), g.user, key, dept if key == "monthly" else None, period, f.get("note", "")), "บันทึกว่าส่งรายงานแล้ว")
-    return redirect(f"/reports/{key}?year={year}&month={month}" + (f"&department_id={dept}" if dept else ""))
+    today = timeutil.today()
+    year, month = _int(f.get("year")) or today.year, _int(f.get("month")) or today.month
+    dept = _int(f.get("department_id")) or g.user["department_id"]
+    if key == "capa":                                         # สถานะ CAPA ไม่มีงวดให้เลือก: ส่งของเดือนที่แล้ว
+        prev = timeutil.today().replace(day=1) - timedelta(days=1)
+        period = f"{prev.year:04d}-{prev.month:02d}"
+    else:
+        period = f"{year:04d}-{month:02d}" if key == "monthly" else f"{year:04d}"
+    _flash(rd.mark_submitted(get_db(), g.user, key, dept, period, f.get("note", "")), "บันทึกว่าส่งรายงานแล้ว")
+    return redirect(f"/reports/{key}?year={year}&month={month}" + (f"&department_id={dept}" if dept and key == "monthly" else ""))
