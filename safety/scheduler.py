@@ -10,7 +10,7 @@ import os
 import re
 import sqlite3
 import threading
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from . import notify, timeutil
 from .db import connect
@@ -53,34 +53,58 @@ def _daily_time(db) -> tuple[int, int]:
     return (int(m.group(1)), int(m.group(2))) if m else (7, 30)
 
 
+STALE_MINUTES = 30                 # รอบที่เริ่มแล้วแต่ไม่เสร็จเกินเวลานี้ถือว่าล้ม (โปรเซสตาย/ฐานข้อมูลล็อก) และเริ่มใหม่ได้
+fmt = lambda dt: dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
 def due_run_needed(db, now: datetime) -> bool:
-    """ถึงเวลาแล้ว (หรือเลยเวลาแล้ว = ตามทัน) และวันนี้ยังไม่เคยรัน"""
+    """ถึงเวลาแล้ว (หรือเลยเวลาแล้ว = ตามทัน) และวันนี้ยังไม่เคยรัน — หรือเคยเริ่มแต่ไม่เสร็จนานเกิน STALE_MINUTES"""
     hour, minute = _daily_time(db)
     if (now.hour, now.minute) < (hour, minute):
         return False
-    return db.execute("SELECT 1 FROM job_runs WHERE job='daily' AND run_date=?", (now.date().isoformat(),)).fetchone() is None
+    row = db.execute("SELECT finished_at, started_at FROM job_runs WHERE job='daily' AND run_date=?", (now.date().isoformat(),)).fetchone()
+    if row is None:
+        return True
+    return row[0] is None and (row[1] is None or row[1] <= fmt(now - timedelta(minutes=STALE_MINUTES)))
 
 
-def run_daily(db, today: date | None = None, force: bool = False, backup_dir: str | None = None) -> dict:
-    today = today or timeutil.today()
+def run_daily(db, today: date | None = None, force: bool = False, backup_dir: str | None = None,
+              now: datetime | None = None) -> dict:
+    today, now = today or timeutil.today(), now or datetime.now()
     try:
-        db.execute("INSERT INTO job_runs(job, run_date) VALUES('daily', ?)", (today.isoformat(),))
+        db.execute("INSERT INTO job_runs(job, run_date, started_at) VALUES('daily', ?, ?)", (today.isoformat(), fmt(now)))
         db.commit()
     except sqlite3.IntegrityError:
         db.rollback()
         if not force:
-            return {"skipped": True}
+            # มีรอบของวันนี้อยู่แล้ว: ทำต่อได้เฉพาะรอบที่ "เริ่มแล้วแต่ไม่เสร็จนานเกินกำหนด" (ล้มกลางทาง) — เปลี่ยนเวลาเริ่มแบบ atomic ให้เหลือผู้ชนะคนเดียว
+            took = db.execute("UPDATE job_runs SET started_at=? WHERE job='daily' AND run_date=? AND finished_at IS NULL "
+                              "AND (started_at IS NULL OR started_at <= ?)",
+                              (fmt(now), today.isoformat(), fmt(now - timedelta(minutes=STALE_MINUTES)))).rowcount
+            db.commit()
+            if took != 1:
+                return {"skipped": True}
     outbox_before = db.execute("SELECT COUNT(*) FROM notify_outbox").fetchone()[0]
     notifications = errors = 0
     rows = db.execute("SELECT id, due_date FROM hazards WHERE status IN ('reported','assessed','assigned') "
                       "AND due_date IS NOT NULL ORDER BY id").fetchall()
+    offsets = {ev: sorted(r[0] for r in db.execute("SELECT DISTINCT offset_days FROM notify_rules WHERE event=? AND enabled=1", (ev,)))
+               for ev in ("due_soon", "overdue")}
     for hazard_id, due_text in rows:
         try:
             due = date.fromisoformat(due_text)
             days = (due - today).days
-            event, offset = ("due_soon", days) if days >= 0 else ("overdue", -days)
             db.execute("SAVEPOINT daily_item")
-            notifications += notify.emit(db, event, hazard_id, None, offset_days=offset)
+            # ตามทันทุกขั้นที่ "ถึงแล้ว" (ข้ามวันที่ระบบดับก็ไม่พลาดการยกระดับ); ขั้นที่เคยส่งแล้วถูกกันซ้ำด้วย dedupe key ของกฎ+ขั้น
+            if days >= 0:
+                for off in offsets["due_soon"]:
+                    if off >= days:
+                        notifications += notify.emit(db, "due_soon", hazard_id, None, offset_days=off, days=days)
+            else:
+                late = -days
+                for off in offsets["overdue"]:
+                    if off <= late:
+                        notifications += notify.emit(db, "overdue", hazard_id, None, offset_days=off, days=late)
             db.execute("RELEASE daily_item")
             db.commit()
         except Exception:                                  # noqa: BLE001 — รายการเดียวเสียไม่ทำให้ทั้งรอบล้ม

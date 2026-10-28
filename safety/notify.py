@@ -112,7 +112,7 @@ def _queue_external(db, channel: str, target: str, title: str, body: str, urgent
 
 
 def emit(db, event: str, hazard_id: int, actor_id: int | None, *, offset_days: int | None = None,
-         today: date | None = None, stage: str | None = None) -> int:
+         today: date | None = None, stage: str | None = None, days: int | None = None) -> int:
     """เขียนการแจ้งเตือนตามกฎของเหตุการณ์นี้ คืนจำนวนแถวแจ้งเตือนในระบบที่สร้างใหม่; ไม่ throw ไม่ commit"""
     if event not in NOTIFY_EVENTS:
         return 0
@@ -123,7 +123,7 @@ def emit(db, event: str, hazard_id: int, actor_id: int | None, *, offset_days: i
             db.execute("RELEASE notify")
             return 0
         area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (hazard["risk_area_id"],)).fetchone()
-        title, body = render_message(event, hazard, {"area": area[0] if area else "", "days": offset_days})
+        title, body = render_message(event, hazard, {"area": area[0] if area else "", "days": days if days is not None else offset_days})
         stage = stage if stage is not None else _stage(event, hazard, offset_days)
         created = 0
         for rule in db.execute("SELECT * FROM notify_rules WHERE event=? AND enabled=1 ORDER BY id", (event,)).fetchall():

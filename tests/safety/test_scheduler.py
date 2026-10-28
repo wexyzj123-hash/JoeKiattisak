@@ -65,8 +65,8 @@ def test_force_reruns_but_notifications_still_deduped(s):
     assert again["skipped"] is False and again["notifications"] == 0 and len(s.who()) == 1
 
 
-@pytest.mark.parametrize("delta, expected", [(-5, 0), (-3, 0), (-2, 1), (-1, 0), (0, 0)])
-def test_due_soon_fires_exactly_on_offset_day(s, delta, expected):
+@pytest.mark.parametrize("delta, expected", [(-5, 0), (-3, 0), (-2, 1), (-1, 1), (0, 1)])       # ตั้งแต่วันที่ถึง offset เป็นต้นไป (ตามทันถ้าข้ามวัน)
+def test_due_soon_fires_from_the_offset_day_onwards_but_never_before(s, delta, expected):
     s.hz()
     assert run(s.db, D + timedelta(days=delta))["notifications"] == expected
     assert s.who("due_soon") == (["เจ้าของ"] if expected else [])
@@ -94,7 +94,8 @@ def test_closed_and_rejected_hazards_never_remind(s):
 
 def test_due_today_is_not_overdue(s):
     s.hz()
-    assert run(s.db, D)["notifications"] == 0 and s.who("overdue") == []
+    run(s.db, D)
+    assert s.who("overdue") == [] and s.who("due_soon") == ["เจ้าของ"]                  # วันครบกำหนดยังไม่เกิน; ได้แค่เตือนใกล้ครบกำหนด
 
 
 def test_hazard_without_due_date_ignored(s):
@@ -117,11 +118,78 @@ def test_one_failing_hazard_does_not_abort_run(s, monkeypatch):
     assert {r[0] for r in s.db.execute("SELECT hazard_id FROM notifications")} == {good1, good2}
 
 
-def test_missed_days_do_not_backfill_old_stages(s):
+def test_missed_days_catch_up_every_level_reached_without_flooding(s):
     s.hz()
-    # ระบบไม่ได้ทำงานหลายวัน: วันนี้เกินมา 5 วัน ซึ่งไม่มีกฎ offset 5 → ไม่ส่งขั้น 1/3 ย้อนหลัง
-    assert run(s.db, D + timedelta(days=5))["notifications"] == 0 and s.who() == []
-    assert run(s.db, D + timedelta(days=3))["notifications"] == 2                              # (ควบคุม) วันที่ 3 มีกฎจริง → เจ้าของ + หัวหน้า
+    # ระบบดับหลายวัน: วันนี้เกินมา 5 วัน → ขั้น L1 (วันที่ 1) และ L2 (วันที่ 3) ที่ยังไม่เคยส่งต้องตามทันตอนนี้ ส่วน L3 (วันที่ 7) ยังไม่ถึง
+    res = run(s.db, D + timedelta(days=5))
+    assert res["notifications"] == 3 and s.who("overdue") == ["หัวหน้า", "เจ้าของ", "เจ้าของ"]
+    assert run(s.db, D + timedelta(days=5))["notifications"] == 0                          # รันซ้ำไม่ซ้ำ
+    assert run(s.db, D + timedelta(days=6))["notifications"] == 0                          # วันถัดไปไม่ส่งขั้นเดิมอีก
+    assert run(s.db, D + timedelta(days=7))["notifications"] == 2                          # ถึง L3 แล้วจึงส่ง (แอดมิน + หัวหน้า)
+
+
+def test_catch_up_message_shows_the_real_number_of_days_late(s):
+    s.hz()
+    run(s.db, D + timedelta(days=5))
+    titles = [r[0] for r in s.db.execute("SELECT title FROM notifications WHERE event='overdue'")]
+    assert titles and all("(5 วัน)" in t for t in titles), titles
+
+
+def test_due_soon_catch_up_uses_actual_days_left(s):
+    s.hz()
+    run(s.db, D - timedelta(days=1))                                                        # ข้ามวัน D-2 ไป
+    title = s.db.execute("SELECT title FROM notifications WHERE event='due_soon'").fetchone()[0]
+    assert "อีก 1 วัน" in title
+
+
+def stale(db, run_date, minutes_ago, finished=False, base=datetime(2026, 3, 20, 12, 0)):
+    started = (base - timedelta(minutes=minutes_ago)).strftime("%Y-%m-%d %H:%M:%S")
+    db.execute("INSERT INTO job_runs(job, run_date, started_at, finished_at) VALUES('daily', ?, ?, ?)",
+               (run_date, started, "2026-03-20 08:00:00" if finished else None))
+    db.commit()
+
+
+def test_crashed_run_is_picked_up_again_after_the_grace_period(s):
+    s.hz()
+    day = D - timedelta(days=2)                                                               # วันที่ของรอบ = วันที่ของ "ตอนนี้" (due_soon ขั้น 2 วันจะยิง)
+    now = datetime(day.year, day.month, day.day, 12, 0)
+    stale(s.db, day.isoformat(), 120, base=now)                                               # เริ่มแล้วเมื่อ 2 ชม. ก่อนแต่ไม่เคยเสร็จ (โปรเซสตาย)
+    assert due_run_needed(s.db, now) is True
+    res = run_daily(s.db, day, now=now)
+    assert res["skipped"] is False and res["notifications"] == 1
+    assert s.db.execute("SELECT finished_at IS NOT NULL FROM job_runs").fetchone()[0] == 1
+    assert due_run_needed(s.db, now) is False and run_daily(s.db, day, now=now) == {"skipped": True}
+
+
+def test_run_in_progress_is_not_started_twice_and_finished_run_never_reruns(s):
+    now = datetime(2026, 3, 20, 12, 0)
+    stale(s.db, D.isoformat(), 3)                                                             # เพิ่งเริ่ม 3 นาทีก่อน = ยังทำงานอยู่
+    assert due_run_needed(s.db, now) is False
+    assert run_daily(s.db, D, now=now) == {"skipped": True}
+    s.db.execute("DELETE FROM job_runs"); s.db.commit()
+    stale(s.db, D.isoformat(), 500, finished=True)
+    assert due_run_needed(s.db, now) is False and run_daily(s.db, D, now=now) == {"skipped": True}
+
+
+def test_old_rows_without_started_at_and_unfinished_count_as_stale(s):
+    s.db.execute("INSERT INTO job_runs(job, run_date) VALUES('daily', ?)", (D.isoformat(),)); s.db.commit()
+    assert due_run_needed(s.db, datetime(2026, 3, 20, 12, 0)) is True
+
+
+def test_concurrent_reclaim_of_a_stale_run_has_one_winner(tmp_path):
+    path = str(tmp_path / "c.db")
+    con = connect(path); ensure_schema(con); stale(con, D.isoformat(), 120); con.close()
+    results, barrier = [], threading.Barrier(4)
+
+    def worker():
+        c = connect(path)
+        barrier.wait()
+        results.append(run_daily(c, D, now=datetime(2026, 3, 20, 12, 0), backup_dir=str(tmp_path / "b")))
+        c.close()
+
+    threads = [threading.Thread(target=worker) for _ in range(4)]
+    [t.start() for t in threads]; [t.join(10) for t in threads]
+    assert sorted(r.get("skipped", False) for r in results) == [False, True, True, True]
 
 
 def test_due_run_needed_catch_up_and_before_time(s):
@@ -199,7 +267,7 @@ def test_scheduler_thread_runs_catch_up_once_and_stops(tmp_path, monkeypatch):
     app = create_app({"TESTING": True, "DATABASE": str(tmp_path / "t.db"), "SSO_SECRET": SECRET, "SERVICE_TOKEN": "x", "HUB_URL": "http://h"})
     con = connect(app.config["DATABASE"]); con.execute("UPDATE app_settings SET value='00:00' WHERE key='daily_time'"); con.commit(); con.close()
     calls = []
-    monkeypatch.setattr(scheduler, "run_daily", lambda db, *a, **k: (calls.append(1), db.execute("INSERT OR IGNORE INTO job_runs(job, run_date) VALUES('daily', ?)", (timeutil.today().isoformat(),)), db.commit(), {})[-1])
+    monkeypatch.setattr(scheduler, "run_daily", lambda db, *a, **k: (calls.append(1), db.execute("INSERT OR IGNORE INTO job_runs(job, run_date, started_at, finished_at) VALUES('daily', ?, datetime('now','localtime'), datetime('now','localtime'))", (timeutil.today().isoformat(),)), db.commit(), {})[-1])
     th = start_scheduler(app, interval=0.02)
     deadline = time.time() + 3
     while not calls and time.time() < deadline:

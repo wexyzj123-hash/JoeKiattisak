@@ -455,3 +455,53 @@ def test_worker_survives_exceptions_and_keeps_running(tmp_path, monkeypatch):
         time.sleep(0.02)
     th.stop_event.set(); th.join(timeout=2)
     assert calls["n"] >= 3 and th.daemon is True and not th.is_alive()
+
+
+# ---------- TLS ของอีเมลต้องตรวจใบรับรองเซิร์ฟเวอร์ ----------
+class FakeSMTP:
+    instances = []
+
+    def __init__(self, host, port, timeout=None, local_hostname=None, context=None):
+        self.kind, self.context, self.starttls_context, self.logged_in, self.sent = type(self).__name__, context, None, None, 0
+        FakeSMTP.instances.append(self)
+
+    def __enter__(self): return self
+    def __exit__(self, *a): return False
+    def starttls(self, context=None): self.starttls_context = context
+    def login(self, user, password): self.logged_in = (user, password)
+    def send_message(self, msg): self.sent += 1
+
+
+class FakeSMTPS(FakeSMTP):
+    pass
+
+
+def _verifying(ctx):
+    import ssl
+    return ctx is not None and ctx.verify_mode == ssl.CERT_REQUIRED and ctx.check_hostname is True
+
+
+@pytest.mark.parametrize("mode", ["starttls", "1", "true", "yes", "STARTTLS"])
+def test_starttls_verifies_server_certificate_before_login(monkeypatch, mode):
+    FakeSMTP.instances.clear()
+    monkeypatch.setattr(delivery.smtplib, "SMTP", FakeSMTP)
+    send_email("a@b.co", "s", "b", {"SMTP_HOST": "mail.example", "SMTP_TLS": mode, "SMTP_USER": "u", "SMTP_PASSWORD": "pw"})
+    inst = FakeSMTP.instances[0]
+    assert _verifying(inst.starttls_context), "starttls() ต้องส่ง ssl context ที่ตรวจใบรับรอง+ชื่อโฮสต์"
+    assert inst.logged_in == ("u", "pw") and inst.sent == 1
+
+
+@pytest.mark.parametrize("mode", ["ssl", "smtps", "SSL"])
+def test_smtps_uses_verifying_context(monkeypatch, mode):
+    FakeSMTPS.instances.clear()
+    monkeypatch.setattr(delivery.smtplib, "SMTP_SSL", FakeSMTPS)
+    monkeypatch.setattr(delivery.smtplib, "SMTP", lambda *a, **k: pytest.fail("ต้องใช้ SMTP_SSL"))
+    send_email("a@b.co", "s", "b", {"SMTP_HOST": "mail.example", "SMTP_PORT": "465", "SMTP_TLS": mode})
+    assert _verifying(FakeSMTPS.instances[0].context) and FakeSMTPS.instances[0].sent == 1
+
+
+def test_plain_smtp_without_tls_setting_does_not_call_starttls(monkeypatch):
+    FakeSMTP.instances.clear()
+    monkeypatch.setattr(delivery.smtplib, "SMTP", FakeSMTP)
+    send_email("a@b.co", "s", "b", {"SMTP_HOST": "mail.example"})
+    assert FakeSMTP.instances[0].starttls_context is None

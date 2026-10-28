@@ -157,3 +157,23 @@ def test_per_app_cache_isolation(tmp_path, monkeypatch):
     calls = hub_says(monkeypatch, {})
     login(a, "reporter", hub_uid=30).get("/hazards"); login(b, "reporter", hub_uid=30).get("/hazards")
     assert len(calls) == 2
+
+
+@pytest.mark.parametrize("code", [401, 403])
+def test_rejected_service_token_is_logged_as_an_error_every_refresh_and_fails_open(app, monkeypatch, caplog, code):
+    calls = []
+
+    def reject(req, timeout):
+        calls.append(1)
+        raise urllib.error.HTTPError(req.full_url, code, "no", {}, None)
+    monkeypatch.setattr(hubcheck, "_urlopen", reject)
+    clock = {"t": 100.0}
+    monkeypatch.setattr(hubcheck, "_now", lambda: clock["t"])
+    c = login(app, "reporter", hub_uid=21)
+    with caplog.at_level(logging.WARNING, logger="safety.hubcheck"):
+        for _ in range(3):
+            assert c.get("/hazards").status_code == 200                                       # fail open: ใช้งานต่อได้
+            clock["t"] += 20
+    errors = [r for r in caplog.records if r.levelno >= logging.ERROR]
+    assert len(calls) == 3 and len(errors) == 3
+    assert all("SERVICE_TOKEN" in r.getMessage() and "svc-token" not in r.getMessage() for r in errors)

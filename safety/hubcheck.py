@@ -31,7 +31,9 @@ def _fetch(app, hub_uid: int) -> tuple[bool, bool]:
         with _urlopen(req, timeout=TIMEOUT) as resp:
             return bool(json.loads(resp.read().decode("utf-8")).get("active")), True
     except urllib.error.HTTPError as exc:
-        return (False, True) if exc.code == 404 else (True, False)      # ไม่พบผู้ใช้ = ปิด; 401/5xx = ถือว่าตรวจไม่ได้
+        if exc.code in (401, 403):                                       # ตั้งค่าผิด: การล็อกเอาต์ผู้ใช้ที่ Hub ปิดจะไม่ทำงาน — ต้องไม่เงียบ
+            log.error("Hub rejected the service token (HTTP %s): user-status checks are NOT effective — check SERVICE_TOKEN matches the Hub", exc.code)
+        return (False, True) if exc.code == 404 else (True, False)      # ไม่พบผู้ใช้ = ปิด; 401/403/5xx = ถือว่าตรวจไม่ได้
     except Exception:                                                    # noqa: BLE001 — เครือข่าย/หมดเวลา/ข้อมูลผิดรูปแบบ
         return True, False
 

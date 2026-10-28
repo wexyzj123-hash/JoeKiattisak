@@ -10,6 +10,7 @@ import os
 import re
 import smtplib
 import socket
+import ssl
 import threading
 import urllib.error
 import urllib.request
@@ -105,9 +106,15 @@ def send_email(target: str, subject: str, body: str, env: Mapping) -> None:
         raise TransportError("ที่อยู่อีเมลไม่ถูกต้อง", retryable=False) from None
     try:
         port = int(env.get("SMTP_PORT") or 25)
-        with smtplib.SMTP(host, port, timeout=_timeout(env), local_hostname="aiat-safety.local") as smtp:
-            if str(env.get("SMTP_TLS", "")).lower() in ("1", "true", "yes", "starttls"):
-                smtp.starttls()
+        mode = str(env.get("SMTP_TLS", "")).lower()
+        context = ssl.create_default_context()           # ตรวจใบรับรองเซิร์ฟเวอร์และชื่อโฮสต์เสมอ (ค่าเริ่มต้นของ smtplib ไม่ตรวจ)
+        if mode in ("ssl", "smtps"):
+            conn = smtplib.SMTP_SSL(host, port, timeout=_timeout(env), local_hostname="aiat-safety.local", context=context)
+        else:
+            conn = smtplib.SMTP(host, port, timeout=_timeout(env), local_hostname="aiat-safety.local")
+        with conn as smtp:
+            if mode in ("1", "true", "yes", "starttls"):
+                smtp.starttls(context=context)
             if env.get("SMTP_USER"):
                 smtp.login(env["SMTP_USER"], env.get("SMTP_PASSWORD", ""))
             smtp.send_message(msg)

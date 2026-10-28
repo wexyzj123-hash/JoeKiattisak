@@ -215,6 +215,7 @@ CREATE TABLE IF NOT EXISTS app_settings (
 CREATE TABLE IF NOT EXISTS job_runs (
     job         TEXT NOT NULL,
     run_date    TEXT NOT NULL,
+    started_at  TEXT,
     finished_at TEXT,
     PRIMARY KEY (job, run_date)
 );
@@ -281,5 +282,6 @@ def ensure_schema(con) -> None:
     seed_risk(con)
     _add_column(con, "hazards", "level_requires_approval", "INTEGER NOT NULL DEFAULT 0")
     _add_column(con, "hazards", "version", "INTEGER NOT NULL DEFAULT 0")
+    _add_column(con, "job_runs", "started_at", "TEXT")
     seed_notify(con)
     con.commit()

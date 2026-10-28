@@ -218,3 +218,11 @@ def test_message_sanitised_and_truncated(n):
     assert "เหตุผล หลายบรรทัด" in b2
     t3, b3 = render_message("overdue", n.row(hid), {"days": 3})
     assert "3" in t3 + b3
+
+
+def test_emit_days_parameter_overrides_displayed_days_but_not_the_dedupe_stage(n):
+    hid = n.hz(owner_id=n.owner)
+    assert emit(n.db, "overdue", hid, None, offset_days=1, days=9) == 1
+    title = n.notes(n.owner)[0]["title"]
+    assert "(9 วัน)" in title
+    assert emit(n.db, "overdue", hid, None, offset_days=1, days=10) == 0                       # ขั้นเดิม (offset 1) ไม่ซ้ำแม้จำนวนวันจริงเปลี่ยน
