@@ -97,7 +97,7 @@ def test_patrol_list_and_start_flow_and_permissions(v):
     assert r.status_code == 302 and re.fullmatch(r"/patrols/\d+", r.headers["Location"])
     assert v.post(v.head, "/patrols/start", checklist_id=str(v.cl), risk_area_id=str(v.a["a"])).status_code == 403
     assert v.insp.post("/patrols/start", data={"checklist_id": "1"}).status_code == 400                                  # CSRF
-    bad = v.post(v.insp, "/patrols/start", checklist_id="999", risk_area_id=str(v.a["a"]), follow_redirects=True) if False else v.post(v.insp, "/patrols/start", checklist_id="999", risk_area_id=str(v.a["a"]))
+    bad = v.post(v.insp, "/patrols/start", checklist_id="999", risk_area_id=str(v.a["a"]))
     assert bad.status_code == 302 and bad.headers["Location"] == "/patrols"
 
 
@@ -131,7 +131,7 @@ def test_save_and_submit_through_the_screen_with_validation_messages(v):
     row = v.con.execute("SELECT * FROM patrol_rounds WHERE id=?", (rid,)).fetchone()
     assert (row["status"], row["passed"], row["failed"], row["score_pct"]) == ("submitted", 1, 1, 50)
     done = v.insp.get(f"/patrols/{rid}").get_data(as_text=True)
-    assert 'type="radio"' not in done and "ส่งแล้ว" in done and "50" in done and "evidence.png" not in done or "alt=" in done
+    assert 'type="radio"' not in done and "ส่งแล้ว" in done and "50" in done and "alt=" in done
     stale = v.post(v.insp, f"/patrols/{rid}/save", version="0", **{f"result_{a1['id']}": "fail"})                      # ส่งไปแล้ว แก้ไม่ได้
     assert v.con.execute("SELECT result FROM patrol_answers WHERE id=?", (a1["id"],)).fetchone()[0] == "pass"
 
@@ -162,7 +162,7 @@ def test_submitted_round_summary_visibility_and_finding_buttons(v):
     assert f'action="/patrols/answers/{a1}/hazard"' in own and f'action="/patrols/answers/{a2}/capa"' in own and "ไม่ผ่าน" in own
     head = v.head.get(f"/patrols/{rid}")
     assert head.status_code == 200 and "/patrols/answers/" not in head.get_data(as_text=True)                                     # ดูได้ แต่สร้างข้อค้นพบไม่ได้
-    assert v.plain.get(f"/patrols/{rid}").status_code == 404 or v.plain.get(f"/patrols/{rid}").status_code == 200
+    assert v.plain.get(f"/patrols/{rid}").status_code == 404
     assert v.other_b.get(f"/patrols/{rid}").status_code == 404 and v.rep.get(f"/patrols/{rid}").status_code in (403, 404)
 
 
@@ -262,7 +262,7 @@ def test_capa_posts_need_csrf_and_permission_and_visibility(v):
     cid = v.capa()
     for step in ("start", "complete", "verify", "reopen", "cancel", "reassign", "effectiveness"):
         assert v.insp.post(f"/capas/{cid}/{step}", data={"x": "1"}).status_code == 400, step
-    assert v.post(v.viewer, f"/capas/{cid}/start").status_code == 403
+    assert v.post(v.viewer, f"/capas/{cid}/start").status_code == 404                                      # ผู้ดูที่ไม่เกี่ยวข้อง: มองไม่เห็นรายการ
     assert v.post(v.rep2, f"/capas/{cid}/start").status_code == 404 and v.post(v.other_b, f"/capas/{cid}/complete", note="x").status_code == 404
     assert v.post(v.rep, f"/capas/{cid}/cancel", reason="x").status_code == 302                                         # เจ้าของยกเลิกไม่ได้ → flash แล้ว redirect
     assert v.con.execute("SELECT status FROM capas WHERE id=?", (cid,)).fetchone()[0] == "open"

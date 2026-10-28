@@ -11,6 +11,7 @@ from ..db import get_db
 from ..hazards import risk_area_options, visible_hazard
 from ..incidents import visible_incident
 from ..perms import permission_any, permission_required, user_permissions
+from ..security import safety_login_required
 from .hazards import _int
 
 bp = Blueprint("capas", __name__)
@@ -81,7 +82,7 @@ def new():
 
 
 @bp.route("/capas/<int:capa_id>")
-@permission_any(*ANY_CAPA)
+@safety_login_required
 def detail(capa_id):
     db, perms = get_db(), user_permissions(get_db(), g.user)
     c = _load(capa_id)
@@ -93,7 +94,7 @@ def detail(capa_id):
     if verifier and status == "done":
         if g.user["id"] in owners_ever:
             blocked = "คุณเคยเป็นเจ้าของงานนี้ จึงยืนยันผลเองไม่ได้ — ต้องให้ผู้อื่นที่มีสิทธิ์ยืนยัน"
-        elif c["done_by"] == g.user["id"]:
+        elif g.user["id"] in capa.done_ever(db, c):
             blocked = "คุณเป็นผู้ที่กดว่าเสร็จ จึงยืนยันผลเองไม่ได้ — ต้องให้ผู้อื่นที่มีสิทธิ์ยืนยัน (ผู้ที่กดว่าเสร็จยืนยันเองไม่ได้)"
     today = timeutil.today().isoformat()
     actions = {
@@ -129,13 +130,13 @@ def _act(capa_id, fn, *args, perm_ok=True):
 
 
 @bp.route("/capas/<int:capa_id>/start", methods=["POST"])
-@permission_any(*ANY_CAPA)
+@safety_login_required
 def start(capa_id):
     return _act(capa_id, capa.start)
 
 
 @bp.route("/capas/<int:capa_id>/complete", methods=["POST"])
-@permission_any(*ANY_CAPA)
+@safety_login_required
 def complete(capa_id):
     f = request.form
     return _act(capa_id, lambda db, u, cid: capa.complete(db, u, cid, f.get("note", ""), expected_version=_int(f.get("version"))))
@@ -156,7 +157,7 @@ def reopen(capa_id):
 
 
 @bp.route("/capas/<int:capa_id>/cancel", methods=["POST"])
-@permission_any(*ANY_CAPA)
+@safety_login_required
 def cancel(capa_id):
     return _act(capa_id, lambda db, u, cid: capa.cancel(db, u, cid, request.form.get("reason", "")))
 

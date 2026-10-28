@@ -266,7 +266,7 @@ def emit_capa(db, event: str, capa_id: int, actor_id: int | None, *, offset_days
         area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (capa["risk_area_id"],)).fetchone()
         title, body = render_capa_message(event, capa, {"area": area[0] if area else "", "days": days if days is not None else offset_days})
         if event in ("capa_due_soon", "capa_overdue"):
-            stage = str(offset_days)
+            stage = f"{offset_days}:{capa['owner_id']}:{capa['due_date']}"       # ย้ายเจ้าของ/เลื่อนกำหนด → เตือนรอบใหม่
         elif event == "capa_assigned":
             stage = f"{capa['owner_id']}:{capa['due_date']}"
         elif event in ("capa_done", "capa_reopened"):

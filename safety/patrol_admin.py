@@ -168,10 +168,22 @@ def create_plan(db, user, form: Mapping) -> tuple[int | None, list[str]]:
     return cur.lastrowid, []
 
 
+def _plan_in_scope(db, user, plan_id: int):
+    plan = db.execute("SELECT * FROM patrol_plans WHERE id=?", (plan_id,)).fetchone()
+    return plan if plan is not None and user_in_scope(db, user, plan["risk_area_id"]) else None
+
+
+def plans_for(db, user) -> list:
+    """แผนการตรวจเฉพาะพื้นที่ในขอบเขตโรงงาน/แผนกของผู้ใช้"""
+    rows = db.execute("SELECT p.*, c.name_th AS checklist_name, a.name_th AS area_name FROM patrol_plans p JOIN checklists c ON c.id = p.checklist_id "
+                      "JOIN risk_areas a ON a.id = p.risk_area_id ORDER BY p.active DESC, c.code, a.name_th").fetchall()
+    return [r for r in rows if user_in_scope(db, user, r["risk_area_id"])]
+
+
 def update_plan(db, user, plan_id: int, form: Mapping) -> list[str]:
     if not _allowed(db, user):
         return DENIED
-    plan = db.execute("SELECT * FROM patrol_plans WHERE id=?", (plan_id,)).fetchone()
+    plan = _plan_in_scope(db, user, plan_id)
     if plan is None:
         return ["ไม่พบแผนการตรวจ"]
     freq = (form.get("frequency") or "").strip()
@@ -188,6 +200,8 @@ def update_plan(db, user, plan_id: int, form: Mapping) -> list[str]:
 def toggle_plan(db, user, plan_id: int) -> list[str]:
     if not _allowed(db, user):
         return DENIED
+    if _plan_in_scope(db, user, plan_id) is None:
+        return ["ไม่พบแผนการตรวจ"]
     try:
         if db.execute("UPDATE patrol_plans SET active = 1 - active WHERE id=?", (plan_id,)).rowcount != 1:
             db.rollback()

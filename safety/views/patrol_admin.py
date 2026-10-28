@@ -88,8 +88,7 @@ def plans():
         else:
             flash("ไม่รองรับการดำเนินการนี้ (แผนลบไม่ได้ ใช้การปิดใช้งาน)")
         return redirect("/admin/patrol-plans")
-    rows = db.execute("SELECT p.*, c.name_th AS checklist_name, a.name_th AS area_name FROM patrol_plans p JOIN checklists c ON c.id = p.checklist_id "
-                      "JOIN risk_areas a ON a.id = p.risk_area_id ORDER BY p.active DESC, c.code, a.name_th").fetchall()
+    rows = pa.plans_for(db, g.user)
     inspectors = [u for u in db.execute("SELECT u.id, u.name FROM safety_users u WHERE u.active=1 ORDER BY u.name")
                   if "patrol.perform" in user_permissions(db, db.execute("SELECT * FROM safety_users WHERE id=?", (u["id"],)).fetchone())]
     return render_template("patrol_plans.html", rows=rows, frequencies=pa.FREQUENCIES, inspectors=inspectors, areas=risk_area_options(db, g.user),

@@ -94,6 +94,13 @@ def owners_ever(db, capa) -> set[int]:
     return found
 
 
+def done_ever(db, capa) -> set[int]:
+    """ทุกคนที่เคยกดว่าเสร็จ (รวมรอบที่ถูกตีกลับ) — ใช้ตรวจกฎสองคู่ตอนยืนยันผล"""
+    found = {capa["done_by"]} - {None}
+    found |= {r["actor_id"] for r in db.execute("SELECT actor_id FROM capa_events WHERE capa_id=? AND kind='completed'", (capa["id"],))} - {None}
+    return found
+
+
 def _source(db, user, source) -> tuple[int | None, list[str]]:
     """พื้นที่ของแหล่งที่มา (ต้องเป็นรายการที่ผู้ใช้มองเห็น)"""
     kind, sid = source
@@ -223,7 +230,7 @@ def _verifier_errors(db, user, capa) -> list[str]:
         return ["คุณไม่มีสิทธิ์ยืนยันผล CAPA"]
     if user["id"] in owners_ever(db, capa):
         return ["ผู้ที่เคยเป็นเจ้าของงานนี้ยืนยันผลเองไม่ได้ ต้องให้ผู้อื่นที่มีสิทธิ์เป็นผู้ยืนยัน"]
-    if capa["done_by"] == user["id"]:
+    if user["id"] in done_ever(db, capa):
         return ["ผู้ยืนยันต้องไม่ใช่ผู้ที่กดว่าเสร็จ — ให้ผู้อื่นที่มีสิทธิ์เป็นผู้ยืนยัน"]
     return []
 

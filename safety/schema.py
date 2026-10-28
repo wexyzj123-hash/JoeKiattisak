@@ -469,8 +469,9 @@ CREATE TRIGGER IF NOT EXISTS patrol_rounds_frozen_upd BEFORE UPDATE ON patrol_ro
 BEGIN SELECT RAISE(ABORT, 'submitted patrol round is immutable'); END;
 CREATE TRIGGER IF NOT EXISTS patrol_rounds_frozen_del BEFORE DELETE ON patrol_rounds WHEN OLD.status = 'submitted'
 BEGIN SELECT RAISE(ABORT, 'submitted patrol round is immutable'); END;
+DROP TRIGGER IF EXISTS patrol_answers_frozen_upd;
 CREATE TRIGGER IF NOT EXISTS patrol_answers_frozen_upd BEFORE UPDATE ON patrol_answers
-WHEN (SELECT status FROM patrol_rounds WHERE id = OLD.round_id) = 'submitted'
+WHEN (SELECT status FROM patrol_rounds WHERE id = OLD.round_id) = 'submitted' OR (SELECT status FROM patrol_rounds WHERE id = NEW.round_id) = 'submitted'
 BEGIN SELECT RAISE(ABORT, 'submitted patrol round is immutable'); END;
 CREATE TRIGGER IF NOT EXISTS patrol_answers_frozen_del BEFORE DELETE ON patrol_answers
 WHEN (SELECT status FROM patrol_rounds WHERE id = OLD.round_id) = 'submitted'
@@ -478,8 +479,10 @@ BEGIN SELECT RAISE(ABORT, 'submitted patrol round is immutable'); END;
 CREATE TRIGGER IF NOT EXISTS patrol_answers_frozen_ins BEFORE INSERT ON patrol_answers
 WHEN (SELECT status FROM patrol_rounds WHERE id = NEW.round_id) = 'submitted'
 BEGIN SELECT RAISE(ABORT, 'submitted patrol round is immutable'); END;
+DROP TRIGGER IF EXISTS patrol_attachments_frozen_upd;
 CREATE TRIGGER IF NOT EXISTS patrol_attachments_frozen_upd BEFORE UPDATE ON patrol_attachments
 WHEN (SELECT r.status FROM patrol_answers a JOIN patrol_rounds r ON r.id = a.round_id WHERE a.id = OLD.answer_id) = 'submitted'
+  OR (SELECT r.status FROM patrol_answers a JOIN patrol_rounds r ON r.id = a.round_id WHERE a.id = NEW.answer_id) = 'submitted'
 BEGIN SELECT RAISE(ABORT, 'submitted patrol round is immutable'); END;
 CREATE TRIGGER IF NOT EXISTS patrol_attachments_frozen_del BEFORE DELETE ON patrol_attachments
 WHEN (SELECT r.status FROM patrol_answers a JOIN patrol_rounds r ON r.id = a.round_id WHERE a.id = OLD.answer_id) = 'submitted'

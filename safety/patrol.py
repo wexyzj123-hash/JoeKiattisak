@@ -231,6 +231,8 @@ def add_photo(db, user, round_id: int, answer_id: int, filename: str, data: byte
         save_attachment(db, upload_root, int(answer_id), "before", filename, data, user["id"], scope="patrol")
     except ImageError as exc:
         return [f"{filename}: {exc}"]
+    except sqlite3.IntegrityError:                         # ส่งรอบตรวจพร้อมกันกับการอัปโหลด
+        return ["รอบตรวจนี้ส่งแล้ว เพิ่มรูปไม่ได้"]
     return []
 
 
