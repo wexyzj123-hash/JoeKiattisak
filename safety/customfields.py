@@ -25,13 +25,19 @@ def split_options(options: str) -> list[str]:
     return [o.strip() for o in (options or "").splitlines() if o.strip()]
 
 
+def _posted(form: Mapping, name: str) -> str:
+    """ค่าแรกที่ไม่ว่างของฟิลด์ชื่อนี้ (เบราว์เซอร์ที่ไม่มี JS อาจส่งช่องของประเภทอื่นที่ซ่อนอยู่มาก่อนด้วยค่าว่าง)"""
+    values = form.getlist(name) if hasattr(form, "getlist") else [form.get(name)]
+    return next((v.strip() for v in values if v and v.strip()), "")
+
+
 def validate_custom(fields, form: Mapping) -> tuple[dict, list[str]]:
     """อ่านค่า cf_<key> จากฟอร์ม ตรวจตามชนิด; คืน ({key: ค่า}, ข้อความผิดพลาด) — ฟิลด์ที่ไม่บังคับและเว้นว่างจะไม่ถูกเก็บ"""
     values: dict = {}
     errors: list[str] = []
     for f in fields:
         key, label, kind = f["key"], f["label_th"], f["type"]
-        raw = (form.get(f"cf_{key}") or "").strip()
+        raw = _posted(form, f"cf_{key}")
         if kind == "checkbox":
             ticked = raw.lower() in ("1", "on", "true")
             if f["required"] and not ticked:

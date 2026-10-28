@@ -16,7 +16,7 @@ UNASSESSED = ("ยังไม่ประเมิน", "#8fa3bd")
 def _visible(db, user) -> tuple[str, list]:
     sql, args = hazard_scope_sql(user)
     if not can_view_all(user_permissions(db, user)):
-        sql, args = f"{sql} AND h.reported_by = ?", args + [user["id"]]
+        sql, args = f"{sql} AND (h.reported_by = ? OR h.owner_id = ?)", args + [user["id"]] * 2
     return sql, args
 
 

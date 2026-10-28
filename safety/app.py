@@ -27,12 +27,14 @@ def create_app(test_config: dict | None = None) -> Flask:
     if test_config:
         app.config.update(test_config)
     validate_secrets(app.config["SSO_SECRET"], app.config["SERVICE_TOKEN"])
-    app.config.setdefault("SECRET_KEY", os.environ.get("SAFETY_SECRET_KEY"))
+    if not app.config.get("SECRET_KEY"):
+        app.config["SECRET_KEY"] = os.environ.get("SAFETY_SECRET_KEY") or None
     if not app.config["SECRET_KEY"]:
         app.config["SECRET_KEY"] = hashlib.sha256(("safety-session:" + app.config["SSO_SECRET"]).encode()).hexdigest()
 
     app.config.setdefault("UPLOAD_ROOT", os.environ.get("SAFETY_UPLOAD_ROOT", os.path.join(ROOT, "data", "uploads")))
-    app.config.setdefault("MAX_CONTENT_LENGTH", 25 * 1024 * 1024)
+    if app.config.get("MAX_CONTENT_LENGTH") is None:           # Flask ตั้งคีย์นี้เป็น None ไว้แล้ว — setdefault ไม่ทำงาน
+        app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
     safetydb.init_app(app)
     install_csrf(app)
     app.before_request(load_user)
@@ -49,6 +51,11 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.register_blueprint(api.bp)
     app.register_blueprint(sso.bp)
     app.register_blueprint(home.bp)
+
+    @app.errorhandler(413)
+    def _too_large(_exc):
+        from flask import render_template
+        return render_template("too_large.html"), 413
 
     @app.context_processor
     def _nav():

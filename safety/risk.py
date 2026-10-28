@@ -144,6 +144,9 @@ def apply_criteria(db, form) -> list[str]:
         if lid is None and not (g("name") or g("min") or g("max") or g("color") or g("sla")):
             continue                                                       # แถวว่างสำหรับเพิ่มระดับ — ข้าม
         if lid is not None:
+            if lid in kept_ids:
+                errors.append("ระดับความเสี่ยงเดียวกันถูกส่งมาซ้ำในฟอร์ม")
+                continue
             kept_ids.add(lid)
         levels.append({"id": lid, "name_th": g("name"), "min_score": _int(g("min")), "max_score": _int(g("max")),
                        "color": g("color"), "sla_days": _int(g("sla")),

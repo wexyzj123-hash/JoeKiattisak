@@ -13,7 +13,7 @@ MAX_BYTES = 10 * 1024 * 1024
 MAX_PIXELS = 40_000_000
 MAX_SIDE = 1600
 MAX_PER_KIND = 5
-ALLOWED_FORMATS = {"JPEG", "PNG", "WEBP"}
+ALLOWED_FORMATS = {"JPEG", "PNG", "WEBP", "MPO"}      # MPO = JPEG หลายภาพของกล้องโทรศัพท์ (ใช้ภาพหลักภาพเดียว)
 KINDS = ("before", "after")
 
 
@@ -36,8 +36,10 @@ def process_image(data: bytes) -> bytes:
             raise ImageError("ไฟล์ไม่ใช่รูปภาพที่รองรับ (รองรับ JPEG, PNG, WebP)")
         if img.width * img.height > MAX_PIXELS:
             raise ImageError("ขนาดภาพ (จำนวนพิกเซล) ใหญ่เกินไป")
-        if getattr(img, "is_animated", False):
+        if img.format != "MPO" and getattr(img, "is_animated", False):
             raise ImageError("ไม่รองรับภาพเคลื่อนไหว")
+        if img.format == "MPO":
+            img.seek(0)
         try:
             img.load()
         except Exception as exc:                                  # noqa: BLE001 — ไฟล์ขาด/เสีย

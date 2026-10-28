@@ -103,6 +103,7 @@ CREATE TABLE IF NOT EXISTS hazards (
     level_name     TEXT,
     level_color    TEXT,
     level_requires_approval INTEGER NOT NULL DEFAULT 0,
+    version        INTEGER NOT NULL DEFAULT 0,
     status         TEXT NOT NULL DEFAULT 'reported'
                    CHECK (status IN ('reported','assessed','assigned','closed','rejected')),
     owner_id       INTEGER REFERENCES safety_users(id),
@@ -139,6 +140,9 @@ CREATE TABLE IF NOT EXISTS hazard_events (
 CREATE TRIGGER IF NOT EXISTS hazard_events_no_update BEFORE UPDATE ON hazard_events
 BEGIN SELECT RAISE(ABORT, 'hazard_events is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS hazard_events_no_delete BEFORE DELETE ON hazard_events
+BEGIN SELECT RAISE(ABORT, 'hazard_events is append-only'); END;
+CREATE TRIGGER IF NOT EXISTS hazard_events_no_replace BEFORE INSERT ON hazard_events
+WHEN EXISTS (SELECT 1 FROM hazard_events WHERE id = NEW.id)
 BEGIN SELECT RAISE(ABORT, 'hazard_events is append-only'); END;
 """
 
@@ -188,4 +192,5 @@ def ensure_schema(con) -> None:
     seed_roles(con)
     seed_risk(con)
     _add_column(con, "hazards", "level_requires_approval", "INTEGER NOT NULL DEFAULT 0")
+    _add_column(con, "hazards", "version", "INTEGER NOT NULL DEFAULT 0")
     con.commit()

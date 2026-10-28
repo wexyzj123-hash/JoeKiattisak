@@ -46,14 +46,25 @@ def hazard_scope_sql(user) -> tuple[str, list]:
             "JOIN departments d ON d.id = l.department_id WHERE " + " AND ".join(conds) + ")"), args
 
 
+def user_in_scope(db, user, risk_area_id: int) -> bool:
+    """พื้นที่เสี่ยงนี้อยู่ในขอบเขตโรงงาน/แผนกของผู้ใช้หรือไม่ (ไม่มีขอบเขต = ทุกพื้นที่)"""
+    conds, args = ["ra.id = ?"], [risk_area_id]
+    if user["factory_id"] is not None:
+        conds.append("d.factory_id = ?"); args.append(user["factory_id"])
+    if user["department_id"] is not None:
+        conds.append("d.id = ?"); args.append(user["department_id"])
+    return db.execute("SELECT 1 FROM risk_areas ra JOIN lines l ON l.id = ra.line_id JOIN departments d ON d.id = l.department_id "
+                      f"WHERE {' AND '.join(conds)}", args).fetchone() is not None
+
+
 def visible_hazard(db, user, hazard_id: int):
     """แถวอันตรายที่ผู้ใช้มองเห็น หรือ None (ไม่มี/นอกขอบเขต/ผู้แจ้งทั่วไปที่ไม่ใช่เจ้าของ)"""
     sql, args = hazard_scope_sql(user)
     row = db.execute(f"SELECT h.* FROM hazards h WHERE h.id = ? AND {sql}", [hazard_id] + args).fetchone()
     if row is None:
         return None
-    if not can_view_all(user_permissions(db, user)) and row["reported_by"] != user["id"]:
-        return None
+    if not can_view_all(user_permissions(db, user)) and user["id"] not in (row["reported_by"], row["owner_id"]):
+        return None                                         # ผู้ใช้ทั่วไปเห็นเฉพาะที่ตนแจ้งหรือที่ได้รับมอบหมาย
     return row
 
 

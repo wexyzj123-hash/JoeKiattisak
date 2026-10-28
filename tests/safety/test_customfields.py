@@ -117,10 +117,10 @@ def test_duplicate_key_same_type_rejected_but_allowed_on_other_type(safety_app):
     con.commit()
     create(c, hazard_type_id=str(t)); create(c, hazard_type_id=str(t))
     assert len(sql(safety_app, "SELECT 1 FROM custom_fields")) == 1
-    create(c, hazard_type_id=str(t2)); create(c, hazard_type_id="")
-    assert len(sql(safety_app, "SELECT 1 FROM custom_fields")) == 3
-    create(c, hazard_type_id="")                                         # ซ้ำกับ "ทุกประเภท" ที่มีอยู่
-    assert len(sql(safety_app, "SELECT 1 FROM custom_fields")) == 3
+    create(c, hazard_type_id=str(t2))                                    # คีย์เดียวกันคนละประเภทได้
+    assert len(sql(safety_app, "SELECT 1 FROM custom_fields")) == 2
+    create(c, hazard_type_id="")                                         # "ทุกประเภท" ชนกับที่ผูกประเภทไว้ — ไม่ได้ (ใช้พร้อมกันแล้วค่าทับกัน)
+    assert len(sql(safety_app, "SELECT 1 FROM custom_fields")) == 2
 
 
 def test_select_needs_two_distinct_options(safety_app):

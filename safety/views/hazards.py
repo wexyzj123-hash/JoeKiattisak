@@ -12,7 +12,7 @@ from flask import Blueprint, abort, current_app, flash, g, redirect, render_temp
 from .. import timeutil, workflow
 from ..customfields import fields_for_type
 from ..db import get_db
-from ..hazards import EVENT_TH, STATUS_TH, can_view_all, hazard_scope_sql, risk_area_options, visible_hazard
+from ..hazards import EVENT_TH, STATUS_TH, can_view_all, hazard_scope_sql, risk_area_options, user_in_scope, visible_hazard
 from ..images import KINDS, MAX_PER_KIND, ImageError, process_image, save_attachment
 from ..master import REGISTRY, active_options
 from ..perms import permission_any, permission_required, user_permissions
@@ -85,7 +85,7 @@ def index():
     scope_sql, scope_args = hazard_scope_sql(g.user)
     conds.append(scope_sql); args += scope_args
     if not can_view_all(perms):
-        conds.append("h.reported_by = ?"); args.append(g.user["id"])
+        conds.append("(h.reported_by = ? OR h.owner_id = ?)"); args += [g.user["id"]] * 2
     status = request.args.get("status", "")
     if status in STATUS_TH:
         conds.append("h.status = ?"); args.append(status)
@@ -177,7 +177,7 @@ def detail(hazard_id):
                       "(SELECT name FROM safety_users WHERE id=?) AS reporter, (SELECT name FROM safety_users WHERE id=?) AS owner",
                       (h["hazard_type_id"], h["source_id"], h["reported_by"], h["owner_id"])).fetchone()
     status, is_open = h["status"], h["status"] in OPEN
-    mine = h["reported_by"] == g.user["id"]
+    mine = g.user["id"] in (h["reported_by"], h["owner_id"])
     can_assess, can_assign, can_close = ("hazard.assess" in perms, "hazard.assign" in perms, "hazard.close" in perms)
     actions = {
         "assess": is_open and status in ("reported", "assessed") and can_assess,
@@ -197,8 +197,9 @@ def detail(hazard_id):
         overdue=bool(h["due_date"] and h["due_date"] < today and is_open),
         likelihood_max=scale_size(db, "likelihood"), severity_max=scale_size(db, "severity"),
         scales={k: db.execute("SELECT level, label_th FROM risk_scales WHERE kind=? ORDER BY level", (k,)).fetchall() for k in ("likelihood", "severity")},
-        owners=db.execute("SELECT u.id, u.name, COALESCE(r.name_th, u.role) AS role FROM safety_users u "
-                          "LEFT JOIN safety_roles r ON r.key = u.role WHERE u.active=1 ORDER BY u.name").fetchall())
+        owners=[o for o in db.execute("SELECT u.id, u.name, u.factory_id, u.department_id, COALESCE(r.name_th, u.role) AS role "
+                                      "FROM safety_users u LEFT JOIN safety_roles r ON r.key = u.role WHERE u.active=1 ORDER BY u.name")
+                if user_in_scope(db, o, h["risk_area_id"])])
 
 
 def _done(errors: list[str], hazard_id: int):
@@ -253,7 +254,7 @@ def reject(hazard_id):
 def photos(hazard_id):
     h, perms = _load(hazard_id), _perms()
     kind = request.form.get("kind", "before")
-    mine = h["reported_by"] == g.user["id"]
+    mine = g.user["id"] in (h["reported_by"], h["owner_id"])
     if h["status"] not in OPEN:
         return _done(["รายการนี้ปิดหรือถูกปฏิเสธแล้ว แนบรูปเพิ่มไม่ได้"], hazard_id)
     if kind == "before":

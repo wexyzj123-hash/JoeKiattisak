@@ -52,6 +52,9 @@ def custom_fields():
                 flash("ไม่พบประเภทอันตรายที่เลือก")
             elif opt_err:
                 flash(opt_err)
+            elif db.execute("SELECT 1 FROM custom_fields WHERE key=? AND ((? IS NULL AND hazard_type_id IS NOT NULL) "
+                            "OR (? IS NOT NULL AND hazard_type_id IS NULL))", (key, type_id, type_id)).fetchone():
+                flash("รหัสฟิลด์นี้ชนกับฟิลด์ของ 'ทุกประเภท' หรือของประเภทอื่นที่ใช้ร่วมกันได้ — ใช้รหัสอื่น")
             else:
                 try:
                     db.execute("INSERT INTO custom_fields(hazard_type_id,key,label_th,type,options,required,sort) "

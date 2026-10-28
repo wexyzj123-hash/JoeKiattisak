@@ -38,7 +38,9 @@
   function apply() {
     document.querySelectorAll('.cf').forEach(function (el) {
       var t = el.getAttribute('data-type');
-      el.style.display = (t === '' || t === sel.value) ? '' : 'none';
+      var show = (t === '' || t === sel.value);
+      el.style.display = show ? '' : 'none';
+      el.querySelectorAll('input, select, textarea').forEach(function (i) { i.disabled = !show; });   // ช่องที่ซ่อนไม่ถูกส่ง
     });
   }
   sel.addEventListener('change', apply); apply();

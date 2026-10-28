@@ -26,7 +26,8 @@ def create_app(test_config: dict | None = None) -> Flask:
     if test_config:
         app.config.update(test_config)
     validate_secrets(app.config["SSO_SECRET"], app.config["SERVICE_TOKEN"])
-    app.config.setdefault("SECRET_KEY", os.environ.get("HUB_SECRET_KEY"))
+    if not app.config.get("SECRET_KEY"):
+        app.config["SECRET_KEY"] = os.environ.get("HUB_SECRET_KEY") or None
     if not app.config["SECRET_KEY"]:      # แนะนำให้ตั้ง HUB_SECRET_KEY แยกจาก SSO_SECRET (ผู้ถือ SSO_SECRET จะปลอมคุกกี้ไม่ได้)
         app.config["SECRET_KEY"] = hashlib.sha256(("hub-session:" + app.config["SSO_SECRET"]).encode()).hexdigest()
 

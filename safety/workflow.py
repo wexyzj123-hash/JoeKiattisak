@@ -11,7 +11,7 @@ from typing import Mapping
 
 from . import timeutil
 from .customfields import fields_for_type, validate_custom
-from .hazards import add_event, next_code, risk_area_options, visible_hazard
+from .hazards import add_event, next_code, risk_area_options, user_in_scope, visible_hazard
 from .perms import user_permissions
 from .risk import calc_score, level_for_score
 
@@ -35,8 +35,10 @@ def _need(db, user, perm: str, what: str) -> list[str]:
 
 def _transition(db, hazard, sets: dict, kind: str, user, to_status: str, note: str = "", data: dict | None = None) -> list[str]:
     cols = ", ".join(f"{c}=?" for c in sets)
-    cur = db.execute(f"UPDATE hazards SET {cols}, status=?, updated_at=datetime('now','localtime') "
-                     "WHERE id=? AND status=?", [*sets.values(), to_status, hazard["id"], hazard["status"]])
+    # ตรวจทั้งสถานะและ version — กันคนตัดหน้าแม้สถานะเดิม (ประเมินซ้ำ/โอนงาน) แล้วบันทึกเหตุการณ์ผิดจากความจริง
+    cur = db.execute(f"UPDATE hazards SET {cols}, status=?, version=version+1, updated_at=datetime('now','localtime') "
+                     "WHERE id=? AND status=? AND version=?",
+                     [*sets.values(), to_status, hazard["id"], hazard["status"], hazard["version"]])
     if cur.rowcount != 1:
         db.rollback()
         return LOST_RACE
@@ -126,8 +128,11 @@ def assign(db, user, hazard_id: int, owner_id, due_date: str, note: str = "") ->
     if errors:
         return errors
     owner = _int(owner_id)
-    if owner is None or not db.execute("SELECT 1 FROM safety_users WHERE id=? AND active=1", (owner,)).fetchone():
+    owner_row = db.execute("SELECT * FROM safety_users WHERE id=? AND active=1", (owner,)).fetchone() if owner is not None else None
+    if owner_row is None:
         return ["กรุณาเลือกผู้รับผิดชอบที่ใช้งานอยู่"]
+    if not user_in_scope(db, owner_row, hazard["risk_area_id"]):
+        return ["ผู้รับผิดชอบที่เลือกอยู่นอกขอบเขตของรายการนี้"]
     today = timeutil.today()
     raw = (due_date or "").strip()
     if raw:
@@ -149,6 +154,18 @@ def assign(db, user, hazard_id: int, owner_id, due_date: str, note: str = "") ->
                                                          "due_date": due.isoformat()})
 
 
+def _owners_ever(db, hazard) -> set[int]:
+    """ผู้รับผิดชอบปัจจุบันและทุกคนที่เคยรับผิดชอบ (จากประวัติ) — โอนงานออกแล้วก็ยังปิดเองไม่ได้"""
+    owners = {hazard["owner_id"]} - {None}
+    for row in db.execute("SELECT data FROM hazard_events WHERE hazard_id=? AND kind='assigned'", (hazard["id"],)):
+        try:
+            data = json.loads(row["data"] or "{}")
+        except ValueError:
+            continue
+        owners |= {data.get("owner"), data.get("old_owner")} - {None}
+    return owners
+
+
 def close(db, user, hazard_id: int, note: str) -> list[str]:
     hazard, errors = _open_for(db, user, "hazard.close", "ปิดรายการอันตราย", hazard_id, ("assigned",))
     if errors:
@@ -158,8 +175,8 @@ def close(db, user, hazard_id: int, note: str) -> list[str]:
         return ["กรุณาระบุผลการแก้ไข"]
     if len(note) > NOTE_MAX:
         return [f"ผลการแก้ไขยาวเกิน {NOTE_MAX} ตัวอักษร"]
-    if hazard["level_requires_approval"] and hazard["owner_id"] == user["id"]:
-        return [f"รายการระดับ {hazard['level_name']} ต้องให้ผู้อื่นที่ไม่ใช่ผู้รับผิดชอบเป็นผู้ปิดรายการ"]
+    if hazard["level_requires_approval"] and user["id"] in _owners_ever(db, hazard):
+        return [f"รายการระดับ {hazard['level_name']} ต้องให้ผู้ที่ไม่เคยเป็นผู้รับผิดชอบรายการนี้เป็นผู้ปิดรายการ"]
     return _transition(db, hazard, {"closing_note": note}, "closed", user, "closed", note)
 
 
