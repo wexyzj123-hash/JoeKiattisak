@@ -41,7 +41,7 @@ def login():
     return render_template("login.html", next=nxt)
 
 
-@bp.route("/logout", methods=["POST"])
+@bp.route("/logout", methods=["GET", "POST"])   # GET: Safety ส่งผู้ใช้มาออกจากระบบกลาง
 def logout():
     session.clear()
     return redirect("/login")

@@ -84,3 +84,13 @@ def test_disabled_user_cannot_login(hub_app):
     assert login(c).status_code == 200
     with c.session_transaction() as s:
         assert "uid" not in s
+
+
+def test_get_logout_clears_session_for_safety_redirect(hub_app):
+    add_user(hub_app)
+    c = hub_app.test_client()
+    login(c)
+    r = c.get("/logout")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/login")
+    with c.session_transaction() as s:
+        assert "uid" not in s
