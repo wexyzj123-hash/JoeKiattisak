@@ -28,6 +28,7 @@ PERMISSIONS: dict[str, str] = {
 from functools import wraps  # noqa: E402
 
 from flask import abort, current_app, g, redirect  # noqa: E402
+from .urls import hub_public
 
 
 def user_permissions(db, user) -> set[str]:
@@ -51,7 +52,7 @@ def permission_any(*keys: str):
         @wraps(view)
         def wrapped(*a, **kw):
             if g.get("user") is None:
-                return redirect(current_app.config["HUB_URL"])
+                return redirect(hub_public())
             from .db import get_db
             if not set(keys) & user_permissions(get_db(), g.user):
                 abort(403)
@@ -66,7 +67,7 @@ def permission_required(*keys: str):
         @wraps(view)
         def wrapped(*a, **kw):
             if g.get("user") is None:
-                return redirect(current_app.config["HUB_URL"])
+                return redirect(hub_public())
             from .db import get_db
             have = user_permissions(get_db(), g.user)
             if not all(k in have for k in keys):

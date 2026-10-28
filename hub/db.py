@@ -36,7 +36,7 @@ def init_app(app) -> None:
     try:
         ensure_schema(con)
         seed_default_apps(con, app.config.get("SAFETY_URL", "http://localhost:5200"))
-        seed_link_apps(con, app.config.get("LINK_APPS") if app.config.get("LINK_APPS") is not None else os.environ)
+        seed_link_apps(con, app.config["LINK_APPS"] if app.config.get("LINK_APPS") is not None else os.environ)
     finally:
         con.close()
     app.teardown_appcontext(close_db)

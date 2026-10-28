@@ -10,6 +10,7 @@ from ..db import get_db
 from ..hazards import STATUS_TH
 from ..perms import user_permissions
 from ..security import safety_login_required
+from ..urls import hub_public
 
 bp = Blueprint("home", __name__)
 THEME_CSS = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -73,10 +74,10 @@ def index():
 def signout():
     """Hub เรียกหลังผู้ใช้ออกจากระบบกลาง — ล้าง session ของ Safety แล้วกลับหน้าล็อกอินของ Hub"""
     session.clear()
-    return redirect(current_app.config["HUB_URL"].rstrip("/") + "/login")
+    return redirect(hub_public("/login"))
 
 
 @bp.route("/logout", methods=["POST"])
 def logout():
     session.clear()
-    return redirect(current_app.config["HUB_URL"].rstrip("/") + "/logout")
+    return redirect(hub_public("/logout"))

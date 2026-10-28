@@ -6,9 +6,10 @@ import os
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from flask import Blueprint, abort, current_app, g, redirect, render_template, send_file
+from flask import Blueprint, abort, current_app, g, redirect, render_template, request, send_file
 
 from shared.sso import sign_token
+from shared.urls import public_url
 
 from ..db import get_db
 from ..security import login_required
@@ -91,7 +92,7 @@ def go(key: str):
     if not _allowed(row):
         abort(403)
     if row["link_mode"] == "link":                      # ระบบเดิมที่ไม่มี SSO: เปิดที่อยู่ตรง ๆ ห้ามส่ง token ไปให้
-        return redirect(row["url"])
+        return redirect(public_url(row["url"], request.host))
     token = sign_token(current_app.config["SSO_SECRET"],
                        {"uid": g.user["id"], "name": g.user["name_th"], "roles": [g.user["role"]], "aud": row["key"]})
-    return redirect(row["url"].rstrip("/") + "/sso?" + urlencode({"token": token}))
+    return redirect(public_url(row["url"].rstrip("/"), request.host) + "/sso?" + urlencode({"token": token}))

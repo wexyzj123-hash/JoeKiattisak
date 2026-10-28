@@ -69,6 +69,13 @@ rem ---- 5) ตรวจว่าเปิดระบบได้ (โหลด
 ".venv\Scripts\python.exe" tools\selfcheck.py || goto :fail
 
 for /f "tokens=1,2" %%a in ('".venv\Scripts\python.exe" tools\ports.py show') do (set "HUB_PORT=%%a" & set "SAFETY_PORT=%%b")
+net session >nul 2>nul || goto :fw_hint
+call "%~dp0firewall.bat" quiet
+goto :fw_done
+:fw_hint
+echo.
+echo [!] เครื่องอื่นในวง LAN จะเปิดไม่ได้ถ้าไฟร์วอลล์ยังบล็อกพอร์ต %HUB_PORT% และ %SAFETY_PORT% - คลิกขวา firewall.bat แล้วเลือก Run as administrator (ทำครั้งเดียว)
+:fw_done
 echo.
 echo ============================================================
 echo  ติดตั้งเสร็จแล้ว  (Hub พอร์ต %HUB_PORT% / Safety พอร์ต %SAFETY_PORT%)

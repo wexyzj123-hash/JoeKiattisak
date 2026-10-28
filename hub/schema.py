@@ -36,10 +36,30 @@ LINK_MODES = ("sso", "link")
 LINK_SEEDS = (("UTCMMS_URL", "utcmms", "UT CMMS (ระบบซ่อมบำรุง)", 20), ("ECHECK_URL", "echeck", "E-Checksheet", 30))
 
 
-def seed_link_apps(con, env) -> None:
-    """ใส่ปุ่มเชื่อมไประบบเดิมจากค่าใน .env (UTCMMS_URL, ECHECK_URL) ถ้ายังไม่มี — ไม่ทับค่าที่แอดมินแก้ใน Hub แล้ว; รับเฉพาะ http(s)"""
+def _alive(port: int) -> bool:
+    import socket
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=0.5):
+            return True
+    except OSError:
+        return False
+
+
+# ระบบเดิมบนเครื่องเดียวกัน (พอร์ต 5000): ถ้าไม่ได้ตั้ง URL ไว้และพบว่ามีโปรแกรมฟังอยู่ที่ 5000 จะเพิ่มปุ่มให้เอง (ใช้ localhost แล้วระบบสลับเป็นที่อยู่ที่ผู้ใช้เปิดเข้ามา)
+LEGACY_DEFAULTS = {"utcmms": "http://localhost:5000/", "echeck": "http://localhost:5000/echeck/dashboard"}
+
+
+def seed_link_apps(con, env, hub_port: int | None = None, probe=_alive) -> None:
+    """ใส่ปุ่มเชื่อมไประบบเดิมจาก .env (UTCMMS_URL, ECHECK_URL) หรือค้นหาเองที่พอร์ต 5000 — ไม่ทับ/ไม่เปิดกลับค่าที่แอดมินแก้ใน Hub แล้ว; รับเฉพาะ http(s)"""
+    try:
+        port = int(hub_port if hub_port is not None else (env.get("HUB_PORT") or 5000))
+    except ValueError:
+        port = 5000
+    auto = port != 5000 and probe(5000)
     for var, key, name, sort in LINK_SEEDS:
         url = (env.get(var) or "").strip()
+        if not url and auto:
+            url = LEGACY_DEFAULTS[key]
         if url.lower().startswith(("http://", "https://")) and " " not in url:
             con.execute("INSERT OR IGNORE INTO app_registry(key,name_th,url,icon,sort,link_mode) VALUES(?,?,?,?,?,'link')", (key, name, url, "layers", sort))
     con.commit()

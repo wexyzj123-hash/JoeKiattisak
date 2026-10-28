@@ -11,6 +11,7 @@ from shared.envfile import validate_secrets
 
 from . import db as safetydb
 from .security import install_csrf, load_user
+from .urls import hub_public
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 
@@ -63,7 +64,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         from .hubcheck import hub_user_active
         if not hub_user_active(app, g.user["hub_uid"]):
             session.clear()
-            return redirect(app.config["HUB_URL"])
+            return redirect(hub_public())
         return None
 
     from .views import (api, criteria, custom_fields, hazards, home, master, notifications, notify_admin, overview, pages, profile, search, injury_admin, incidents, patrol_admin, patrols, capas, report_due, reports,

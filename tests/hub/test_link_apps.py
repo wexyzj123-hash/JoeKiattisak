@@ -78,3 +78,34 @@ def test_old_database_gets_link_mode_column(tmp_path):
                       "INSERT INTO app_registry(key,name_th,url) VALUES('safety','S','http://s.test');")
     ensure_schema(con); ensure_schema(con)
     assert con.execute("SELECT link_mode FROM app_registry").fetchone()[0] == "sso"
+
+
+def test_go_uses_the_host_the_user_came_in_on_for_loopback_urls(hub_app):
+    add_link(hub_app, "safety2", "http://localhost:5200", "S2", mode="sso")
+    base = "http://192.168.133.129:5001"
+    uid = rows(hub_app, "SELECT id FROM users LIMIT 1") or None
+    login_as(hub_app)
+    uid = rows(hub_app, "SELECT id FROM users LIMIT 1")[0][0]
+    c = hub_app.test_client()
+    with c.session_transaction(base_url=base) as sess:
+        sess["uid"] = uid
+    loc = c.get("/go/safety2", base_url=base).headers["Location"]
+    assert loc.startswith("http://192.168.133.129:5200/sso?token=")
+    add_link(hub_app, "legacy", "http://localhost:5000/echeck/dashboard", "L")
+    assert c.get("/go/legacy", base_url=base).headers["Location"] == "http://192.168.133.129:5000/echeck/dashboard"
+
+
+def test_default_legacy_links_added_automatically_only_when_port_5000_is_alive(hub_app):
+    con = connect(hub_app.config["DATABASE"])
+    seed_link_apps(con, {}, hub_port=5001, probe=lambda port: False)
+    assert con.execute("SELECT COUNT(*) FROM app_registry WHERE link_mode='link'").fetchone()[0] == 0
+    seed_link_apps(con, {}, hub_port=5000, probe=lambda port: True)                                   # Hub เองอยู่ 5000 → ไม่ลิงก์ไปตัวเอง
+    assert con.execute("SELECT COUNT(*) FROM app_registry WHERE link_mode='link'").fetchone()[0] == 0
+    seed_link_apps(con, {}, hub_port=5001, probe=lambda port: port == 5000)
+    got = {r["key"]: r["url"] for r in con.execute("SELECT key, url FROM app_registry WHERE link_mode='link'")}
+    assert got == {"utcmms": "http://localhost:5000/", "echeck": "http://localhost:5000/echeck/dashboard"}
+    con.execute("UPDATE app_registry SET enabled=0 WHERE key='utcmms'"); con.commit()
+    seed_link_apps(con, {}, hub_port=5001, probe=lambda port: True)
+    assert con.execute("SELECT enabled FROM app_registry WHERE key='utcmms'").fetchone()[0] == 0     # แอดมินปิดแล้วไม่เปิดกลับ
+    seed_link_apps(con, {"UTCMMS_URL": "http://10.0.0.9:8080/"}, hub_port=5001, probe=lambda p: True)
+    assert con.execute("SELECT url FROM app_registry WHERE key='utcmms'").fetchone()[0] == "http://localhost:5000/"   # ไม่ทับของเดิม

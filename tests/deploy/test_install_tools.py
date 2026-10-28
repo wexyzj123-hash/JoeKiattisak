@@ -116,3 +116,11 @@ def test_no_posix_only_calls_in_app_code():
 def test_bat_scripts_that_run_python_force_utf8():
     for n in ("install.bat", "start.bat", "backup.bat"):
         assert 'set "PYTHONUTF8=1"' in open(os.path.join(ROOT, "deploy", "windows", n), encoding="utf-8").read(), n
+
+
+def test_firewall_script_reads_ports_and_install_calls_or_hints_it():
+    d = os.path.join(ROOT, "deploy", "windows")
+    fw = open(os.path.join(d, "firewall.bat"), encoding="utf-8").read()
+    ins = open(os.path.join(d, "install.bat"), encoding="utf-8").read()
+    assert "localport=%HUB_PORT%,%SAFETY_PORT%" in fw and "ports.py show" in fw and "net session" in fw
+    assert 'firewall.bat" quiet' in ins and ":fw_hint" in ins and ":fw_done" in ins

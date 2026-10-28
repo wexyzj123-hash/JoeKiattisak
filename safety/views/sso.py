@@ -9,12 +9,13 @@ from flask import Blueprint, current_app, redirect, render_template, request, se
 from shared.sso import SsoError, verify_token
 
 from ..db import get_db
+from ..urls import hub_public
 
 bp = Blueprint("sso", __name__)
 
 
 def _deny():
-    return render_template("sso_error.html", hub_url=current_app.config["HUB_URL"]), 403
+    return render_template("sso_error.html", hub_url=hub_public()), 403
 
 
 @bp.route("/sso")

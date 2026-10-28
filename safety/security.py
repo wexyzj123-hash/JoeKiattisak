@@ -6,6 +6,7 @@ import secrets
 from functools import wraps
 
 from flask import abort, current_app, g, redirect, request, session
+from .urls import hub_public
 
 CSRF_KEY = "_csrf"
 
@@ -45,7 +46,7 @@ def safety_login_required(view):
     @wraps(view)
     def wrapped(*a, **kw):
         if g.get("user") is None:
-            return redirect(current_app.config["HUB_URL"])
+            return redirect(hub_public())
         return view(*a, **kw)
     return wrapped
 
