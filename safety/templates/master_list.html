@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ td.label_th }} · AIAT Safety{% endblock %}
+{% macro th(key, label) -%}
+<th><a href="?q={{ q | urlencode }}&sort={{ key }}&dir={{ 'desc' if sort == key and direction == 'asc' else 'asc' }}">{{ label }}{% if sort == key %} {{ '▲' if direction == 'asc' else '▼' }}{% endif %}</a></th>
+{%- endmacro %}
+{% block body %}
+<h1>{{ td.label_th }}</h1>
+<form method="get" class="card" style="max-width:none;margin:0 0 16px;display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+  <label>ค้นหา (รหัส / ชื่อ) <input name="q" value="{{ q }}"></label>
+  <button type="submit">ค้นหา</button>
+  {% if can_edit %}<a class="btn" href="/master/{{ td.slug }}/new">+ เพิ่ม{{ td.label_th }}</a>{% endif %}
+</form>
+<div class="card" style="max-width:none;margin:0;overflow-x:auto">
+<table style="width:100%;border-collapse:collapse">
+  <tr><th>ลำดับ</th>{{ th('code', 'รหัส') }}{{ th('name_th', 'ชื่อ') }}<th>อธิบาย</th>{{ th('active', 'สถานะ') }}{{ th('creator', 'ผู้บันทึก') }}<th>ดำเนินการ</th></tr>
+  {% for r in page.rows %}
+  <tr>
+    <td>{{ (page.page - 1) * page.per_page + loop.index }}</td>
+    <td>{{ r['code'] }}</td><td>{{ r['name_th'] }}</td><td>{{ r['description'] }}</td>
+    <td>{{ 'ใช้งาน' if r['active'] else 'ปิดใช้งาน' }}</td><td>{{ r['creator'] or '' }}</td>
+    <td>{% if can_edit %}
+      <a href="/master/{{ td.slug }}/{{ r['id'] }}/edit">แก้ไข</a>
+      <form method="post" action="/master/{{ td.slug }}/{{ r['id'] }}/toggle" style="display:inline">
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <button type="submit">{{ 'ปิดใช้งาน' if r['active'] else 'เปิดใช้งาน' }}</button></form>
+    {% endif %}</td>
+  </tr>
+  {% else %}<tr><td colspan="7">ไม่พบข้อมูล</td></tr>{% endfor %}
+</table>
+</div>
+<nav style="display:flex;gap:6px;margin-top:12px">
+  {% for p in range(1, page.pages + 1) %}
+  <a class="btn" style="{{ 'opacity:.6' if p != page.page }}" href="?q={{ q | urlencode }}&sort={{ sort }}&dir={{ direction }}&page={{ p }}">{{ p }}</a>
+  {% endfor %}
+  <span style="color:var(--muted);align-self:center">ทั้งหมด {{ page.total }} รายการ</span>
+</nav>
+{% endblock %}

@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}{{ 'แก้ไข' if row else 'เพิ่ม' }}{{ td.label_th }} · AIAT Safety{% endblock %}
+{% block body %}
+<form method="post" class="card" style="max-width:520px;margin:6vh auto">
+  <h1>{{ 'แก้ไข' if row else 'เพิ่ม' }}{{ td.label_th }}</h1>
+  {% for e in errors %}<div class="flash">{{ e }}</div>{% endfor %}
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <label>รหัส <input name="code" value="{{ values.get('code', '') }}" required maxlength="32"></label>
+  <label>ชื่อ <input name="name_th" value="{{ values.get('name_th', '') }}" required maxlength="200"></label>
+  <label>อธิบาย <input name="description" value="{{ values.get('description', '') }}" maxlength="1000"></label>
+  <div style="display:flex;gap:8px"><button type="submit">บันทึก</button><a class="btn" href="/master/{{ td.slug }}">ยกเลิก</a></div>
+</form>
+{% endblock %}
