@@ -82,9 +82,9 @@ def test_sso_error_page_has_no_sidebar(safety_app):
     assert 'class="sidebar"' not in html
 
 
-def test_notifications_placeholder_200_for_user_managers_and_mentions_phase_4(safety_app):
+def test_notifications_admin_page_200_for_user_managers_only(safety_app):
     page = login(safety_app, "admin").get("/admin/notifications")
-    assert page.status_code == 200 and "เฟส 4" in page.get_data(as_text=True)
+    assert page.status_code == 200 and "กฎการแจ้งเตือน" in page.get_data(as_text=True)
     assert safety_app.test_client().get("/admin/notifications").status_code == 302
     assert login(safety_app, "viewer").get("/admin/notifications").status_code == 403
 
