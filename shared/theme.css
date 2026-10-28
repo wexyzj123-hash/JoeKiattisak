@@ -77,6 +77,7 @@ table th, table td { text-align: left; padding: 8px 10px; border-bottom: 1px sol
 
 /* ตารางที่ซ้อนเป็นการ์ดบนจอแคบ (ชื่อคอลัมน์ใส่ผ่าน data-label โดย theme.js) */
 .table-stack td { overflow-wrap: anywhere; }
+@media (min-width: 641px) { .table-stack td:first-child { overflow-wrap: normal; white-space: nowrap; } }
 @media (max-width: 640px) {
   .table-stack, .table-stack tbody { display: block; width: 100% !important; }
   .table-stack tr.hrow { display: none; }
