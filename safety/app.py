@@ -39,7 +39,10 @@ def create_app(test_config: dict | None = None) -> Flask:
     install_csrf(app)
     app.before_request(load_user)
 
-    from .views import api, criteria, custom_fields, hazards, home, master, overview, pages, roles, sso, users
+    from .views import (api, criteria, custom_fields, hazards, home, master, notifications, overview, pages, profile, roles,
+                        sso, users)
+    app.register_blueprint(notifications.bp)
+    app.register_blueprint(profile.bp)
     app.register_blueprint(overview.bp)
     app.register_blueprint(hazards.bp)
     app.register_blueprint(custom_fields.bp)
@@ -64,6 +67,8 @@ def create_app(test_config: dict | None = None) -> Flask:
         from .db import get_db
         from .nav import nav_items
         from .perms import user_permissions
-        return {"nav": nav_items(user_permissions(get_db(), g.user), request.path)}
+        from .views.notifications import unread_count
+        db = get_db()
+        return {"nav": nav_items(user_permissions(db, g.user), request.path), "unread_count": unread_count(db, g.user["id"])}
 
     return app

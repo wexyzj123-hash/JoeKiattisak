@@ -7,6 +7,9 @@
     <div class="nav-group">{{ grp.title }}</div>
     {% for i in grp.items %}<a class="nav-item{{ ' active' if i.active }}" href="{{ i.href }}">{{ i.label }}</a>{% endfor %}
     {% endfor %}
+    <div class="nav-group">ของฉัน</div>
+    <a class="nav-item" href="/notifications">🔔 การแจ้งเตือน <span class="badge" id="bell-badge" style="position:static;{{ '' if unread_count else 'display:none' }}">{{ unread_count }}</span></a>
+    <a class="nav-item" href="/profile">โปรไฟล์ของฉัน</a>
     <form method="post" action="/logout" class="nav-user">
       <span>{{ g.user['name'] }}</span>
       <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
@@ -18,4 +21,20 @@
     {% block body %}{% endblock %}
   </main>
 </div>
+{% endblock %}
+{% block scripts %}
+<script>
+// อัปเดตตัวเลขกระดิ่งทุก 60 วินาที (พังเงียบ ๆ ได้ — หน้ายังใช้งานปกติ)
+(function () {
+  var badge = document.getElementById('bell-badge');
+  if (!badge || !window.fetch) return;
+  function tick() {
+    fetch('/notifications/unread-count', {credentials: 'same-origin', cache: 'no-store'})
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d) { badge.textContent = d.count; badge.style.display = d.count ? '' : 'none'; } })
+      .catch(function () {});
+  }
+  setInterval(tick, 60000);
+})();
+</script>
 {% endblock %}
