@@ -172,3 +172,31 @@ def test_post_without_master_edit_is_403_even_with_csrf(safety_app, slug):
 
 def test_unknown_slug_404(safety_app):
     assert login(safety_app).get("/master/nope").status_code == 404
+
+
+def test_edit_page_renders_prefilled_for_plain_and_child_tables(safety_app):
+    c = login(safety_app)
+    create(c, "hazard-types", code="XSS", name_th='"><script>alert(1)</script>', description="d&d")
+    tid = sql(safety_app, "SELECT id FROM hazard_types")[0][0]
+    r = c.get(f"/master/hazard-types/{tid}/edit")
+    html = r.get_data(as_text=True)
+    assert r.status_code == 200 and 'value="XSS"' in html and "<script>alert(1)" not in html
+    assert "&lt;script&gt;" in html and "d&amp;d" in html
+    c.post("/master/factories/new", data={"_csrf": csrf(c), "code": "F1", "name_th": "โรงงาน 1"})
+    fid = sql(safety_app, "SELECT id FROM factories")[0][0]
+    c.post("/master/departments/new", data={"_csrf": csrf(c), "code": "D1", "name_th": "แผนก", "factory_id": fid})
+    did = sql(safety_app, "SELECT id FROM departments")[0][0]
+    r = c.get(f"/master/departments/{did}/edit")
+    html = r.get_data(as_text=True)
+    assert r.status_code == 200 and 'value="D1"' in html and f'<option value="{fid}" selected>' in html
+
+
+def test_edit_page_keeps_inactive_current_parent_visible_and_selected(safety_app):
+    c = login(safety_app)
+    c.post("/master/factories/new", data={"_csrf": csrf(c), "code": "F1", "name_th": "โรงงานเก่า"})
+    fid = sql(safety_app, "SELECT id FROM factories")[0][0]
+    c.post("/master/departments/new", data={"_csrf": csrf(c), "code": "D1", "name_th": "แผนก", "factory_id": fid})
+    did = sql(safety_app, "SELECT id FROM departments")[0][0]
+    c.post(f"/master/factories/{fid}/toggle", data={"_csrf": csrf(c)})
+    html = c.get(f"/master/departments/{did}/edit").get_data(as_text=True)
+    assert f'<option value="{fid}" selected>' in html and "โรงงานเก่า" in html

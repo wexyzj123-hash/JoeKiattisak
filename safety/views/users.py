@@ -5,7 +5,9 @@ from __future__ import annotations
 from flask import Blueprint, flash, redirect, render_template, request
 
 from ..db import get_db
-from ..perms import permission_required
+from flask import g
+
+from ..perms import permission_required, role_permissions, user_permissions
 
 bp = Blueprint("users", __name__, url_prefix="/admin")
 
@@ -27,12 +29,18 @@ def _set_scope(db, user, form) -> None:
     fid, did = _int(raw_f), _int(raw_d)
     if (raw_f and fid is None) or (raw_d and did is None):
         return flash("ขอบเขตหน่วยงานไม่ถูกต้อง")
-    if fid is not None and db.execute("SELECT 1 FROM factories WHERE id=?", (fid,)).fetchone() is None:
-        return flash("ไม่พบโรงงานที่เลือก")
+    if fid is not None:
+        fac = db.execute("SELECT active FROM factories WHERE id=?", (fid,)).fetchone()
+        if fac is None:
+            return flash("ไม่พบโรงงานที่เลือก")
+        if not fac["active"] and fid != user["factory_id"]:
+            return flash("โรงงานที่เลือกถูกปิดใช้งานแล้ว")
     if did is not None:
-        dept = db.execute("SELECT factory_id FROM departments WHERE id=?", (did,)).fetchone()
+        dept = db.execute("SELECT factory_id, active FROM departments WHERE id=?", (did,)).fetchone()
         if dept is None:
             return flash("ไม่พบแผนกที่เลือก")
+        if not dept["active"] and did != user["department_id"]:
+            return flash("แผนกที่เลือกถูกปิดใช้งานแล้ว")
         if fid is not None and dept["factory_id"] != fid:
             return flash("แผนกที่เลือกไม่ได้อยู่ในโรงงานนี้")
         fid = dept["factory_id"]                  # เลือกแผนกอย่างเดียว → ใช้โรงงานของแผนกนั้น
@@ -49,8 +57,13 @@ def users():
         uid = _int(f.get("id"))
         user = db.execute("SELECT * FROM safety_users WHERE id=?", (uid,)).fetchone() if uid else None
         action = f.get("action")
+        actor = user_permissions(db, g.user)
         if user is None:
             flash("ไม่พบผู้ใช้")
+        elif action in ("toggle", "set_role") and not role_permissions(db, user["role"]) <= actor:
+            flash("จัดการผู้ใช้ที่มีสิทธิ์สูงกว่าคุณไม่ได้")           # เช่น ผู้ถือ users.manage แตะต้องผู้ดูแลระบบไม่ได้
+        elif action == "set_role" and not role_permissions(db, f.get("role", "")) <= actor:
+            flash("กำหนดบทบาทที่มีสิทธิ์มากกว่าที่คุณมีไม่ได้")
         elif action == "toggle":
             if user["active"] and user["role"] == "admin" and _other_active_admins(db, user["id"]) == 0:
                 flash("ปิดใช้งานผู้ดูแลระบบคนสุดท้ายไม่ได้")
@@ -77,6 +90,6 @@ def users():
     return render_template(
         "users.html", users=rows,
         roles=db.execute("SELECT key, name_th FROM safety_roles ORDER BY is_system DESC, key").fetchall(),
-        factories=db.execute("SELECT id, name_th FROM factories WHERE active=1 ORDER BY code").fetchall(),
-        departments=db.execute("""SELECT d.id, d.name_th, f.name_th AS factory FROM departments d
-                                  JOIN factories f ON f.id = d.factory_id WHERE d.active=1 ORDER BY f.code, d.code""").fetchall())
+        factories=db.execute("SELECT id, name_th, active FROM factories ORDER BY code").fetchall(),
+        departments=db.execute("""SELECT d.id, d.name_th, d.active, f.name_th AS factory FROM departments d
+                                  JOIN factories f ON f.id = d.factory_id ORDER BY f.code, d.code""").fetchall())

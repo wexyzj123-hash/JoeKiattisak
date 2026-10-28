@@ -120,3 +120,102 @@ def test_toggle_user_blocks_next_sso_login(safety_app):
     assert safety_app.test_client().get("/sso?token=" + token(uid=77, roles=("viewer",))).status_code == 403
     post(c, action="toggle", id=str(uid))
     assert safety_app.test_client().get("/sso?token=" + token(uid=77, roles=("viewer",))).status_code == 302
+
+
+# ---- ผู้ถือ users.manage / roles.manage ต้องไม่ยกระดับตัวเองเป็นแอดมินได้ ----
+def custom_role(app, admin_client, key, perms):
+    admin_client.post("/admin/roles", data={"_csrf": csrf(admin_client), "action": "create", "key": key,
+                                            "name_th": key, "permissions": perms})
+
+
+def test_users_manage_cannot_promote_self_or_others_to_admin(safety_app):
+    adm = login(safety_app)
+    custom_role(safety_app, adm, "hr", ["users.manage"])
+    hr = login(safety_app, "hr")
+    post(hr, action="set_role", id=str(hr.uid), role="admin")
+    other = make_user(safety_app, "reporter")
+    post(hr, action="set_role", id=str(other), role="admin")
+    assert role_of(safety_app, hr.uid) == "hr" and role_of(safety_app, other) == "reporter"
+
+
+def test_users_manage_cannot_touch_an_existing_admin(safety_app):
+    adm = login(safety_app)
+    other_admin = make_user(safety_app, "admin")
+    custom_role(safety_app, adm, "hr", ["users.manage"])
+    hr = login(safety_app, "hr")
+    post(hr, action="toggle", id=str(other_admin))
+    post(hr, action="set_role", id=str(other_admin), role="viewer")
+    row = sql(safety_app, "SELECT role, active FROM safety_users WHERE id=?", (other_admin,))[0]
+    assert (row["role"], row["active"]) == ("admin", 1)
+
+
+def test_users_manage_can_still_manage_ordinary_users(safety_app):
+    adm = login(safety_app)
+    custom_role(safety_app, adm, "hr", ["users.manage", "master.view", "hazard.report"])
+    hr = login(safety_app, "hr")
+    uid = make_user(safety_app, "reporter")
+    post(hr, action="set_role", id=str(uid), role="viewer")
+    assert role_of(safety_app, uid) == "viewer"
+    post(hr, action="toggle", id=str(uid))
+    assert sql(safety_app, "SELECT active FROM safety_users WHERE id=?", (uid,))[0][0] == 0
+
+
+def test_cannot_assign_role_with_permissions_you_lack(safety_app):
+    adm = login(safety_app)
+    custom_role(safety_app, adm, "hr", ["users.manage"])
+    hr = login(safety_app, "hr")
+    uid = make_user(safety_app, "reporter")
+    post(hr, action="set_role", id=str(uid), role="assessor")           # assessor มีสิทธิ์ที่ hr ไม่มี
+    assert role_of(safety_app, uid) == "reporter"
+
+
+def test_roles_manage_cannot_grant_permissions_it_lacks(safety_app):
+    adm = login(safety_app)
+    custom_role(safety_app, adm, "rm", ["roles.manage", "master.view"])
+    rm = login(safety_app, "rm")
+    rm.post("/admin/roles", data={"_csrf": csrf(rm), "action": "update", "key": "rm", "name_th": "rm",
+                                  "permissions": ["roles.manage", "users.manage", "master.edit"]})
+    assert set(sql(safety_app, "SELECT permissions FROM safety_roles WHERE key='rm'")[0][0].split(",")) == \
+        {"roles.manage", "master.view"}
+    rm.post("/admin/roles", data={"_csrf": csrf(rm), "action": "create", "key": "sneaky", "name_th": "x",
+                                  "permissions": ["users.manage"]})
+    assert sql(safety_app, "SELECT 1 FROM safety_roles WHERE key='sneaky'") == []
+
+
+def test_roles_manage_can_grant_what_it_has_and_cannot_edit_or_delete_higher_roles(safety_app):
+    adm = login(safety_app)
+    custom_role(safety_app, adm, "rm", ["roles.manage", "master.view", "hazard.report"])
+    rm = login(safety_app, "rm")
+    rm.post("/admin/roles", data={"_csrf": csrf(rm), "action": "update", "key": "viewer", "name_th": "ผู้ดู",
+                                  "permissions": ["master.view", "hazard.report"]})
+    assert sql(safety_app, "SELECT permissions FROM safety_roles WHERE key='viewer'")[0][0] == "master.view,hazard.report"
+    rm.post("/admin/roles", data={"_csrf": csrf(rm), "action": "update", "key": "assessor", "name_th": "ถูกแก้",
+                                  "permissions": ["master.view"]})                       # assessor สูงกว่า rm
+    rm.post("/admin/roles", data={"_csrf": csrf(rm), "action": "update", "key": "admin", "name_th": "ถูกแก้"})
+    assert sql(safety_app, "SELECT name_th FROM safety_roles WHERE key='assessor'")[0][0] == "ผู้ประเมิน/จป."
+    assert sql(safety_app, "SELECT name_th FROM safety_roles WHERE key='admin'")[0][0] == "ผู้ดูแลระบบ"
+
+
+# ---- ขอบเขตผู้ใช้: ห้ามเลือกที่ปิดอยู่ และห้ามขยายขอบเขตเงียบ ๆ ----
+def test_set_scope_rejects_inactive_factory_and_department(safety_app):
+    c = login(safety_app)
+    f1, f2, d1, d2 = org(safety_app, c)
+    c.post(f"/master/factories/{f2}/toggle", data={"_csrf": csrf(c)})
+    c.post(f"/master/departments/{d1}/toggle", data={"_csrf": csrf(c)})
+    uid = make_user(safety_app, "dept_head")
+    post(c, action="set_scope", id=str(uid), factory_id=str(f2), department_id="")
+    post(c, action="set_scope", id=str(uid), factory_id="", department_id=str(d1))
+    assert tuple(sql(safety_app, "SELECT factory_id, department_id FROM safety_users WHERE id=?", (uid,))[0]) == (None, None)
+
+
+def test_scope_pointing_at_a_later_deactivated_factory_stays_selected_and_resubmittable(safety_app):
+    c = login(safety_app)
+    f1, f2, d1, d2 = org(safety_app, c)
+    uid = make_user(safety_app, "dept_head")
+    post(c, action="set_scope", id=str(uid), factory_id=str(f1), department_id=str(d1))
+    c.post(f"/master/factories/{f1}/toggle", data={"_csrf": csrf(c)})
+    html = c.get("/admin/users").get_data(as_text=True)
+    assert f'<option value="{f1}" selected>โรงงาน F1</option>' in html              # ตัวเลือกโรงงาน (ไม่ปนกับตัวเลือกแผนก)
+    assert f'<option value="{d1}" selected>โรงงาน F1 › แผนก D1</option>' in html
+    post(c, action="set_scope", id=str(uid), factory_id=str(f1), department_id=str(d1))     # ส่งค่าเดิมกลับ ไม่ขยายขอบเขต
+    assert tuple(sql(safety_app, "SELECT factory_id, department_id FROM safety_users WHERE id=?", (uid,))[0]) == (f1, d1)

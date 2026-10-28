@@ -6,7 +6,9 @@ import re
 from flask import Blueprint, flash, redirect, render_template, request
 
 from ..db import get_db
-from ..perms import PERMISSIONS, permission_required
+from flask import g
+
+from ..perms import PERMISSIONS, permission_required, role_permissions, user_permissions
 
 bp = Blueprint("roles", __name__, url_prefix="/admin")
 KEY_RE = re.compile(r"^[a-z][a-z0-9_]{1,31}$")
@@ -27,9 +29,13 @@ def roles():
         f = request.form
         action, key, name = f.get("action"), f.get("key", "").strip(), f.get("name_th", "").strip()
         row = db.execute("SELECT * FROM safety_roles WHERE key=?", (key,)).fetchone()
+        actor = user_permissions(db, g.user)
+        perms = _perms_from_form(f)
+        asked = set(perms.split(",")) - {""} if perms else set()
         if action == "create":
-            perms = _perms_from_form(f)
-            if not KEY_RE.match(key) or row is not None:
+            if perms is not None and not asked <= actor:
+                flash("กำหนดสิทธิ์ที่คุณไม่มีให้บทบาทอื่นไม่ได้")
+            elif not KEY_RE.match(key) or row is not None:
                 flash("รหัสบทบาทต้องขึ้นต้นด้วย a-z ใช้ a-z 0-9 _ ยาว 2-32 ตัว และห้ามซ้ำกับที่มีอยู่")
             elif not name:
                 flash("กรุณากรอกชื่อบทบาท")
@@ -41,9 +47,12 @@ def roles():
                 db.commit()
         elif row is None:
             flash("ไม่พบบทบาท")
+        elif action in ("update", "delete") and not role_permissions(db, key) <= actor:
+            flash("จัดการบทบาทที่มีสิทธิ์สูงกว่าคุณไม่ได้")
         elif action == "update":
-            perms = _perms_from_form(f)
-            if not name:
+            if perms is not None and not (asked - role_permissions(db, key)) <= actor:
+                flash("กำหนดสิทธิ์ที่คุณไม่มีให้บทบาทอื่นไม่ได้")
+            elif not name:
                 flash("กรุณากรอกชื่อบทบาท")
             elif perms is None:
                 flash("มีสิทธิ์ที่ไม่รู้จัก")

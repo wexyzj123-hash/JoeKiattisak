@@ -29,6 +29,11 @@ def user_permissions(db, user) -> set[str]:
     return {p for p in (row["permissions"].split(",") if row else []) if p in PERMISSIONS}
 
 
+def role_permissions(db, role_key: str) -> set[str]:
+    """สิทธิ์ของบทบาทหนึ่ง (admin = ครบทุกสิทธิ์เสมอ; ไม่พบ = ว่าง)"""
+    return user_permissions(db, {"role": role_key})
+
+
 def permission_required(*keys: str):
     """ต้องล็อกอิน (ไม่ล็อกอิน → กลับ Hub) และมีสิทธิ์ครบทุกคีย์ (ไม่ครบ → 403)"""
     def deco(view):

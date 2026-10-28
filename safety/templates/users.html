@@ -18,8 +18,8 @@
         <button type="submit">เปลี่ยนบทบาท</button></form>
       <form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ u['id'] }}">
         <input type="hidden" name="action" value="set_scope">
-        <select name="factory_id"><option value="">ทุกโรงงาน</option>{% for f in factories %}<option value="{{ f['id'] }}" {{ 'selected' if f['id'] == u['factory_id'] }}>{{ f['name_th'] }}</option>{% endfor %}</select>
-        <select name="department_id"><option value="">ทุกแผนก</option>{% for d in departments %}<option value="{{ d['id'] }}" {{ 'selected' if d['id'] == u['department_id'] }}>{{ d['factory'] }} › {{ d['name_th'] }}</option>{% endfor %}</select>
+        <select name="factory_id"><option value="">ทุกโรงงาน</option>{% for f in factories if f['active'] or f['id'] == u['factory_id'] %}<option value="{{ f['id'] }}" {{ 'selected' if f['id'] == u['factory_id'] }}>{{ f['name_th'] }}</option>{% endfor %}</select>
+        <select name="department_id"><option value="">ทุกแผนก</option>{% for d in departments if d['active'] or d['id'] == u['department_id'] %}<option value="{{ d['id'] }}" {{ 'selected' if d['id'] == u['department_id'] }}>{{ d['factory'] }} › {{ d['name_th'] }}</option>{% endfor %}</select>
         <button type="submit">กำหนดขอบเขต</button></form>
       <form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ u['id'] }}">
         <input type="hidden" name="action" value="toggle"><button type="submit">{{ 'ปิดใช้งาน' if u['active'] else 'เปิดใช้งาน' }}</button></form>

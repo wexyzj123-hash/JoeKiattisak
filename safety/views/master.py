@@ -45,7 +45,7 @@ def _form(td, row_id=None):
         errors = save_row(db, td, row_id, request.form, g.user["id"])
         if not errors:
             return redirect(f"/master/{td.slug}")
-    values = request.form if request.method == "POST" else (row or {})
+    values = request.form if request.method == "POST" else (dict(row) if row else {})
     parents, selected = [], None
     if td.parent:
         parents = list(active_options(db, parent_td(td)))
