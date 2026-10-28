@@ -7,7 +7,7 @@ import os
 
 from flask import Blueprint, abort, current_app, flash, g, redirect, render_template, request, send_file
 
-from .. import incident_flow, incidents, timeutil
+from .. import charts, incident_flow, incident_stats, incidents, timeutil
 from ..db import get_db
 from ..hazards import risk_area_options, user_in_scope
 from ..images import MAX_PER_KIND, ImageError, save_attachment
@@ -84,6 +84,21 @@ def index():
     return render_template("incident_list.html", rows=rows, page=page, pages=pages, total=total, status_th=INCIDENT_STATUS_TH,
                            kind_th=INCIDENT_KIND_TH, can_report="incident.report" in perms,
                            f={"kind": kind, "status": status, "q": q, "mine": request.args.get("mine", "")})
+
+
+# ---------- สถิติ ----------
+@bp.route("/stats")
+@permission_required("incident.investigate")
+def stats():
+    db, user = get_db(), g.user
+    days, last = incident_stats.days_without_lost_time(db, user)
+    monthly = incident_stats.monthly_incidents(db, user)
+    sev = incident_stats.by_severity(db, user)
+    donut_svg, legend = charts.donut(sev, label="อุบัติเหตุแยกตามระดับการบาดเจ็บ", center="อุบัติเหตุ")
+    return render_template(
+        "incident_stats.html", days=days, last=last, counts=incident_stats.counts_by_kind_status(db, user), monthly=monthly,
+        trend_svg=charts.trend(monthly, labels=("อุบัติเหตุ", "Near Miss"), colors=("#ea580c", "#ca8a04"), title="อุบัติเหตุและ Near Miss 12 เดือน"),
+        donut=donut_svg, legend=legend, areas=incident_stats.by_area(db, user), status_th=INCIDENT_STATUS_TH, kind_th=INCIDENT_KIND_TH)
 
 
 # ---------- แจ้งใหม่ ----------

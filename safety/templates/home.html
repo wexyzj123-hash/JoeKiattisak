@@ -25,6 +25,8 @@
   {{ kpi_card('kpi-danger', '/hazards?overdue=1', 'clock', 'overdue', overdue, 'เกินกำหนด') }}
   {{ kpi_card('kpi-ok', '/hazards?closed_month=1', 'check', 'closed-month', closed_month, 'ปิดแล้วเดือนนี้') }}
   {{ kpi_card('kpi-warn', '/hazards?high=1', 'alert', 'high-risk', high_risk, 'ความเสี่ยงสูงที่เปิดอยู่') }}
+  <div class="kpi kpi-ok"><span class="kpi-ic">{{ icon('shield', 22) }}</span><span class="kpi-n" data-kpi="days-no-lti"{% if lti_date %} data-last="{{ lti_date }}"{% endif %}>{{ lti_days if lti_days is not none else '-' }}</span>
+    <span class="kpi-l">{% if lti_days is not none %}วันปลอดอุบัติเหตุ (หยุดงาน) · ล่าสุด {{ lti_date }}{% else %}วันปลอดอุบัติเหตุ — ยังไม่มีอุบัติเหตุหยุดงานที่บันทึก{% endif %}</span></div>
 </div>
 
 <div class="dash-grid">

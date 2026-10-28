@@ -30,6 +30,7 @@ MENU = (
     )),
     ("อุบัติเหตุ", (
         ("รายงานอุบัติเหตุ / Near Miss", "/incidents", "alert", "incident.report"),
+        ("สถิติอุบัติเหตุ", "/incidents/stats", "overview", "incident.investigate"),
     )),
     ("ข้อมูลองค์กร", (
         ("โรงงาน", "/master/factories", "building", "master.view"),

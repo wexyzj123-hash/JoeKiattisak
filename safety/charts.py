@@ -13,7 +13,7 @@ def _n(v: float) -> str:
     return f"{v:.2f}".rstrip("0").rstrip(".")
 
 
-def donut(items: list[tuple[str, int]], size: int = 180) -> tuple[Markup, list[dict]]:
+def donut(items: list[tuple[str, int]], size: int = 180, label: str = "รายการเปิดอยู่ตามประเภท", center: str = "เปิดอยู่") -> tuple[Markup, list[dict]]:
     """โดนัทของ [(ชื่อ, จำนวน)] → (svg, คำอธิบาย [{name, n, pct, color}]); ผลรวมเป็นศูนย์ → วงแหวนเทา"""
     total = sum(n for _, n in items)
     c, r, w = size / 2, size / 2 - 14, 22
@@ -39,13 +39,14 @@ def donut(items: list[tuple[str, int]], size: int = 180) -> tuple[Markup, list[d
     base = f'<circle cx="{_n(c)}" cy="{_n(c)}" r="{_n(r)}" fill="none" stroke="var(--line)" stroke-width="{w}"/>'
     summary = "; ".join(f"{name} {n}" for name, n in items) or "ไม่มีรายการ"
     svg = (f'<svg xmlns="http://www.w3.org/2000/svg" class="donut" viewBox="0 0 {size} {size}" width="{size}" height="{size}" role="img" '
-           f'aria-label="{escape("รายการเปิดอยู่ตามประเภท: " + summary)}">{base}{paths}'
+           f'aria-label="{escape(label + ": " + summary)}">{base}{paths}'
            f'<text x="{_n(c)}" y="{_n(c - 2)}" text-anchor="middle" font-size="26" font-weight="700" fill="currentColor">{total}</text>'
-           f'<text x="{_n(c)}" y="{_n(c + 16)}" text-anchor="middle" font-size="11" fill="currentColor" opacity=".75">เปิดอยู่</text></svg>')
+           f'<text x="{_n(c)}" y="{_n(c + 16)}" text-anchor="middle" font-size="11" fill="currentColor" opacity=".75">{escape(center)}</text></svg>')
     return Markup(svg), legend
 
 
-def trend(rows: list[tuple[str, int, int]], width: int = 600, height: int = 200) -> Markup:
+def trend(rows: list[tuple[str, int, int]], width: int = 600, height: int = 200, labels: tuple[str, str] = ("แจ้ง", "ปิด"),
+          colors: tuple[str, str] = (REPORTED, CLOSED), title: str = "แนวโน้มแจ้ง/ปิด 12 เดือน") -> Markup:
     """แท่งคู่ แจ้ง/ปิด ต่อเดือน; rows = [(YYYY-MM, แจ้ง, ปิด)]"""
     peak = max([1] + [max(r, c) for _, r, c in rows])
     left, bottom, top = 8, 28, 10
@@ -55,12 +56,12 @@ def trend(rows: list[tuple[str, int, int]], width: int = 600, height: int = 200)
     parts = []
     for i, (month, reported, closed) in enumerate(rows):
         x = left + i * slot + slot * 0.14
-        for j, (val, color, label) in enumerate(((reported, REPORTED, "แจ้ง"), (closed, CLOSED, "ปิด"))):
+        for j, (val, color, label) in enumerate(((reported, colors[0], labels[0]), (closed, colors[1], labels[1]))):
             h = plot_h * val / peak
             if val:
                 parts.append(f'<rect x="{_n(x + j * (bw + 3))}" y="{_n(top + plot_h - h)}" width="{_n(bw)}" height="{_n(max(h, 2))}" rx="3" fill="{color}"><title>{escape(month)} {label} {val}</title></rect>')
         parts.append(f'<text x="{_n(left + i * slot + slot / 2)}" y="{height - 10}" text-anchor="middle" font-size="11" fill="currentColor" opacity=".8">{escape(month[5:])}</text>')
-    summary = "; ".join(f"{m} แจ้ง {r} ปิด {c}" for m, r, c in rows)
+    summary = "; ".join(f"{m} {labels[0]} {r} {labels[1]} {c}" for m, r, c in rows)
     return Markup(f'<svg xmlns="http://www.w3.org/2000/svg" class="trend" viewBox="0 0 {width} {height}" role="img" '
-                  f'aria-label="{escape("แนวโน้มแจ้ง/ปิด 12 เดือน: " + summary)}" preserveAspectRatio="xMidYMid meet">'
+                  f'aria-label="{escape(title + ": " + summary)}" preserveAspectRatio="xMidYMid meet">'
                   f'<path d="M{left} {top + plot_h} H{width - left}" stroke="var(--line)" stroke-width="1"/>{"".join(parts)}</svg>')

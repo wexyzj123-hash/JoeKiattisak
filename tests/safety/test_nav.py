@@ -22,12 +22,12 @@ def test_admin_sees_home_plus_all_groups_in_screenshot_order():
     assert labels(groups) == [
         HOME,
         ["ภาพรวมดำเนินงาน", "ภาพรวมตามหน่วยงาน", "พื้นที่เสี่ยง", "ลงทะเบียนบันทึกอันตราย", "แหล่งที่มา", "ประเภทอันตราย"],
-        ["รายงานอุบัติเหตุ / Near Miss"],
+        ["รายงานอุบัติเหตุ / Near Miss", "สถิติอุบัติเหตุ"],
         ["โรงงาน", "แผนก", "ไลน์/กลุ่มงาน", "สาเหตุอุบัติเหตุ"],
         ["ประเภทผู้ใช้งาน", "ผู้ใช้งาน", "เกณฑ์ความเสี่ยง", "ฟิลด์เพิ่มเติม", "ระดับความรุนแรงการบาดเจ็บ", "การแจ้งเตือน"]]
     hrefs = [i.href for g in groups for i in g.items]
     assert hrefs == ["/", "/overview", "/overview/departments", "/master/risk-areas", "/hazards", "/master/hazard-sources",
-                     "/master/hazard-types", "/incidents", "/master/factories", "/master/departments", "/master/lines",
+                     "/master/hazard-types", "/incidents", "/incidents/stats", "/master/factories", "/master/departments", "/master/lines",
                      "/master/incident-causes", "/admin/roles", "/admin/users", "/admin/criteria", "/admin/custom-fields",
                      "/admin/injury-severities", "/admin/notifications"]
 

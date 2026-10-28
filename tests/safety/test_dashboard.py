@@ -200,5 +200,5 @@ def test_query_count_constant_with_many_hazards(safety_app):
 
 def test_no_widgets_without_real_data(safety_app):
     html = login(safety_app, "admin").get("/").get_data(as_text=True)
-    for fake in ("สภาพอากาศ", "e-Learning", "ข่าวสาร", "วันปลอดอุบัติเหตุ"):
+    for fake in ("สภาพอากาศ", "e-Learning", "ข่าวสาร"):
         assert fake not in html

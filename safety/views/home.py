@@ -5,7 +5,7 @@ import os
 
 from flask import abort, Blueprint, current_app, g, redirect, render_template, send_file, session
 
-from .. import charts, stats
+from .. import charts, incident_stats, stats
 from ..db import get_db
 from ..hazards import STATUS_TH
 from ..perms import user_permissions
@@ -57,8 +57,9 @@ def index():
     trend_rows = stats.monthly_trend(db, user)
     latest_notes = db.execute("SELECT id, title, link, created_at, read_at FROM notifications WHERE user_id = ? "
                               "ORDER BY created_at DESC, id DESC LIMIT 5", (user["id"],)).fetchall()
+    lti_days, lti_date = incident_stats.days_without_lost_time(db, user)
     return render_template(
-        "home.html", open_total=counts["reported"] + counts["assessed"] + counts["assigned"], overdue=stats.overdue_count(db, user),
+        "home.html", lti_days=lti_days, lti_date=lti_date, open_total=counts["reported"] + counts["assessed"] + counts["assigned"], overdue=stats.overdue_count(db, user),
         closed_month=stats.closed_this_month(db, user), high_risk=stats.high_risk_open(db, user),
         donut=donut_svg, legend=legend, trend_svg=charts.trend(trend_rows), trend_rows=trend_rows,
         latest=stats.latest_hazards(db, user), status_th=STATUS_TH, notes=latest_notes,
