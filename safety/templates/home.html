@@ -1,13 +1,6 @@
-{% extends "base.html" %}
+{% extends "layout.html" %}
 {% block title %}AIAT Safety{% endblock %}
 {% block body %}
-<header style="display:flex;justify-content:space-between;align-items:center">
-  <h1>AIAT Safety</h1>
-  <form method="post" action="/logout" style="display:flex;gap:10px;align-items:center">
-    <span>{{ g.user['name'] }}</span>
-    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-    <button type="submit">ออกจากระบบ</button>
-  </form>
-</header>
-<p>เข้าสู่ระบบความปลอดภัยเรียบร้อย — ระบบกำลังพัฒนาตามเฟส</p>
+<h1>สวัสดี {{ g.user['name'] }}</h1>
+<div class="card" style="max-width:none;margin:0"><p>เข้าสู่ระบบความปลอดภัยเรียบร้อย — เลือกเมนูด้านซ้ายเพื่อเริ่มใช้งาน</p></div>
 {% endblock %}

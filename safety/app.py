@@ -5,7 +5,7 @@ import hashlib
 import os
 from datetime import timedelta
 
-from flask import Flask
+from flask import Flask, g, request
 
 from shared.envfile import validate_secrets
 
@@ -35,11 +35,22 @@ def create_app(test_config: dict | None = None) -> Flask:
     install_csrf(app)
     app.before_request(load_user)
 
-    from .views import api, home, master, roles, sso, users
+    from .views import api, home, master, pages, roles, sso, users
+    app.register_blueprint(pages.bp)
     app.register_blueprint(users.bp)
     app.register_blueprint(master.bp)
     app.register_blueprint(roles.bp)
     app.register_blueprint(api.bp)
     app.register_blueprint(sso.bp)
     app.register_blueprint(home.bp)
+
+    @app.context_processor
+    def _nav():
+        if g.get("user") is None:
+            return {}
+        from .db import get_db
+        from .nav import nav_items
+        from .perms import user_permissions
+        return {"nav": nav_items(user_permissions(get_db(), g.user), request.path)}
+
     return app

@@ -1,7 +1,6 @@
-{% extends "base.html" %}
+{% extends "layout.html" %}
 {% block title %}ประเภทผู้ใช้งาน · AIAT Safety{% endblock %}
 {% block body %}
-{% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
 <h1>ประเภทผู้ใช้งาน</h1>
 {% for r in roles %}
 <form method="post" class="card" style="max-width:none;margin:12px 0">

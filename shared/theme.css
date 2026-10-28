@@ -20,3 +20,17 @@ button, .btn { background: var(--accent); color: var(--accent-ink); border: 0; b
 .tile { display: grid; gap: 6px; color: inherit; text-decoration: none; position: relative; }
 .tile:hover { border-color: var(--accent); }
 .badge { position: absolute; top: 12px; right: 12px; background: var(--danger); color: #fff; border-radius: 999px; padding: 2px 9px; font-size: .8rem; font-weight: 700; }
+
+/* โครงหน้า Safety: เมนูด้านข้าง + เนื้อหา */
+.shell { display: grid; grid-template-columns: 250px 1fr; min-height: 100vh; }
+.sidebar { background: #0a1c33; border-right: 1px solid var(--line); padding: 16px 0; display: flex; flex-direction: column; }
+.brand { font-weight: 800; font-size: 1.15rem; padding: 4px 20px 16px; color: var(--accent); }
+.nav-group { padding: 14px 20px 6px; color: var(--muted); font-size: .8rem; letter-spacing: .04em; }
+.nav-item { display: block; padding: 9px 20px 9px 32px; color: var(--text); text-decoration: none; border-left: 3px solid transparent; }
+.nav-item:hover { background: rgba(255,255,255,.05); }
+.nav-item.active { color: var(--accent); border-left-color: var(--accent); background: rgba(255,159,28,.08); font-weight: 700; }
+.nav-user { margin-top: auto; padding: 16px 20px 0; display: grid; gap: 8px; color: var(--muted); }
+.content { padding: 24px; min-width: 0; }
+table th, table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+a { color: var(--accent); }
+@media (max-width: 800px) { .shell { grid-template-columns: 1fr; } .sidebar { flex-direction: row; flex-wrap: wrap; padding: 8px; } .nav-group { width: 100%; padding: 8px 12px 0; } .nav-item { padding: 8px 12px; border-left: 0; } .nav-user { margin: 0; } }

@@ -1,4 +1,4 @@
-{% extends "base.html" %}
+{% extends "layout.html" %}
 {% block title %}{{ td.label_th }} · AIAT Safety{% endblock %}
 {% macro th(key, label) -%}
 <th><a href="?q={{ q | urlencode }}&sort={{ key }}&dir={{ 'desc' if sort == key and direction == 'asc' else 'asc' }}">{{ label }}{% if sort == key %} {{ '▲' if direction == 'asc' else '▼' }}{% endif %}</a></th>

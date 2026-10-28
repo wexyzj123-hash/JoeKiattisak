@@ -1,7 +1,6 @@
-{% extends "base.html" %}
+{% extends "layout.html" %}
 {% block title %}ผู้ใช้งาน · AIAT Safety{% endblock %}
 {% block body %}
-{% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
 <h1>ผู้ใช้งาน</h1>
 <p style="color:var(--muted)">ผู้ใช้จะปรากฏที่นี่หลังเข้าสู่ระบบผ่าน AIAT Hub ครั้งแรก</p>
 <div class="card" style="max-width:none;margin:0;overflow-x:auto">

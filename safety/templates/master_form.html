@@ -1,7 +1,7 @@
-{% extends "base.html" %}
+{% extends "layout.html" %}
 {% block title %}{{ 'แก้ไข' if row else 'เพิ่ม' }}{{ td.label_th }} · AIAT Safety{% endblock %}
 {% block body %}
-<form method="post" class="card" style="max-width:520px;margin:6vh auto">
+<form method="post" class="card" style="max-width:520px;margin:0">
   <h1>{{ 'แก้ไข' if row else 'เพิ่ม' }}{{ td.label_th }}</h1>
   {% for e in errors %}<div class="flash">{{ e }}</div>{% endfor %}
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
