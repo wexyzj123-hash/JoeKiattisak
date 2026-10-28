@@ -12,9 +12,9 @@ from tests.safety.factories import add_chain, add_hazard, add_refs
 from tests.safety.helpers import login
 
 
-def test_home_greeting_has_default_mascot(safety_app):
+def test_home_hero_has_decorative_safety_first_mascot(safety_app):
     html = login(safety_app, "reporter").get("/").get_data(as_text=True)
-    assert "mascot-default" in html and 'role="img"' in html
+    assert "mascot-alert" in html and 'aria-hidden="true"' in html
 
 
 def test_hazard_list_empty_states_use_sleeping_and_thinking(safety_app):

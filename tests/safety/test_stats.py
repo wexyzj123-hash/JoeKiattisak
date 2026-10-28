@@ -173,3 +173,64 @@ def test_hub_badge_sums_summary(safety_app, monkeypatch):
 
     monkeypatch.setattr(launcher, "urlopen", lambda req, timeout: Resp(body))
     assert launcher.fetch_badge({"key": "safety", "url": "http://safety.test"}, "svc-token") == 3          # เปิด 2 + เกินกำหนด 1
+
+
+# ---------- แดชบอร์ดหน้าหลัก ----------
+def _type(db, code, name):
+    return db.execute("INSERT INTO hazard_types(code,name_th) VALUES(?,?)", (code, name)).lastrowid
+
+
+def test_open_by_type_counts_buckets_top5_and_excludes_closed_and_zero(w):
+    ids = [_type(w.db, f"X{i}", f"ประเภท{i}") for i in range(7)]
+    for i, tid in enumerate(ids):
+        for _ in range(7 - i):                                               # 7,6,5,4,3,2,1
+            w.hz(status="assigned", hazard_type_id=tid)
+    w.hz(status="closed", hazard_type_id=ids[6]); w.hz(status="rejected", hazard_type_id=ids[6])
+    _type(w.db, "ZERO", "ไม่มีรายการ")
+    got = stats.open_by_type(w.db, w.admin)
+    assert got == [("ประเภท0", 7), ("ประเภท1", 6), ("ประเภท2", 5), ("ประเภท3", 4), ("ประเภท4", 3), ("อื่น ๆ", 3)]
+    assert sum(n for _, n in got) == 28
+
+
+def test_open_by_type_small_sets_have_no_other_bucket_and_scope_applies(w):
+    w.hz("a", status="reported"); w.hz("b", status="assessed", reporter=w.rep2)
+    assert stats.open_by_type(w.db, w.admin) == [("สารเคมี", 2)]
+    scoped = user_row(w.db, add_user(w.db, "assessor", factory_id=w.b["f"]))
+    assert stats.open_by_type(w.db, scoped) == [("สารเคมี", 1)]
+    assert stats.open_by_type(w.db, user_row(w.db, w.rep2)) == [("สารเคมี", 1)]
+    assert stats.open_by_type(w.db, user_row(w.db, add_user(w.db, "reporter", "ว่าง"))) == []
+
+
+def test_closed_this_month_uses_event_month_boundaries_and_scope(w):
+    a, b = w.hz(status="closed"), w.hz(status="closed")
+    c, d = w.hz("b", status="closed", reporter=w.rep2), w.hz(status="closed")
+    w.closed_event(a, "2026-03-01 00:00:00"); w.closed_event(b, "2026-03-10 23:59:59")
+    w.closed_event(c, "2026-03-05 10:00:00"); w.closed_event(d, "2026-02-28 23:59:59")
+    assert stats.closed_this_month(w.db, w.admin) == 3
+    assert stats.closed_this_month(w.db, w.admin, date(2026, 2, 5)) == 1
+    assert stats.closed_this_month(w.db, w.admin, date(2026, 4, 1)) == 0
+    scoped = user_row(w.db, add_user(w.db, "assessor", factory_id=w.b["f"]))
+    assert stats.closed_this_month(w.db, scoped) == 1
+    assert stats.closed_this_month(w.db, user_row(w.db, w.rep2)) == 1
+
+
+def test_high_risk_open_uses_snapshot_flag_and_ignores_closed(w):
+    w.hz(status="assigned", l=5, s=5); w.hz(status="assessed", l=5, s=4); w.hz(status="closed", l=5, s=5)
+    w.hz(status="assigned", l=1, s=1); w.hz()
+    assert stats.high_risk_open(w.db, w.admin) == 2
+    w.db.execute("UPDATE risk_levels SET requires_approval = 0")                    # แก้เกณฑ์ภายหลัง ไม่กระทบ snapshot เดิม
+    w.db.commit()
+    assert stats.high_risk_open(w.db, w.admin) == 2
+
+
+def test_latest_hazards_order_limit_overdue_flag_and_scope(w):
+    for i in range(8):
+        w.hz(reported_at=f"2026-03-0{i + 1} 09:00:00", code=f"HZ-L-{i}", status="assigned", due=D(-1) if i == 7 else D(5))
+    w.hz("b", reported_at="2026-03-09 09:00:00", code="HZ-L-B", reporter=w.rep2, status="closed", due=D(-3))
+    rows = stats.latest_hazards(w.db, w.admin)
+    assert [r["code"] for r in rows] == ["HZ-L-B", "HZ-L-7", "HZ-L-6", "HZ-L-5", "HZ-L-4", "HZ-L-3"]
+    assert [bool(r["overdue"]) for r in rows] == [False, True, False, False, False, False]          # ปิดแล้วไม่เกินกำหนด
+    assert len(stats.latest_hazards(w.db, w.admin, limit=2)) == 2
+    scoped = user_row(w.db, add_user(w.db, "assessor", factory_id=w.b["f"]))
+    assert [r["code"] for r in stats.latest_hazards(w.db, scoped)] == ["HZ-L-B"]
+    assert {"area_name", "level_name", "level_color", "status", "due_date", "title"} <= set(rows[0].keys())

@@ -98,3 +98,36 @@ def global_summary(db) -> tuple[int, int]:
     row = db.execute(f"SELECT COUNT(*), COALESCE(SUM(h.due_date < ?), 0) FROM hazards h WHERE {OPEN_SQL}",
                      (timeutil.today().isoformat(),)).fetchone()
     return row[0], int(row[1])
+
+
+def open_by_type(db, user, top: int = 5) -> list[tuple[str, int]]:
+    """รายการเปิดอยู่แยกตามประเภทอันตราย: ประเภทที่มากสุด top อันดับ + 'อื่น ๆ' (ไม่แสดงประเภทที่เป็นศูนย์)"""
+    where, args = _visible(db, user)
+    rows = db.execute(f"SELECT t.name_th AS name, COUNT(*) AS n FROM hazards h JOIN hazard_types t ON t.id = h.hazard_type_id "
+                      f"WHERE {where} AND {OPEN_SQL} GROUP BY t.id ORDER BY n DESC, t.name_th", args).fetchall()
+    out = [(r["name"], r["n"]) for r in rows[:top]]
+    rest = sum(r["n"] for r in rows[top:])
+    return out + [("อื่น ๆ", rest)] if rest else out
+
+
+def closed_this_month(db, user, today: date | None = None) -> int:
+    """จำนวนที่ปิดในเดือนปฏิทินของ today (นับจากเหตุการณ์ 'closed')"""
+    where, args = _visible(db, user)
+    month = (today or timeutil.today()).strftime("%Y-%m")
+    return db.execute(f"SELECT COUNT(*) FROM hazard_events e JOIN hazards h ON h.id = e.hazard_id "
+                      f"WHERE {where} AND e.kind = 'closed' AND substr(e.at,1,7) = ?", args + [month]).fetchone()[0]
+
+
+def high_risk_open(db, user) -> int:
+    """รายการเปิดอยู่ที่ระดับความเสี่ยงต้องอนุมัติ (ตาม snapshot ที่บันทึกตอนประเมิน)"""
+    where, args = _visible(db, user)
+    return db.execute(f"SELECT COUNT(*) FROM hazards h WHERE {where} AND {OPEN_SQL} AND h.level_requires_approval = 1", args).fetchone()[0]
+
+
+def latest_hazards(db, user, limit: int = 6) -> list:
+    where, args = _visible(db, user)
+    return db.execute(
+        f"SELECT h.id, h.code, h.title, h.status, h.due_date, h.level_name, h.level_color, h.score, a.name_th AS area_name, "
+        f"(h.due_date IS NOT NULL AND h.due_date < ? AND {OPEN_SQL}) AS overdue "
+        f"FROM hazards h JOIN risk_areas a ON a.id = h.risk_area_id WHERE {where} "
+        f"ORDER BY h.reported_at DESC, h.id DESC LIMIT ?", [timeutil.today().isoformat()] + args + [max(1, min(int(limit), 50))]).fetchall()

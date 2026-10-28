@@ -1,9 +1,74 @@
 {% extends "layout.html" %}
-{% block title %}AIAT Safety{% endblock %}
+{% block title %}หน้าหลัก · Safety 4.0{% endblock %}
 {% block body %}
-<div class="welcome">
-  {{ mascot('default', 110) }}
-  <div><h2>สวัสดี {{ g.user['name'] }}</h2><p class="muted">ยินดีต้อนรับสู่ AIAT Safety — เลือกเมนูเพื่อเริ่มใช้งาน หรือแจ้งอันตรายที่พบได้ทันที</p></div>
+<section class="hero">
+  <div class="hero-text">
+    <p class="hero-kicker">สวัสดี {{ g.user['name'] }}</p>
+    <h1>ความปลอดภัยเริ่มได้จาก… <em>ทุกคน</em></h1>
+    <p>ร่วมกันสังเกต แจ้ง และแก้ไขอันตราย เพื่อให้ทุกคนกลับบ้านอย่างปลอดภัย</p>
+    <div class="hero-chips">
+      {% set hrefs = nav | map(attribute='items') | sum(start=[]) | map(attribute='href') | list %}
+      {% if can_report %}<a class="chip-link" href="/hazards/new">{{ icon('plus', 16) }} แจ้งอันตราย</a>{% endif %}
+      {% if '/hazards' in hrefs %}<a class="chip-link" href="/hazards">{{ icon('clipboard', 16) }} ทะเบียนอันตราย</a>{% endif %}
+      {% if '/overview' in hrefs %}<a class="chip-link" href="/overview">{{ icon('overview', 16) }} ภาพรวมความเสี่ยง</a>{% endif %}
+      <a class="chip-link" href="/notifications">{{ icon('bell', 16) }} การแจ้งเตือนของฉัน</a>
+    </div>
+  </div>
+  <div class="hero-art">{{ mascot('alert', 170, decorative=True) }}</div>
+</section>
+
+<div class="kpis">
+  <a class="kpi" href="/hazards"><span class="kpi-ic">{{ icon('clipboard', 22) }}</span><span class="kpi-n" data-kpi="open">{{ open_total }}</span><span class="kpi-l">รายการเปิดอยู่</span></a>
+  <a class="kpi kpi-danger" href="/hazards?sort=due_date&amp;dir=asc"><span class="kpi-ic">{{ icon('clock', 22) }}</span><span class="kpi-n" data-kpi="overdue">{{ overdue }}</span><span class="kpi-l">เกินกำหนด</span></a>
+  <a class="kpi kpi-ok" href="/hazards?status=closed"><span class="kpi-ic">{{ icon('check', 22) }}</span><span class="kpi-n" data-kpi="closed-month">{{ closed_month }}</span><span class="kpi-l">ปิดแล้วเดือนนี้</span></a>
+  <a class="kpi kpi-warn" href="/hazards?sort=score&amp;dir=desc"><span class="kpi-ic">{{ icon('alert', 22) }}</span><span class="kpi-n" data-kpi="high-risk">{{ high_risk }}</span><span class="kpi-l">ความเสี่ยงสูงที่เปิดอยู่</span></a>
 </div>
-<div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn" href="/hazards">ลงทะเบียนบันทึกอันตราย</a><a class="btn" href="/notifications">การแจ้งเตือนของฉัน</a></div>
+
+<div class="dash-grid">
+  <section class="card dash-card" aria-labelledby="h-trend">
+    <h2 id="h-trend">แนวโน้ม 12 เดือน</h2>
+    {{ trend_svg }}
+    <p class="legend"><span class="dot" style="background:#2166d6"></span> แจ้ง <span class="dot" style="background:#16a34a"></span> ปิด</p>
+    <table class="sr-only"><caption>ข้อมูลแนวโน้มรายเดือน</caption><tr><th>เดือน</th><th>แจ้ง</th><th>ปิด</th></tr>
+      {% for m, r, c in trend_rows %}<tr><td>{{ m }}</td><td>{{ r }}</td><td>{{ c }}</td></tr>{% endfor %}</table>
+  </section>
+  <section class="card dash-card" aria-labelledby="h-type">
+    <h2 id="h-type">รายการเปิดอยู่ตามประเภทอันตราย</h2>
+    {% if legend %}
+    <div class="donut-row">{{ donut }}
+      <ul class="donut-legend">{% for l in legend %}<li><span class="dot" style="background:{{ l.color }}"></span><span>{{ l.name }}</span><strong>{{ l.n }}</strong><small>{{ l.pct }}%</small></li>{% endfor %}</ul>
+    </div>
+    {% else %}<div class="empty-state">{{ mascot('sleeping', 80, decorative=True) }}<p>ยังไม่มีรายการเปิดอยู่</p></div>{% endif %}
+  </section>
+</div>
+
+<section class="card dash-card" aria-labelledby="h-latest" style="max-width:none;margin:16px 0 0">
+  <h2 id="h-latest">รายการอันตรายล่าสุด</h2>
+  {% if latest %}
+  <div class="table-wrap"><table class="table-stack" style="width:100%">
+    <thead><tr><th>รหัส</th><th>หัวข้อ</th><th>พื้นที่</th><th>ความเสี่ยง</th><th>สถานะ</th><th>ครบกำหนด</th></tr></thead>
+    {% for r in latest %}<tr>
+      <td data-label="รหัส"><a href="/hazards/{{ r['id'] }}">{{ r['code'] }}</a></td><td data-label="หัวข้อ">{{ r['title'] }}</td><td data-label="พื้นที่">{{ r['area_name'] }}</td>
+      <td data-label="ความเสี่ยง">{% if r['level_name'] %}<span class="chip" style="background:{{ r['level_color'] }}">{{ r['level_name'] }}</span>{% else %}<span class="muted">ยังไม่ประเมิน</span>{% endif %}</td>
+      <td data-label="สถานะ">{{ status_th[r['status']] }}</td>
+      <td data-label="ครบกำหนด">{{ r['due_date'] or '' }}{% if r['overdue'] %} <span class="chip" style="background:var(--danger)">เกินกำหนด</span>{% endif %}</td>
+    </tr>{% endfor %}
+  </table></div>
+  {% else %}<div class="empty-state">{{ mascot('sleeping', 80, decorative=True) }}<p>ยังไม่มีรายการอันตราย — ถ้าพบสิ่งผิดปกติ แจ้งได้เลย</p></div>{% endif %}
+</section>
+
+<div class="dash-grid" style="margin-top:16px">
+  <section class="card dash-card" aria-labelledby="h-quick">
+    <h2 id="h-quick">เมนูลัด</h2>
+    <div class="quick">
+      {% for grp in nav %}{% for it in grp.items if it.href != '/' %}<a href="{{ it.href }}">{{ icon(it.icon, 22) }}<span>{{ it.label }}</span></a>{% endfor %}{% endfor %}
+    </div>
+  </section>
+  <section class="card dash-card" aria-labelledby="h-notes">
+    <h2 id="h-notes">การแจ้งเตือนล่าสุดของฉัน</h2>
+    {% for n in notes %}<a class="note-row{{ ' unread' if not n['read_at'] }}" href="/notifications/go/{{ n['id'] }}"><span>{{ n['title'] }}</span><small>{{ n['created_at'] }}</small></a>
+    {% else %}<div class="empty-state">{{ mascot('sleeping', 80, decorative=True) }}<p>ยังไม่มีการแจ้งเตือน</p></div>{% endfor %}
+    {% if notes %}<a href="/notifications">ดูทั้งหมด →</a>{% endif %}
+  </section>
+</div>
 {% endblock %}
