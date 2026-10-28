@@ -34,6 +34,21 @@ def role_permissions(db, role_key: str) -> set[str]:
     return user_permissions(db, {"role": role_key})
 
 
+def permission_any(*keys: str):
+    """ต้องล็อกอินและมีสิทธิ์อย่างน้อยหนึ่งคีย์ (ไม่ล็อกอิน → กลับ Hub, ไม่มีสิทธิ์ → 403)"""
+    def deco(view):
+        @wraps(view)
+        def wrapped(*a, **kw):
+            if g.get("user") is None:
+                return redirect(current_app.config["HUB_URL"])
+            from .db import get_db
+            if not set(keys) & user_permissions(get_db(), g.user):
+                abort(403)
+            return view(*a, **kw)
+        return wrapped
+    return deco
+
+
 def permission_required(*keys: str):
     """ต้องล็อกอิน (ไม่ล็อกอิน → กลับ Hub) และมีสิทธิ์ครบทุกคีย์ (ไม่ครบ → 403)"""
     def deco(view):

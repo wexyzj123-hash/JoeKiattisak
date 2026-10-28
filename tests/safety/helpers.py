@@ -1,13 +1,13 @@
 from safety.db import connect
 
 
-def make_user(app, role="admin", hub_uid=None, name="ทดสอบ", active=1) -> int:
+def make_user(app, role="admin", hub_uid=None, name="ทดสอบ", active=1, factory_id=None, department_id=None) -> int:
     con = connect(app.config["DATABASE"])
     try:
         if hub_uid is None:
             hub_uid = con.execute("SELECT COALESCE(MAX(hub_uid),0)+1 FROM safety_users").fetchone()[0]
-        cur = con.execute("INSERT INTO safety_users(hub_uid,name,role,active) VALUES(?,?,?,?)",
-                          (hub_uid, name, role, active))
+        cur = con.execute("INSERT INTO safety_users(hub_uid,name,role,active,factory_id,department_id) VALUES(?,?,?,?,?,?)",
+                          (hub_uid, name, role, active, factory_id, department_id))
         con.commit()
         return cur.lastrowid
     finally:

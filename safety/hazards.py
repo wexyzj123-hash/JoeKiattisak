@@ -8,6 +8,8 @@ from . import timeutil
 from .master import REGISTRY, breadcrumb
 from .perms import user_permissions
 
+STATUS_TH = {"reported": "แจ้งแล้ว", "assessed": "ประเมินแล้ว", "assigned": "มอบหมายแล้ว", "closed": "ปิดแล้ว", "rejected": "ปฏิเสธ"}
+EVENT_TH = {"reported": "แจ้งอันตราย", "assessed": "ประเมินความเสี่ยง", "assigned": "มอบหมาย", "closed": "ปิดรายการ", "rejected": "ปฏิเสธรายการ"}
 VIEW_ALL_PERMS = {"hazard.assess", "hazard.assign", "hazard.close", "master.view"}
 
 

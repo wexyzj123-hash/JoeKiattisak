@@ -16,7 +16,7 @@ def safety_app(tmp_path):
     from safety.app import create_app
     return create_app({"TESTING": True, "DATABASE": str(tmp_path / "safety.db"), "SECRET_KEY": "k",
                        "SSO_SECRET": SECRET, "SERVICE_TOKEN": "svc-token",
-                       "HUB_URL": "http://hub.test"})
+                       "HUB_URL": "http://hub.test", "UPLOAD_ROOT": str(tmp_path / "uploads")})
 
 
 def csrf(client) -> str:

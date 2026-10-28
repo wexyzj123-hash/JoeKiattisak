@@ -1,0 +1,41 @@
+{% extends "layout.html" %}
+{% block title %}ลงทะเบียนบันทึกอันตราย · AIAT Safety{% endblock %}
+{% macro th(key, label) -%}
+<th><a href="?{{ {'status': f.status, 'level': f.level, 'area': f.area, 'q': f.q, 'mine': f.mine, 'sort': key, 'dir': ('desc' if f.sort == key and f.dir == 'asc' else 'asc')} | urlencode }}">{{ label }}{% if f.sort == key %} {{ '▲' if f.dir == 'asc' else '▼' }}{% endif %}</a></th>
+{%- endmacro %}
+{% block body %}
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+  <h1>ลงทะเบียนบันทึกอันตราย</h1>
+  {% if can_report %}<a class="btn" href="/hazards/new">+ แจ้งอันตราย</a>{% endif %}
+</div>
+<form method="get" class="card" style="max-width:none;margin:0 0 16px;display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+  <label>ค้นหา (รหัส / หัวข้อ) <input name="q" value="{{ f.q }}"></label>
+  <label>สถานะ <select name="status"><option value="">ทั้งหมด</option>
+    {% for k, v in status_th.items() %}<option value="{{ k }}" {{ 'selected' if f.status == k }}>{{ v }}</option>{% endfor %}</select></label>
+  <label>ระดับความเสี่ยง <select name="level"><option value="">ทั้งหมด</option><option value="none" {{ 'selected' if f.level == 'none' }}>ยังไม่ประเมิน</option>
+    {% for l in levels %}<option value="{{ l['name_th'] }}" {{ 'selected' if f.level == l['name_th'] }}>{{ l['name_th'] }}</option>{% endfor %}</select></label>
+  <label>พื้นที่เสี่ยง <select name="area"><option value="">ทั้งหมด</option>
+    {% for a in areas %}<option value="{{ a['id'] }}" {{ 'selected' if f.area == a['id'] }}>{{ a['name_th'] }}</option>{% endfor %}</select></label>
+  <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="mine" value="1" {{ 'checked' if f.mine == '1' }}> เฉพาะของฉัน</label>
+  <button type="submit">ค้นหา</button>
+</form>
+<div class="card" style="max-width:none;margin:0;overflow-x:auto">
+<table style="width:100%;border-collapse:collapse">
+  <tr>{{ th('code', 'รหัส') }}<th>หัวข้อ</th><th>พื้นที่</th>{{ th('score', 'ความเสี่ยง') }}{{ th('status', 'สถานะ') }}{{ th('due_date', 'ครบกำหนด') }}<th>ผู้แจ้ง</th><th>ผู้รับผิดชอบ</th>{{ th('reported_at', 'แจ้งเมื่อ') }}</tr>
+  {% for r in rows %}
+  <tr>
+    <td><a href="/hazards/{{ r['id'] }}">{{ r['code'] }}</a></td><td>{{ r['title'] }}</td><td>{{ r['area_name'] }}</td>
+    <td>{% if r['level_name'] %}<span class="chip" style="background:{{ r['level_color'] }}">{{ r['level_name'] }} ({{ r['score'] }})</span>{% else %}<span style="color:var(--muted)">ยังไม่ประเมิน</span>{% endif %}</td>
+    <td>{{ status_th[r['status']] }}</td>
+    <td>{{ r['due_date'] or '' }}{% if r['overdue'] %} <span class="chip" style="background:var(--danger)">เกินกำหนด</span>{% endif %}</td>
+    <td>{{ r['reporter_name'] }}</td><td>{{ r['owner_name'] or '' }}</td><td>{{ r['reported_at'] }}</td>
+  </tr>
+  {% else %}<tr><td colspan="9">ไม่พบรายการ</td></tr>{% endfor %}
+</table></div>
+<nav style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;align-items:center">
+  {% for p in range(1, pages + 1) %}{% if p == 1 or p == pages or (p - page) | abs <= 2 %}
+  <a class="btn" style="{{ 'opacity:.6' if p != page }}" href="?{{ {'status': f.status, 'level': f.level, 'area': f.area, 'q': f.q, 'mine': f.mine, 'sort': f.sort, 'dir': f.dir, 'page': p} | urlencode }}">{{ p }}</a>
+  {% endif %}{% endfor %}
+  <span style="color:var(--muted)">ทั้งหมด {{ total }} รายการ</span>
+</nav>
+{% endblock %}

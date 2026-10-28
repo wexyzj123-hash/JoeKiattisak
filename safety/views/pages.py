@@ -22,9 +22,3 @@ def overview():
 @safety_login_required
 def overview_departments():
     return _soon("ภาพรวมตามหน่วยงาน")
-
-
-@bp.route("/hazards")
-@safety_login_required
-def hazards():
-    return _soon("ลงทะเบียนบันทึกอันตราย")

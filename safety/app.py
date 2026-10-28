@@ -31,11 +31,14 @@ def create_app(test_config: dict | None = None) -> Flask:
     if not app.config["SECRET_KEY"]:
         app.config["SECRET_KEY"] = hashlib.sha256(("safety-session:" + app.config["SSO_SECRET"]).encode()).hexdigest()
 
+    app.config.setdefault("UPLOAD_ROOT", os.environ.get("SAFETY_UPLOAD_ROOT", os.path.join(ROOT, "data", "uploads")))
+    app.config.setdefault("MAX_CONTENT_LENGTH", 25 * 1024 * 1024)
     safetydb.init_app(app)
     install_csrf(app)
     app.before_request(load_user)
 
-    from .views import api, criteria, custom_fields, home, master, pages, roles, sso, users
+    from .views import api, criteria, custom_fields, hazards, home, master, pages, roles, sso, users
+    app.register_blueprint(hazards.bp)
     app.register_blueprint(custom_fields.bp)
     app.register_blueprint(criteria.bp)
     app.register_blueprint(pages.bp)
