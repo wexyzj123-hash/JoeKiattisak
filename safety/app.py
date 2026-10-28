@@ -63,9 +63,10 @@ def create_app(test_config: dict | None = None) -> Flask:
             return redirect(app.config["HUB_URL"])
         return None
 
-    from .views import (api, criteria, custom_fields, hazards, home, master, notifications, notify_admin, overview, pages, profile,
+    from .views import (api, criteria, custom_fields, hazards, home, master, notifications, notify_admin, overview, pages, profile, search,
                         roles, sso, users)
     app.register_blueprint(notify_admin.bp)
+    app.register_blueprint(search.bp)
     app.register_blueprint(notifications.bp)
     app.register_blueprint(profile.bp)
     app.register_blueprint(overview.bp)

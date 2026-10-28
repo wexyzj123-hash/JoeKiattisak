@@ -1,0 +1,24 @@
+{% extends "layout.html" %}
+{% block title %}ค้นหา — Safety 4.0{% endblock %}
+{% block body %}
+<h1>ค้นหารายการอันตราย</h1>
+<form method="get" action="/search" class="card" style="max-width:none;margin:0 0 16px;grid-template-columns:minmax(0,1fr) auto;align-items:end">
+  <label>รหัสหรือหัวข้อ<input type="search" name="q" value="{{ q }}" maxlength="100" autofocus></label>
+  <button type="submit">ค้นหา</button>
+</form>
+{% if q %}
+<p class="muted">พบ {{ rows|length }} รายการสำหรับ “{{ q }}”{% if rows|length >= 50 %} (แสดงสูงสุด 50 รายการล่าสุด){% endif %}</p>
+{% if rows %}
+<div class="card" style="max-width:none;margin:0"><div class="table-wrap"><table class="table-stack" style="width:100%">
+  <thead><tr><th>รหัส</th><th>หัวข้อ</th><th>พื้นที่</th><th>ความเสี่ยง</th><th>สถานะ</th><th>แจ้งเมื่อ</th></tr></thead>
+  {% for r in rows %}<tr>
+    <td data-label="รหัส"><a href="/hazards/{{ r['id'] }}">{{ r['code'] }}</a></td><td data-label="หัวข้อ">{{ r['title'] }}</td><td data-label="พื้นที่">{{ r['area_name'] }}</td>
+    <td data-label="ความเสี่ยง">{% if r['level_name'] %}<span class="chip" style="background:{{ r['level_color'] }}">{{ r['level_name'] }} ({{ r['score'] }})</span>{% else %}<span class="muted">ยังไม่ประเมิน</span>{% endif %}</td>
+    <td data-label="สถานะ">{{ status_th[r['status']] }}</td><td data-label="แจ้งเมื่อ">{{ r['reported_at'] }}</td>
+  </tr>{% endfor %}
+</table></div></div>
+{% else %}
+<div class="card" style="max-width:none;margin:0"><div class="empty-state">{{ mascot('thinking', 96, decorative=True) }}<p>ไม่พบรายการที่ตรงกับคำค้นหา ลองใช้คำอื่นหรือรหัสบางส่วนดูนะ</p></div></div>
+{% endif %}
+{% endif %}
+{% endblock %}
