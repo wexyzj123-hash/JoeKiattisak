@@ -334,9 +334,16 @@ def gate_enabled(db) -> bool:
 
 
 def open_blockers(db, source_kind: str, source_id: int) -> int:
-    """จำนวน CAPA ของรายการต้นทางนี้ที่ยังไม่ยืนยัน (ไม่นับที่ยกเลิก)"""
-    return db.execute("SELECT COUNT(*) FROM capas WHERE source_kind=? AND source_id=? AND status NOT IN ('verified','cancelled')",
-                      (source_kind, source_id)).fetchone()[0]
+    """จำนวน CAPA ของรายการต้นทางนี้ที่ยังไม่ยืนยัน (ไม่นับที่ยกเลิก); รายการอันตรายที่สร้างจากข้อไม่ผ่านของการตรวจ
+    นับ CAPA ของข้อนั้น (source=patrol) ด้วย เพราะเป็นข้อค้นพบเดียวกัน"""
+    sql = "SELECT COUNT(*) FROM capas WHERE status NOT IN ('verified','cancelled') AND ((source_kind=? AND source_id=?)"
+    args: list = [source_kind, source_id]
+    if source_kind == "hazard":
+        row = db.execute("SELECT patrol_answer_id FROM hazards WHERE id=?", (source_id,)).fetchone()
+        if row and row[0] is not None:
+            sql += " OR (source_kind='patrol' AND source_id=?)"
+            args.append(row[0])
+    return db.execute(sql + ")", args).fetchone()[0]
 
 
 def gate_errors(db, source_kind: str, source_id: int) -> list[str]:

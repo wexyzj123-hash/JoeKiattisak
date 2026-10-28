@@ -214,3 +214,17 @@ def test_closed_hazard_with_gate_on_still_notifies_once(w):
     assert workflow.close(w.db, w.verifier, hid, "แก้แล้ว") == []
     assert w.db.execute("SELECT COUNT(*) FROM hazard_events WHERE kind='closed'").fetchone()[0] == 1
     assert w.db.execute("SELECT COUNT(*) FROM notifications WHERE event='hazard_closed'").fetchone()[0] <= 1
+
+
+def test_gate_counts_capas_of_the_patrol_finding_a_hazard_was_created_from(w):
+    turn_gate(w)
+    _, (a1, a2) = w.submitted_round()
+    hid, _ = patrol.finding_to_hazard(w.db, w.insp, a2, w.type_id, w.source_id, w.root)
+    cid, errs = patrol.finding_to_capa(w.db, w.insp, a2, w.capa_form())
+    assert errs == [] and capa.open_blockers(w.db, "hazard", hid) == 1
+    w.db.execute("UPDATE hazards SET status='assigned', owner_id=?, due_date='2026-04-01' WHERE id=?", (w.insp["id"], hid)); w.db.commit()
+    assert workflow.close(w.db, w.verifier, hid, "แก้แล้ว") and hazard_status(w, hid) == "assigned"
+    capa.complete(w.db, w.owner, cid, "ทำแล้ว"); capa.verify(w.db, w.verifier, cid, "ok")
+    assert workflow.close(w.db, w.verifier, hid, "แก้แล้ว") == []
+    other = patrol.finding_to_capa(w.db, w.insp, a1, w.capa_form())[0]                                    # CAPA ของข้ออื่นไม่เกี่ยว
+    assert other and capa.open_blockers(w.db, "hazard", hid) == 0
