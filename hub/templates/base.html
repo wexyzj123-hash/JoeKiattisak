@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}AIAT Hub{% endblock %}</title>
+<link rel="stylesheet" href="/static/theme.css">
+</head>
+<body>
+<main class="wrap">
+{% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
+{% block body %}{% endblock %}
+</main>
+</body>
+</html>

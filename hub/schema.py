@@ -1,0 +1,29 @@
+"""hub/schema.py — ตารางของ Hub (รันซ้ำได้ ไม่ทำลายข้อมูลเดิม)"""
+from __future__ import annotations
+
+DDL = """
+CREATE TABLE IF NOT EXISTS users (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    username      TEXT NOT NULL UNIQUE,
+    name_th       TEXT NOT NULL DEFAULT '',
+    password_hash TEXT NOT NULL,
+    role          TEXT NOT NULL DEFAULT 'viewer'
+                  CHECK (role IN ('admin','supervisor','technician','viewer')),
+    active        INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS app_registry (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    key           TEXT NOT NULL UNIQUE,
+    name_th       TEXT NOT NULL,
+    url           TEXT NOT NULL,
+    icon          TEXT NOT NULL DEFAULT 'app',
+    enabled       INTEGER NOT NULL DEFAULT 1,
+    required_role TEXT NOT NULL DEFAULT '',
+    sort          INTEGER NOT NULL DEFAULT 0
+);
+"""
+
+
+def ensure_schema(con) -> None:
+    con.executescript(DDL)
+    con.commit()

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}ตั้งค่าครั้งแรก · AIAT Hub{% endblock %}
+{% block body %}
+<form method="post" class="card">
+  <h1>สร้างผู้ดูแลระบบคนแรก</h1>
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <label>ชื่อผู้ใช้ <input name="username" required></label>
+  <label>ชื่อ-นามสกุล <input name="name_th"></label>
+  <label>รหัสผ่าน (อย่างน้อย 8 ตัวอักษร) <input name="password" type="password" minlength="8" required></label>
+  <button type="submit">สร้างผู้ดูแลระบบ</button>
+</form>
+{% endblock %}
