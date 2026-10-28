@@ -125,7 +125,7 @@ def test_dashboard_kpi_card_number_text_and_scope(safety_app):
     for role in ("reporter", "viewer", "admin"):                                                # ทุกคนเห็นตัวเลขระดับองค์กร (ไม่มี PII)
         html = login(safety_app, role).get("/").get_data(as_text=True)
         assert re.search(r'data-kpi="days-no-lti"[^>]*>6<', html), role
-    assert len(re.findall(r'class="kpi[ "]', login(safety_app, "admin").get("/").get_data(as_text=True))) == 5
+    assert len(re.findall(r'class="kpi[ "]', login(safety_app, "admin").get("/").get_data(as_text=True))) == 6
 
 
 def test_stats_query_count_constant_with_many_incidents(safety_app):

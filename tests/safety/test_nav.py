@@ -18,29 +18,32 @@ HOME = ["หน้าหลัก"]
 
 def test_admin_sees_home_plus_all_groups_in_screenshot_order():
     groups = nav_items(ALL, "/")
-    assert [g.title for g in groups] == ["เมนูหลัก", "ระบบข้อมูลหลัก", "อุบัติเหตุ", "ข้อมูลองค์กร", "ผู้ดูแลระบบ"]
+    assert [g.title for g in groups] == ["เมนูหลัก", "ระบบข้อมูลหลัก", "อุบัติเหตุ", "ตรวจความปลอดภัย & CAPA", "ข้อมูลองค์กร", "ผู้ดูแลระบบ"]
     assert labels(groups) == [
         HOME,
         ["ภาพรวมดำเนินงาน", "ภาพรวมตามหน่วยงาน", "พื้นที่เสี่ยง", "ลงทะเบียนบันทึกอันตราย", "แหล่งที่มา", "ประเภทอันตราย"],
         ["รายงานอุบัติเหตุ / Near Miss", "สถิติอุบัติเหตุ"],
+        ["ตรวจความปลอดภัย (Safety Patrol)", "CAPA"],
         ["โรงงาน", "แผนก", "ไลน์/กลุ่มงาน", "สาเหตุอุบัติเหตุ"],
-        ["ประเภทผู้ใช้งาน", "ผู้ใช้งาน", "เกณฑ์ความเสี่ยง", "ฟิลด์เพิ่มเติม", "ระดับความรุนแรงการบาดเจ็บ", "แบบตรวจความปลอดภัย", "แผนการตรวจ", "การแจ้งเตือน"]]
+        ["ประเภทผู้ใช้งาน", "ผู้ใช้งาน", "เกณฑ์ความเสี่ยง", "ฟิลด์เพิ่มเติม", "ระดับความรุนแรงการบาดเจ็บ", "แบบตรวจความปลอดภัย", "แผนการตรวจ", "ตั้งค่า CAPA", "การแจ้งเตือน"]]
     hrefs = [i.href for g in groups for i in g.items]
     assert hrefs == ["/", "/overview", "/overview/departments", "/master/risk-areas", "/hazards", "/master/hazard-sources",
-                     "/master/hazard-types", "/incidents", "/incidents/stats", "/master/factories", "/master/departments", "/master/lines",
+                     "/master/hazard-types", "/incidents", "/incidents/stats", "/patrols", "/capas", "/master/factories", "/master/departments", "/master/lines",
                      "/master/incident-causes", "/admin/roles", "/admin/users", "/admin/criteria", "/admin/custom-fields",
-                     "/admin/injury-severities", "/admin/checklists", "/admin/patrol-plans", "/admin/notifications"]
+                     "/admin/injury-severities", "/admin/checklists", "/admin/patrol-plans", "/admin/capa-settings", "/admin/notifications"]
 
 
 def test_nav_items_hide_unpermitted():
     viewer = nav_items({"master.view"}, "/")
     assert [g.title for g in viewer] == ["เมนูหลัก", "ระบบข้อมูลหลัก", "ข้อมูลองค์กร"]
     assert "ลงทะเบียนบันทึกอันตราย" not in labels(viewer)[1]
-    assert labels(nav_items({"hazard.report"}, "/")) == [HOME, ["ลงทะเบียนบันทึกอันตราย"]]
-    assert labels(nav_items({"incident.report"}, "/")) == [HOME, ["รายงานอุบัติเหตุ / Near Miss"]]
+    assert labels(nav_items({"hazard.report"}, "/")) == [HOME, ["ลงทะเบียนบันทึกอันตราย"], ["CAPA"]]                # เจ้าของ CAPA ทั่วไปเข้าหน้า CAPA ได้
+    assert labels(nav_items({"incident.report"}, "/")) == [HOME, ["รายงานอุบัติเหตุ / Near Miss"], ["CAPA"]]
+    assert labels(nav_items({"patrol.view"}, "/")) == [HOME, ["ตรวจความปลอดภัย (Safety Patrol)"]]
+    assert labels(nav_items({"capa.verify"}, "/")) == [HOME, ["CAPA"]]
     assert nav_items(set(), "/") == []
     assert labels(nav_items({"users.manage"}, "/")) == [HOME, ["ผู้ใช้งาน", "การแจ้งเตือน"]]
-    assert labels(nav_items({"criteria.manage"}, "/")) == [HOME, ["เกณฑ์ความเสี่ยง", "ฟิลด์เพิ่มเติม", "ระดับความรุนแรงการบาดเจ็บ"]]
+    assert labels(nav_items({"criteria.manage"}, "/")) == [HOME, ["เกณฑ์ความเสี่ยง", "ฟิลด์เพิ่มเติม", "ระดับความรุนแรงการบาดเจ็บ", "ตั้งค่า CAPA"]]
     assert labels(nav_items({"roles.manage"}, "/")) == [HOME, ["ประเภทผู้ใช้งาน"]]
 
 

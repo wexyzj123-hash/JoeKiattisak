@@ -1,0 +1,11 @@
+{% extends "layout.html" %}
+{% block title %}ตั้งค่า CAPA · Safety 4.0{% endblock %}
+{% block body %}
+<h1>ตั้งค่า CAPA</h1>
+<form method="post" class="card" style="max-width:640px;margin:0">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" name="require_capa_verified" value="1" {{ 'checked' if enabled }}>
+    <span>ต้องยืนยัน CAPA ครบก่อนปิดรายการอันตราย/อุบัติเหตุ<br><small class="muted">เมื่อเปิด การปิดรายการที่มี CAPA ค้างอยู่ (ที่ยังไม่ยืนยันและไม่ได้ยกเลิก) จะถูกปฏิเสธพร้อมแจ้งจำนวนที่เหลือ — ค่าเริ่มต้นคือปิด</small></span></label>
+  <button type="submit">บันทึก</button>
+</form>
+{% endblock %}

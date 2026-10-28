@@ -113,8 +113,25 @@ def world(tmp_path_factory):
     for n in range(4):
         patrol_admin.add_item(con, adm, clid, {"section": "หมวดความปลอดภัย", "text_th": f"รายการตรวจที่ {n + 1} " + "ข้อความยาว" * 8, "weight": str(n + 1), "require_photo_on_fail": "1" if n % 2 else ""})
     patrol_admin.create_plan(con, adm, {"checklist_id": str(clid), "risk_area_id": str(ch["a"]), "frequency": "weekly", "inspector_id": ""})
+    from safety import capa as capa_mod, patrol as patrol_mod
+    insp = user_row(con, add_user(con, "assessor", "ผู้ตรวจประจำ"))
+    sub_form = None
+    d_round, _ = patrol_mod.start_round(con, adm, checklist_id=clid, risk_area_id=ch["a"])
+    d_answers = con.execute("SELECT id FROM patrol_answers WHERE round_id=?", (d_round,)).fetchall()
+    patrol_mod.save_answers(con, adm, d_round, {f"result_{d_answers[0][0]}": "pass"})
+    s_round, _ = patrol_mod.start_round(con, insp, checklist_id=clid, risk_area_id=ch["a"])
+    s_ans = con.execute("SELECT id FROM patrol_answers WHERE round_id=? ORDER BY sort", (s_round,)).fetchall()
+    patrol_mod.save_answers(con, insp, s_round, {f"result_{a[0]}": ("fail" if i == 0 else "pass") for i, a in enumerate(s_ans)})
+    con.execute("UPDATE checklist_items SET require_photo_on_fail=0"); con.commit()
+    errs = patrol_mod.submit_round(con, insp, s_round)
+    assert errs == [], errs
+    cp_open, _ = capa_mod.create(con, adm, {"title": "ติดตั้งการ์ดเครื่องจักร " + "ยาว" * 20, "description": "รายละเอียด " * 20, "owner_id": str(reporter), "due_date": "2026-12-01",
+                                            "action_type": "corrective", "risk_area_id": str(ch["a"])})
+    cp_done, _ = capa_mod.create(con, adm, {"title": "ทำเสร็จแล้ว", "owner_id": str(reporter), "due_date": "2026-12-05", "action_type": "preventive", "risk_area_id": str(ch["a"])},
+                                 None)
+    capa_mod.complete(con, user_row(con, reporter), cp_done, "ดำเนินการแล้ว")
     h, sv = Live(hub), Live(saf)
-    yield {"hub": h, "safety": sv, "hub_cookie": h.cookie({"uid": hub_uid}), "safe_cookie": sv.cookie({"suid": admin}), "hz": hz, "inc": inc, "checklist": clid, "chain": ch}
+    yield {"hub": h, "safety": sv, "hub_cookie": h.cookie({"uid": hub_uid}), "safe_cookie": sv.cookie({"suid": admin}), "hz": hz, "inc": inc, "checklist": clid, "d_round": d_round, "s_round": s_round, "cp_open": cp_open, "cp_done": cp_done, "chain": ch}
     h.close(); sv.close()
 
 
@@ -137,6 +154,9 @@ def pages(world):
         P("sf-incident-reported", s, f"/incidents/{world['inc']['reported']}", sc), P("sf-incident-closed", s, f"/incidents/{world['inc']['closed']}", sc),
         P("sf-injury-admin", s, "/admin/injury-severities", sc),
         P("sf-checklists", s, "/admin/checklists", sc), P("sf-checklist-items", s, f"/admin/checklists/{world['checklist']}", sc), P("sf-patrol-plans", s, "/admin/patrol-plans", sc), P("sf-incident-stats", s, "/incidents/stats", sc), P("sf-incident-causes", s, "/master/incident-causes", sc),
+        P("sf-patrols", s, "/patrols", sc), P("sf-patrol-draft", s, f"/patrols/{world['d_round']}", sc), P("sf-patrol-submitted", s, f"/patrols/{world['s_round']}", sc),
+        P("sf-capas", s, "/capas", sc), P("sf-capa-new", s, "/capas/new", sc), P("sf-capa-open", s, f"/capas/{world['cp_open']}", sc),
+        P("sf-capa-done", s, f"/capas/{world['cp_done']}", sc), P("sf-capa-settings", s, "/admin/capa-settings", sc),
         P("sf-sso-error", s, "/sso?token=bad"),
     ]
 
@@ -174,7 +194,7 @@ def test_stacked_tables_are_labelled_and_controls_usable_on_narrow_screens(resul
     bad = [(r["name"], r["theme"], r["width"], r["stack"]) for r in results
            if r["stack"]["unlabeled"] or r["stack"]["narrowControls"] or r["stack"]["outside"]]
     assert not bad, json.dumps(bad, ensure_ascii=False)[:3000]
-    assert {r["name"] for r in results if r["stack"]["tables"]} >= {"sf-notify-admin", "sf-checklists", "sf-checklist-items", "sf-patrol-plans", "sf-users", "sf-custom-fields", "sf-criteria", "sf-incidents", "sf-injury-admin",
+    assert {r["name"] for r in results if r["stack"]["tables"]} >= {"sf-notify-admin", "sf-checklists", "sf-checklist-items", "sf-patrol-plans", "sf-patrols", "sf-capas", "sf-users", "sf-custom-fields", "sf-criteria", "sf-incidents", "sf-injury-admin",
                                                                     "sf-hazards", "sf-factories", "hub-admin-users", "hub-admin-apps"}
 
 

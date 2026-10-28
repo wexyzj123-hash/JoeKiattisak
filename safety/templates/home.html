@@ -25,6 +25,8 @@
   {{ kpi_card('kpi-danger', '/hazards?overdue=1', 'clock', 'overdue', overdue, 'เกินกำหนด') }}
   {{ kpi_card('kpi-ok', '/hazards?closed_month=1', 'check', 'closed-month', closed_month, 'ปิดแล้วเดือนนี้') }}
   {{ kpi_card('kpi-warn', '/hazards?high=1', 'alert', 'high-risk', high_risk, 'ความเสี่ยงสูงที่เปิดอยู่') }}
+  {% if can_capa %}<a class="kpi kpi-danger" href="/capas?overdue=1"><span class="kpi-ic">{{ icon('clock', 22) }}</span><span class="kpi-n" data-kpi="capa-overdue">{{ capa_overdue }}</span><span class="kpi-l">CAPA เกินกำหนด</span></a>
+  {% else %}<div class="kpi kpi-danger"><span class="kpi-ic">{{ icon('clock', 22) }}</span><span class="kpi-n" data-kpi="capa-overdue">{{ capa_overdue }}</span><span class="kpi-l">CAPA เกินกำหนด</span></div>{% endif %}
   <div class="kpi kpi-ok"><span class="kpi-ic">{{ icon('shield', 22) }}</span><span class="kpi-n" data-kpi="days-no-lti"{% if lti_date %} data-last="{{ lti_date }}"{% endif %}>{{ lti_days if lti_days is not none else '-' }}</span>
     <span class="kpi-l">{% if lti_days is not none %}วันปลอดอุบัติเหตุ (หยุดงาน) · ล่าสุด {{ lti_date }}{% else %}วันปลอดอุบัติเหตุ — ยังไม่มีอุบัติเหตุหยุดงานที่บันทึก{% endif %}</span></div>
 </div>
@@ -60,6 +62,19 @@
     </tr>{% endfor %}
   </table></div>
   {% else %}<div class="empty-state">{{ mascot('sleeping', 80, decorative=True) }}<p>ยังไม่มีรายการอันตราย — ถ้าพบสิ่งผิดปกติ แจ้งได้เลย</p></div>{% endif %}
+</section>
+
+<section class="card dash-card" aria-labelledby="h-patrol" style="max-width:none;margin:16px 0 0">
+  <h2 id="h-patrol">การตรวจความปลอดภัยล่าสุด</h2>
+  {% if latest_patrols %}
+  <div class="table-wrap"><table class="table-stack" style="width:100%">
+    <tr><th>รหัส</th><th>แบบตรวจ</th><th>พื้นที่</th><th>ผู้ตรวจ</th><th>ผลการตรวจ</th><th>วันที่</th></tr>
+    {% for r in latest_patrols %}<tr>
+      <td>{% if can_patrol %}<a href="/patrols/{{ r['id'] }}">{{ r['code'] }}</a>{% else %}{{ r['code'] }}{% endif %}</td><td>{{ r['checklist_name'] }}</td><td>{{ r['area_name'] }}</td><td>{{ r['inspector_name'] }}</td>
+      <td>{% if r['failed'] %}<span class="chip" style="background:#ff4d4f">ไม่ผ่าน {{ r['failed'] }}</span>{% else %}<span class="chip" style="background:#2ecc71">ผ่าน</span>{% endif %}{% if r['score_pct'] is not none %} {{ r['score_pct'] }}%{% endif %}</td>
+      <td>{{ r['submitted_at'] }}</td></tr>{% endfor %}
+  </table></div>
+  {% else %}<div class="empty-state">{{ mascot('sleeping', 80, decorative=True) }}<p>ยังไม่มีการตรวจความปลอดภัยที่ส่งแล้ว</p></div>{% endif %}
 </section>
 
 <div class="dash-grid" style="margin-top:16px">

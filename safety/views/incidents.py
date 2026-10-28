@@ -7,7 +7,7 @@ import os
 
 from flask import Blueprint, abort, current_app, flash, g, redirect, render_template, request, send_file
 
-from .. import charts, incident_flow, incident_stats, incidents, timeutil
+from .. import capa, charts, incident_flow, incident_stats, incidents, timeutil
 from ..db import get_db
 from ..hazards import risk_area_options, user_in_scope
 from ..images import MAX_PER_KIND, ImageError, save_attachment
@@ -168,7 +168,7 @@ def detail(incident_id):
     lost_time = inc["kind"] == "accident" and bool(sev and sev[0])
     slots = min(MAX_PEOPLE_SLOTS, (len(people) if people else 0) + 3)
     return render_template(
-        "incident_detail.html", i=inc, refs=refs, crumb=breadcrumb(db, REGISTRY["risk-areas"], inc["risk_area_id"]), actions=actions,
+        "incident_detail.html", capas=capa.for_source(db, g.user, "incident", incident_id), can_capa="capa.create" in perms, i=inc, refs=refs, crumb=breadcrumb(db, REGISTRY["risk-areas"], inc["risk_area_id"]), actions=actions,
         people=people, people_n=people_count(db, incident_id), people_roles=PEOPLE_ROLES, slots=slots, owners=owners, events=events,
         status_th=INCIDENT_STATUS_TH, kind_th=INCIDENT_KIND_TH, event_th=INCIDENT_EVENT_TH,
         severities=db.execute("SELECT * FROM injury_severities WHERE active=1 ORDER BY rank, id").fetchall(),

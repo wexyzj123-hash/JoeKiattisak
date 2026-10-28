@@ -32,6 +32,10 @@ MENU = (
         ("รายงานอุบัติเหตุ / Near Miss", "/incidents", "alert", "incident.report"),
         ("สถิติอุบัติเหตุ", "/incidents/stats", "overview", "incident.investigate"),
     )),
+    ("ตรวจความปลอดภัย & CAPA", (
+        ("ตรวจความปลอดภัย (Safety Patrol)", "/patrols", "clipboard", "patrol.perform|patrol.view"),
+        ("CAPA", "/capas", "check", "capa.create|capa.verify|hazard.report|incident.report|patrol.perform"),
+    )),
     ("ข้อมูลองค์กร", (
         ("โรงงาน", "/master/factories", "building", "master.view"),
         ("แผนก", "/master/departments", "layers", "master.view"),
@@ -46,13 +50,14 @@ MENU = (
         ("ระดับความรุนแรงการบาดเจ็บ", "/admin/injury-severities", "sliders", "criteria.manage"),
         ("แบบตรวจความปลอดภัย", "/admin/checklists", "clipboard", "patrol.manage"),
         ("แผนการตรวจ", "/admin/patrol-plans", "clock", "patrol.manage"),
+        ("ตั้งค่า CAPA", "/admin/capa-settings", "sliders", "criteria.manage"),
         ("การแจ้งเตือน", "/admin/notifications", "bell", "users.manage"),
     )),
 )
 
 
 def nav_items(user_permissions: set[str], current_path: str) -> list[Group]:
-    groups = [Group(title, [Item(label, href, icon) for label, href, icon, perm in items if perm in user_permissions])
+    groups = [Group(title, [Item(label, href, icon) for label, href, icon, perm in items if any(p in user_permissions for p in perm.split("|"))])
               for title, items in MENU]
     groups = [g for g in groups if g.items]
     if groups:                                                                   # หน้าหลักปักไว้บนสุดสำหรับทุกคนที่เห็นเมนูใด ๆ

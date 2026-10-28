@@ -344,3 +344,46 @@ def gate_errors(db, source_kind: str, source_id: int) -> list[str]:
         return []
     n = open_blockers(db, source_kind, source_id)
     return [f"ยังมี CAPA ที่ยังไม่ยืนยันผล {n} รายการ — ต้องยืนยันครบก่อนปิดรายการนี้"] if n else []
+
+
+# ---------- รายการ/สรุป ----------
+def _visible_where(db, user) -> tuple[str, list]:
+    sql, args = scope_sql(user)
+    if not user_permissions(db, user) & {"capa.create", "capa.verify"}:
+        sql, args = f"{sql} AND (c.owner_id = ? OR c.created_by = ?)", args + [user["id"]] * 2
+    return sql, args
+
+
+def overdue_count(db, user, today: date | None = None) -> int:
+    where, args = _visible_where(db, user)
+    return db.execute(f"SELECT COUNT(*) FROM capas c WHERE {where} AND c.status IN ('open','in_progress') AND c.due_date < ?",
+                      args + [(today or timeutil.today()).isoformat()]).fetchone()[0]
+
+
+def _like(q: str) -> str:
+    return "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+
+def list_capas(db, user, *, status: str = "", mine: bool = False, overdue: bool = False, q: str = "", limit: int = 20, offset: int = 0):
+    """(แถว, จำนวนทั้งหมด) ตามขอบเขต/สิทธิ์การมองเห็น + ตัวกรอง"""
+    where, args = _visible_where(db, user)
+    if status in STATUS_TH:
+        where, args = where + " AND c.status = ?", args + [status]
+    if mine:
+        where, args = where + " AND (c.owner_id = ? OR c.created_by = ?)", args + [user["id"]] * 2
+    if overdue:
+        where, args = where + " AND c.status IN ('open','in_progress') AND c.due_date < ?", args + [timeutil.today().isoformat()]
+    q = (q or "").strip()[:100]
+    if q:
+        where, args = where + " AND (c.code LIKE ? ESCAPE '\\' OR c.title LIKE ? ESCAPE '\\')", args + [_like(q)] * 2
+    total = db.execute(f"SELECT COUNT(*) FROM capas c WHERE {where}", args).fetchone()[0]
+    rows = db.execute(f"SELECT c.*, a.name_th AS area_name, u.name AS owner_name FROM capas c JOIN risk_areas a ON a.id = c.risk_area_id "
+                      f"JOIN safety_users u ON u.id = c.owner_id WHERE {where} ORDER BY c.due_date, c.id LIMIT ? OFFSET ?",
+                      args + [limit, offset]).fetchall()
+    return rows, total
+
+
+def for_source(db, user, source_kind: str, source_id: int) -> list:
+    """CAPA ของรายการต้นทางที่ผู้ใช้มองเห็น"""
+    return [r for r in db.execute("SELECT * FROM capas WHERE source_kind=? AND source_id=? ORDER BY id", (source_kind, source_id))
+            if visible_capa(db, user, r["id"]) is not None]

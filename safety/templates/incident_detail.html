@@ -118,6 +118,12 @@
 </div>
 </div>
 <div class="card" style="max-width:none;margin:16px 0 0">
+  <h2>CAPA ที่เกี่ยวข้อง</h2>
+  {% for c in capas %}<p style="margin:0"><a href="/capas/{{ c['id'] }}">{{ c['code'] }}</a> · {{ c['title'] }} <span class="muted">({{ {'open': 'เปิด', 'in_progress': 'กำลังดำเนินการ', 'done': 'เสร็จ รอยืนยัน', 'verified': 'ยืนยันแล้ว', 'cancelled': 'ยกเลิก'}[c['status']] }})</span></p>
+  {% else %}<p class="muted" style="margin:0">ยังไม่มี CAPA</p>{% endfor %}
+  {% if can_capa %}<a class="btn" href="/capas/new?source=incident:{{ i['id'] }}" style="justify-self:start">+ สร้าง CAPA</a>{% endif %}
+</div>
+<div class="card" style="max-width:none;margin:16px 0 0">
   <h2>ประวัติการดำเนินการ</h2>
   <ol style="padding-left:20px;display:grid;gap:8px">
   {% for e in events %}

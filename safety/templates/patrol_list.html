@@ -1,0 +1,41 @@
+{% extends "layout.html" %}
+{% block title %}ตรวจความปลอดภัย · Safety 4.0{% endblock %}
+{% block body %}
+<h1>ตรวจความปลอดภัย (Safety Patrol)</h1>
+{% if due %}
+<section class="card dash-card" style="max-width:none;margin:0 0 16px" aria-labelledby="h-due">
+  <h2 id="h-due">ถึงรอบตรวจ</h2>
+  <div class="table-wrap"><table class="table-stack" style="width:100%">
+    <tr><th>แบบตรวจ</th><th>พื้นที่</th><th>ความถี่</th><th>สถานะ</th><th>ดำเนินการ</th></tr>
+    {% for p in due %}<tr{{ ' style="outline:2px solid var(--primary)"'|safe if highlight == p['id'] }}>
+      <td>{{ p['checklist_name'] }}</td><td>{{ p['area_name'] }}</td><td>{{ {'daily': 'รายวัน', 'weekly': 'รายสัปดาห์', 'monthly': 'รายเดือน'}[p['frequency']] }}</td>
+      <td>{% if p['status']['state'] == 'overdue' %}<span class="chip" style="background:var(--danger)">เลยกำหนด {{ p['status']['days'] }} วัน</span>{% else %}<span class="chip" style="background:#facc15">ครบกำหนดวันนี้</span>{% endif %}</td>
+      <td>{% if can_perform %}<form method="post" action="/patrols/start"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="plan_id" value="{{ p['id'] }}"><button type="submit">เริ่มตรวจ</button></form>{% endif %}</td>
+    </tr>{% endfor %}
+  </table></div>
+</section>
+{% endif %}
+{% if can_perform %}
+<form method="post" action="/patrols/start" class="card" style="max-width:640px;margin:0 0 16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));align-items:end">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <label>แบบตรวจ <select name="checklist_id" required><option value="">— เลือก —</option>{% for c in checklists %}<option value="{{ c['id'] }}">{{ c['code'] }} · {{ c['name_th'] }}</option>{% endfor %}</select></label>
+  <label>พื้นที่เสี่ยง <select name="risk_area_id" required><option value="">— เลือก —</option>{% for a in areas %}<option value="{{ a['id'] }}">{{ a['breadcrumb'] }}</option>{% endfor %}</select></label>
+  <button type="submit">เริ่มรอบตรวจ</button>
+</form>
+{% endif %}
+<div class="card" style="max-width:none;margin:0"><div class="table-wrap">
+<table class="table-stack" style="width:100%">
+  <tr><th>รหัส</th><th>แบบตรวจ</th><th>พื้นที่</th><th>ผู้ตรวจ</th><th>สถานะ</th><th>ผลการตรวจ</th><th>วันที่</th></tr>
+  {% for r in rows %}
+  <tr>
+    <td><a href="/patrols/{{ r['id'] }}">{{ r['code'] }}</a></td><td>{{ r['checklist_name'] }}</td><td>{{ r['area_name'] }}</td><td>{{ r['inspector_name'] }}</td>
+    <td>{{ 'ส่งแล้ว' if r['status'] == 'submitted' else 'ร่าง (ยังไม่ส่ง)' }}</td>
+    <td>{% if r['status'] == 'submitted' %}ผ่าน {{ r['passed'] }} · ไม่ผ่าน {{ r['failed'] }} · ไม่เกี่ยวข้อง {{ r['na'] }}{% if r['score_pct'] is not none %} · {{ r['score_pct'] }}%{% endif %}{% endif %}</td>
+    <td>{{ r['submitted_at'] or r['started_at'] }}</td>
+  </tr>
+  {% else %}<tr><td colspan="7"><div class="empty-state">{{ mascot('sleeping', 96, decorative=True) }}<p>ยังไม่มีรอบตรวจ</p></div></td></tr>{% endfor %}
+</table></div></div>
+<nav style="display:flex;gap:8px;margin-top:12px">
+  {% if page > 1 %}<a class="btn" href="?page={{ page - 1 }}">← ก่อนหน้า</a>{% endif %}{% if has_next %}<a class="btn" href="?page={{ page + 1 }}">ถัดไป →</a>{% endif %}
+</nav>
+{% endblock %}

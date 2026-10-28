@@ -9,7 +9,7 @@ import re
 
 from flask import Blueprint, abort, current_app, flash, g, redirect, render_template, request, send_file
 
-from .. import timeutil, workflow
+from .. import capa, timeutil, workflow
 from ..customfields import fields_for_type
 from ..db import get_db
 from ..hazards import EVENT_TH, STATUS_TH, can_view_all, hazard_scope_sql, risk_area_options, user_in_scope, visible_hazard
@@ -203,7 +203,7 @@ def detail(hazard_id):
     events = db.execute("SELECT e.*, u.name AS actor FROM hazard_events e LEFT JOIN safety_users u ON u.id = e.actor_id "
                         "WHERE e.hazard_id=? ORDER BY e.id", (hazard_id,)).fetchall()
     return render_template(
-        "hazard_detail.html", h=h, refs=refs, crumb=breadcrumb(db, REGISTRY["risk-areas"], h["risk_area_id"]),
+        "hazard_detail.html", capas=capa.for_source(db, g.user, "hazard", hazard_id), can_capa="capa.create" in perms, h=h, refs=refs, crumb=breadcrumb(db, REGISTRY["risk-areas"], h["risk_area_id"]),
         custom=_custom_rows(db, h), actions=actions, events=events, status_th=STATUS_TH, event_th=EVENT_TH,
         photos={k: db.execute("SELECT * FROM hazard_attachments WHERE hazard_id=? AND kind=? ORDER BY id", (hazard_id, k)).fetchall() for k in KINDS},
         overdue=bool(h["due_date"] and h["due_date"] < today and is_open),
