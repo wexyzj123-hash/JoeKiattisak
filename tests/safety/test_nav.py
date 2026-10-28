@@ -17,11 +17,11 @@ def test_admin_sees_all_three_groups_in_screenshot_order():
     assert labels(groups) == [
         ["ภาพรวมดำเนินงาน", "ภาพรวมตามหน่วยงาน", "พื้นที่เสี่ยง", "ลงทะเบียนบันทึกอันตราย", "แหล่งที่มา", "ประเภทอันตราย"],
         ["โรงงาน", "แผนก", "ไลน์/กลุ่มงาน"],
-        ["ประเภทผู้ใช้งาน", "ผู้ใช้งาน"]]
+        ["ประเภทผู้ใช้งาน", "ผู้ใช้งาน", "เกณฑ์ความเสี่ยง", "ฟิลด์เพิ่มเติม", "การแจ้งเตือน"]]
     hrefs = [i.href for g in groups for i in g.items]
     assert hrefs == ["/overview", "/overview/departments", "/master/risk-areas", "/hazards", "/master/hazard-sources",
                      "/master/hazard-types", "/master/factories", "/master/departments", "/master/lines",
-                     "/admin/roles", "/admin/users"]
+                     "/admin/roles", "/admin/users", "/admin/criteria", "/admin/custom-fields", "/admin/notifications"]
 
 
 def test_nav_items_hide_unpermitted():
@@ -30,8 +30,9 @@ def test_nav_items_hide_unpermitted():
     assert "ลงทะเบียนบันทึกอันตราย" not in labels(viewer)[0]
     assert labels(nav_items({"hazard.report"}, "/")) == [["ลงทะเบียนบันทึกอันตราย"]]
     assert nav_items(set(), "/") == []
-    only_users = nav_items({"users.manage"}, "/")
-    assert labels(only_users) == [["ผู้ใช้งาน"]]
+    assert labels(nav_items({"users.manage"}, "/")) == [["ผู้ใช้งาน", "การแจ้งเตือน"]]
+    assert labels(nav_items({"criteria.manage"}, "/")) == [["เกณฑ์ความเสี่ยง", "ฟิลด์เพิ่มเติม"]]
+    assert labels(nav_items({"roles.manage"}, "/")) == [["ประเภทผู้ใช้งาน"]]
 
 
 @pytest.mark.parametrize("path, active", [
@@ -41,6 +42,10 @@ def test_nav_items_hide_unpermitted():
     ("/master/hazard-types/5/edit", "ประเภทอันตราย"),
     ("/master/risk-areas/new", "พื้นที่เสี่ยง"),
     ("/admin/users", "ผู้ใช้งาน"),
+    ("/admin/criteria", "เกณฑ์ความเสี่ยง"),
+    ("/admin/custom-fields", "ฟิลด์เพิ่มเติม"),
+    ("/admin/notifications", "การแจ้งเตือน"),
+    ("/hazards/12", "ลงทะเบียนบันทึกอันตราย"),
 ])
 def test_nav_marks_exactly_one_active_item(path, active):
     marked = [i.label for g in nav_items(ALL, path) for i in g.items if i.active]
@@ -75,3 +80,17 @@ def test_home_and_admin_pages_use_the_shell(safety_app):
 def test_sso_error_page_has_no_sidebar(safety_app):
     html = safety_app.test_client().get("/sso?token=bad").get_data(as_text=True)
     assert 'class="sidebar"' not in html
+
+
+def test_notifications_placeholder_200_for_user_managers_and_mentions_phase_4(safety_app):
+    page = login(safety_app, "admin").get("/admin/notifications")
+    assert page.status_code == 200 and "เฟส 4" in page.get_data(as_text=True)
+    assert safety_app.test_client().get("/admin/notifications").status_code == 302
+    assert login(safety_app, "viewer").get("/admin/notifications").status_code == 403
+
+
+def test_every_nav_link_resolves_for_admin(safety_app):
+    c = login(safety_app, "admin")
+    for g in nav_items(ALL, "/"):
+        for item in g.items:
+            assert c.get(item.href).status_code == 200, item.href

@@ -35,6 +35,9 @@ MENU = (
     ("ผู้ดูแลระบบ", (
         ("ประเภทผู้ใช้งาน", "/admin/roles", "roles.manage"),
         ("ผู้ใช้งาน", "/admin/users", "users.manage"),
+        ("เกณฑ์ความเสี่ยง", "/admin/criteria", "criteria.manage"),
+        ("ฟิลด์เพิ่มเติม", "/admin/custom-fields", "criteria.manage"),
+        ("การแจ้งเตือน", "/admin/notifications", "users.manage"),
     )),
 )
 
