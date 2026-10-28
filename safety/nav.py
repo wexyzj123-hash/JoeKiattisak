@@ -28,16 +28,21 @@ MENU = (
         ("แหล่งที่มา", "/master/hazard-sources", "source", "master.view"),
         ("ประเภทอันตราย", "/master/hazard-types", "tag", "master.view"),
     )),
+    ("อุบัติเหตุ", (
+        ("รายงานอุบัติเหตุ / Near Miss", "/incidents", "alert", "incident.report"),
+    )),
     ("ข้อมูลองค์กร", (
         ("โรงงาน", "/master/factories", "building", "master.view"),
         ("แผนก", "/master/departments", "layers", "master.view"),
         ("ไลน์/กลุ่มงาน", "/master/lines", "sliders", "master.view"),
+        ("สาเหตุอุบัติเหตุ", "/master/incident-causes", "tag", "master.view"),
     )),
     ("ผู้ดูแลระบบ", (
         ("ประเภทผู้ใช้งาน", "/admin/roles", "shield", "roles.manage"),
         ("ผู้ใช้งาน", "/admin/users", "users", "users.manage"),
         ("เกณฑ์ความเสี่ยง", "/admin/criteria", "alert", "criteria.manage"),
         ("ฟิลด์เพิ่มเติม", "/admin/custom-fields", "puzzle", "criteria.manage"),
+        ("ระดับความรุนแรงการบาดเจ็บ", "/admin/injury-severities", "sliders", "criteria.manage"),
         ("การแจ้งเตือน", "/admin/notifications", "bell", "users.manage"),
     )),
 )

@@ -93,9 +93,23 @@ def world(tmp_path_factory):
     for i in range(3):
         con.execute("INSERT INTO notifications(user_id,event,title,body,link,dedupe_key) VALUES(?,?,?,?,?,?)",
                     (admin, "overdue", f"เกินกำหนด HZ-{i}", "รายละเอียด " * 20, f"/hazards/{hz['assigned']}", f"k{i}"))
+    from safety import incident_flow, incidents
+    from tests.safety.factories import severity_id, user_row
+    adm, rep = user_row(con, admin), user_row(con, reporter)
+    inc = {}
+    inc["reported"], _ = incidents.report(con, rep, {"kind": "accident", "occurred_at": "2026-03-01T08:15", "risk_area_id": str(ch["a"]),
+        "title": long_title, "description": "รายละเอียด " * 30, "immediate_action": "ปฐมพยาบาล", "injury_severity_id": str(severity_id(con, "lost_time")),
+        "people_name_0": "สมชาย ใจดี", "people_no_0": "E1001", "people_name_1": "สมหญิง รักดี", "people_role_1": "witness"})
+    inc["closed"], _ = incidents.report(con, rep, {"kind": "near_miss", "occurred_at": "2026-03-02T09:00", "risk_area_id": str(ch["a"]),
+        "title": "เกือบชนเสา", "likelihood": "4", "severity": "4"})
+    other_admin = user_row(con, add_user(con, "admin", "แอดมินอีกคน"))
+    cause = con.execute("SELECT id FROM incident_causes LIMIT 1").fetchone()[0]
+    incident_flow.assign_investigator(con, adm, inc["closed"], adm["id"], "")
+    incident_flow.record_investigation(con, adm, inc["closed"], cause, "ขาดป้ายเตือน", "ติดป้าย", "")
+    incident_flow.close(con, other_admin, inc["closed"], "ติดป้ายแล้ว")
     con.commit()
     h, sv = Live(hub), Live(saf)
-    yield {"hub": h, "safety": sv, "hub_cookie": h.cookie({"uid": hub_uid}), "safe_cookie": sv.cookie({"suid": admin}), "hz": hz, "chain": ch}
+    yield {"hub": h, "safety": sv, "hub_cookie": h.cookie({"uid": hub_uid}), "safe_cookie": sv.cookie({"suid": admin}), "hz": hz, "inc": inc, "chain": ch}
     h.close(); sv.close()
 
 
@@ -113,7 +127,11 @@ def pages(world):
         P("sf-criteria", s, "/admin/criteria", sc), P("sf-custom-fields", s, "/admin/custom-fields", sc), P("sf-roles", s, "/admin/roles", sc),
         P("sf-users", s, "/admin/users", sc), P("sf-notify-admin", s, "/admin/notifications", sc),
         P("sf-factories", s, "/master/factories", sc), P("sf-factory-edit", s, f"/master/factories/{world['chain']['f']}/edit", sc),
-        P("sf-departments-new", s, "/master/departments/new", sc), P("sf-sso-error", s, "/sso?token=bad"),
+        P("sf-departments-new", s, "/master/departments/new", sc),
+        P("sf-incidents", s, "/incidents", sc), P("sf-incident-new", s, "/incidents/new", sc),
+        P("sf-incident-reported", s, f"/incidents/{world['inc']['reported']}", sc), P("sf-incident-closed", s, f"/incidents/{world['inc']['closed']}", sc),
+        P("sf-injury-admin", s, "/admin/injury-severities", sc), P("sf-incident-causes", s, "/master/incident-causes", sc),
+        P("sf-sso-error", s, "/sso?token=bad"),
     ]
 
 
@@ -150,7 +168,7 @@ def test_stacked_tables_are_labelled_and_controls_usable_on_narrow_screens(resul
     bad = [(r["name"], r["theme"], r["width"], r["stack"]) for r in results
            if r["stack"]["unlabeled"] or r["stack"]["narrowControls"] or r["stack"]["outside"]]
     assert not bad, json.dumps(bad, ensure_ascii=False)[:3000]
-    assert {r["name"] for r in results if r["stack"]["tables"]} >= {"sf-notify-admin", "sf-users", "sf-custom-fields", "sf-criteria",
+    assert {r["name"] for r in results if r["stack"]["tables"]} >= {"sf-notify-admin", "sf-users", "sf-custom-fields", "sf-criteria", "sf-incidents", "sf-injury-admin",
                                                                     "sf-hazards", "sf-factories", "hub-admin-users", "hub-admin-apps"}
 
 

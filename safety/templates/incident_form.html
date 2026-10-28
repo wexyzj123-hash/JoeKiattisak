@@ -1,0 +1,51 @@
+{% extends "layout.html" %}
+{% block title %}แจ้งอุบัติเหตุ / Near Miss · Safety 4.0{% endblock %}
+{% block body %}
+<h1>แจ้งอุบัติเหตุ / Near Miss</h1>
+{% for e in errors %}<div class="flash">{{ e }}</div>{% endfor %}
+<form method="post" enctype="multipart/form-data" class="card" style="max-width:720px;margin:0">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <fieldset style="border:0;padding:0;margin:0;display:flex;gap:16px;flex-wrap:wrap"><legend class="muted">ประเภทเหตุการณ์</legend>
+    {% for k, v in kind_th.items() %}<label style="display:flex;gap:6px;align-items:center"><input type="radio" name="kind" value="{{ k }}" {{ 'checked' if values.get('kind', 'accident') == k }}> {{ v }}{{ ' (เกือบเกิดอุบัติเหตุ ไม่มีผู้บาดเจ็บ)' if k == 'near_miss' }}</label>{% endfor %}
+  </fieldset>
+  <label>หัวข้อเหตุการณ์ <input name="title" value="{{ values.get('title', '') }}" required maxlength="200"></label>
+  <label>วันเวลาที่เกิดเหตุ <input type="datetime-local" name="occurred_at" value="{{ values.get('occurred_at', '') }}" required></label>
+  <label>พื้นที่เสี่ยง <select name="risk_area_id" required><option value="">— เลือก —</option>
+    {% for a in areas %}<option value="{{ a['id'] }}" {{ 'selected' if values.get('risk_area_id', '') | string == a['id'] | string }}>{{ a['breadcrumb'] }}</option>{% endfor %}</select></label>
+  <label>รายละเอียดเหตุการณ์ <textarea name="description" rows="4" maxlength="2000">{{ values.get('description', '') }}</textarea></label>
+  <label>การแก้ไข/ปฐมพยาบาลเบื้องต้น <textarea name="immediate_action" rows="2" maxlength="1000">{{ values.get('immediate_action', '') }}</textarea></label>
+  <div data-for="accident">
+    <label>ระดับความรุนแรงของการบาดเจ็บ <select name="injury_severity_id"><option value="">— เลือก —</option>
+      {% for s in severities %}<option value="{{ s['id'] }}" {{ 'selected' if values.get('injury_severity_id', '') | string == s['id'] | string }}>{{ s['name_th'] }}</option>{% endfor %}</select></label>
+  </div>
+  <div data-for="near_miss" style="display:grid;gap:12px">
+    <p class="muted" style="margin:0">ประเมินความรุนแรงที่ <em>อาจ</em> เกิดขึ้นหากเหตุการณ์ไม่ถูกหยุดไว้ (ใช้เกณฑ์ความเสี่ยงเดียวกับรายการอันตราย)</p>
+    <label>โอกาสที่จะเกิด <select name="likelihood"><option value="">— เลือก —</option>{% for s in scales['likelihood'] %}<option value="{{ s['level'] }}" {{ 'selected' if values.get('likelihood', '') | string == s['level'] | string }}>{{ s['level'] }} — {{ s['label_th'] }}</option>{% endfor %}</select></label>
+    <label>ความรุนแรงที่อาจเกิด <select name="severity"><option value="">— เลือก —</option>{% for s in scales['severity'] %}<option value="{{ s['level'] }}" {{ 'selected' if values.get('severity', '') | string == s['level'] | string }}>{{ s['level'] }} — {{ s['label_th'] }}</option>{% endfor %}</select></label>
+  </div>
+  <fieldset style="border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;gap:10px"><legend>ผู้เกี่ยวข้อง (ข้อมูลส่วนบุคคล — เห็นได้เฉพาะผู้สอบสวนและผู้แจ้ง)</legend>
+    {% for n in range(slots) %}
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,140px),1fr));gap:8px">
+      <label>ชื่อ-สกุล <input name="people_name_{{ n }}" value="{{ values.get('people_name_' ~ n, '') }}" maxlength="120"></label>
+      <label>รหัสพนักงาน <input name="people_no_{{ n }}" value="{{ values.get('people_no_' ~ n, '') }}" maxlength="30"></label>
+      <label>บทบาท <select name="people_role_{{ n }}">{% for k, v in people_roles.items() %}<option value="{{ k }}" {{ 'selected' if values.get('people_role_' ~ n, 'injured') == k }}>{{ v }}</option>{% endfor %}</select></label>
+      <label>หมายเหตุ <input name="people_note_{{ n }}" value="{{ values.get('people_note_' ~ n, '') }}" maxlength="300"></label>
+    </div>
+    {% endfor %}
+  </fieldset>
+  <label>รูปถ่ายที่เกิดเหตุ (ไม่เกิน {{ max_photos }} รูป, JPEG/PNG/WebP, รูปละไม่เกิน 10 MB)
+    <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple capture="environment"></label>
+  <div style="display:flex;gap:8px"><button type="submit">บันทึกการแจ้ง</button><a class="btn" href="/incidents">ยกเลิก</a></div>
+</form>
+<script>
+// แสดงเฉพาะช่องของประเภทที่เลือก (เซิร์ฟเวอร์ตรวจซ้ำเสมอ)
+(function () {
+  function apply() {
+    var kind = (document.querySelector('input[name="kind"]:checked') || {}).value;
+    document.querySelectorAll('[data-for]').forEach(function (el) { el.style.display = el.getAttribute('data-for') === kind ? '' : 'none'; });
+  }
+  document.querySelectorAll('input[name="kind"]').forEach(function (r) { r.addEventListener('change', apply); });
+  apply();
+})();
+</script>
+{% endblock %}

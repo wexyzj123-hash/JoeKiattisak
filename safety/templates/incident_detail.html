@@ -1,0 +1,119 @@
+{% extends "layout.html" %}
+{% block title %}{{ i['code'] }} · Safety 4.0{% endblock %}
+{% macro photo_grid(items) -%}
+{% if items %}<div style="display:flex;gap:8px;flex-wrap:wrap">
+  {% for a in items %}<a href="/incidents/{{ i['id'] }}/files/{{ a['id'] }}" target="_blank" rel="noopener">
+    <img src="/incidents/{{ i['id'] }}/files/{{ a['id'] }}" alt="{{ a['orig_name'] }}" title="{{ a['orig_name'] }}" style="height:110px;border-radius:8px;border:1px solid var(--line)"></a>{% endfor %}
+</div>{% else %}<span class="muted">ไม่มีรูป</span>{% endif %}
+{%- endmacro %}
+{% macro people_slot(n, p) -%}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,130px),1fr));gap:8px">
+  <label>ชื่อ-สกุล <input name="people_name_{{ n }}" value="{{ p['name'] if p else '' }}" maxlength="120"></label>
+  <label>รหัสพนักงาน <input name="people_no_{{ n }}" value="{{ p['employee_no'] if p else '' }}" maxlength="30"></label>
+  <label>บทบาท <select name="people_role_{{ n }}">{% for k, v in people_roles.items() %}<option value="{{ k }}" {{ 'selected' if (p['role'] if p else 'injured') == k }}>{{ v }}</option>{% endfor %}</select></label>
+  <label>หมายเหตุ <input name="people_note_{{ n }}" value="{{ p['note'] if p else '' }}" maxlength="300"></label>
+</div>
+{%- endmacro %}
+{% block body %}
+<p><a href="/incidents">← กลับรายการ</a></p>
+<h1>{{ i['code'] }} · {{ i['title'] }}</h1>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+  <span class="chip" style="background:{{ '#ff9f1c' if i['kind'] == 'accident' else '#facc15' }}">{{ kind_th[i['kind']] }}</span>
+  <span class="chip" style="background:var(--panel);border:1px solid var(--line);color:var(--text)">{{ status_th[i['status']] }}</span>
+  {% if i['kind'] == 'near_miss' and i['level_name'] %}<span class="chip" style="background:{{ i['level_color'] }}">ระดับที่อาจเกิด {{ i['level_name'] }} ({{ i['score'] }})</span>{% endif %}
+  {% if overdue %}<span class="chip" style="background:var(--danger)">เกินกำหนดสอบสวน</span>{% endif %}
+</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px">
+<div class="card" style="max-width:none;margin:0">
+  <h2>รายละเอียด</h2>
+  <p><strong>พื้นที่:</strong> {{ crumb }}</p>
+  <p><strong>เกิดเหตุเมื่อ:</strong> {{ i['occurred_at'] }} · <strong>ผู้แจ้ง:</strong> {{ refs['reporter'] }} ({{ i['reported_at'] }})</p>
+  {% if i['kind'] == 'accident' and refs['severity_name'] %}<p><strong>ความรุนแรงของการบาดเจ็บ:</strong> {{ refs['severity_name'] }}{% if i['lost_days'] is not none %} · หยุดงาน {{ i['lost_days'] }} วัน{% endif %}</p>{% endif %}
+  {% if i['kind'] == 'near_miss' and i['score'] %}<p><strong>การประเมินที่อาจเกิด:</strong> โอกาส {{ i['likelihood'] }} × ความรุนแรง {{ i['severity'] }} = {{ i['score'] }}</p>{% endif %}
+  <p style="white-space:pre-wrap">{{ i['description'] }}</p>
+  {% if i['immediate_action'] %}<p><strong>การแก้ไขเบื้องต้น:</strong> {{ i['immediate_action'] }}</p>{% endif %}
+  {% if refs['hazard_code'] %}<p><strong>อันตรายที่เกี่ยวข้อง:</strong> <a href="/hazards/{{ i['related_hazard_id'] }}">{{ refs['hazard_code'] }}</a></p>{% endif %}
+  {% if i['owner_id'] %}<p><strong>ผู้สอบสวน:</strong> {{ refs['owner'] }} · <strong>ครบกำหนด:</strong> {{ i['due_date'] }}</p>{% endif %}
+  {% if i['root_cause'] %}<p><strong>สาเหตุหลัก:</strong> {{ refs['cause_name'] }}<br><strong>สาเหตุราก:</strong> {{ i['root_cause'] }}<br><strong>มาตรการแก้ไขป้องกัน:</strong> {{ i['corrective_action'] }}</p>{% endif %}
+  {% if i['closing_note'] %}<p><strong>ผลการแก้ไข:</strong> {{ i['closing_note'] }}</p>{% endif %}
+  {% if i['reject_reason'] %}<p><strong>เหตุผลที่ปฏิเสธ:</strong> {{ i['reject_reason'] }}</p>{% endif %}
+  <h3>ผู้เกี่ยวข้อง</h3>
+  {% if people is none %}<p class="muted">ผู้เกี่ยวข้อง {{ people_n }} คน (ชื่อเป็นข้อมูลส่วนบุคคล เห็นได้เฉพาะผู้สอบสวนและผู้แจ้ง)</p>
+  {% elif people %}<ul style="margin:0;padding-left:20px">{% for p in people %}<li>{{ p['name'] }}{% if p['employee_no'] %} ({{ p['employee_no'] }}){% endif %} — {{ people_roles[p['role']] }}{% if p['note'] %} · {{ p['note'] }}{% endif %}</li>{% endfor %}</ul>
+  {% else %}<span class="muted">ไม่มีการระบุผู้เกี่ยวข้อง</span>{% endif %}
+  <h3>รูปที่เกิดเหตุ</h3>{{ photo_grid(photos['before']) }}
+  <h3>รูปหลังแก้ไข</h3>{{ photo_grid(photos['after']) }}
+</div>
+<div style="display:grid;gap:16px;align-content:start">
+  {% if actions.assign %}
+  <form method="post" action="/incidents/{{ i['id'] }}/assign" class="card" style="max-width:none;margin:0">
+    <h2>{{ 'เปลี่ยนผู้สอบสวน' if i['status'] == 'investigating' else 'มอบหมายผู้สอบสวน' }}</h2>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>ผู้สอบสวน <select name="owner_id" required><option value="">— เลือก —</option>
+      {% for o in owners %}<option value="{{ o['id'] }}" {{ 'selected' if i['owner_id'] == o['id'] }}>{{ o['name'] }} ({{ o['role_name'] }})</option>{% endfor %}</select></label>
+    <label>วันครบกำหนด (เว้นว่าง = 14 วัน) <input type="date" name="due_date" value="{{ i['due_date'] or '' }}"></label>
+    <label>หมายเหตุ <input name="note" maxlength="1000"></label>
+    <button type="submit">มอบหมาย</button>
+  </form>
+  {% endif %}
+  {% if actions.investigate %}
+  <form method="post" action="/incidents/{{ i['id'] }}/investigate" class="card" style="max-width:none;margin:0">
+    <h2>บันทึกผลสอบสวนและมาตรการ</h2>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>สาเหตุหลัก <select name="cause_id" required><option value="">— เลือก —</option>
+      {% for c in causes %}<option value="{{ c['id'] }}" {{ 'selected' if i['cause_id'] == c['id'] }}>{{ c['name_th'] }}</option>{% endfor %}</select></label>
+    <label>สาเหตุราก (ทำไม-ทำไม 5 ครั้ง) <textarea name="root_cause" rows="4" maxlength="2000" required>{{ i['root_cause'] }}</textarea></label>
+    <label>มาตรการแก้ไขและป้องกัน <textarea name="corrective_action" rows="3" maxlength="2000" required>{{ i['corrective_action'] }}</textarea></label>
+    {% if lost_time %}<label>จำนวนวันที่หยุดงาน (ต้องระบุ) <input name="lost_days" inputmode="numeric" value="{{ i['lost_days'] if i['lost_days'] is not none else '' }}" required></label>
+    {% else %}<input type="hidden" name="lost_days" value="">{% endif %}
+    <button type="submit">บันทึกผลสอบสวน</button>
+  </form>
+  {% endif %}
+  {% if actions.close %}
+  <form method="post" action="/incidents/{{ i['id'] }}/close" enctype="multipart/form-data" class="card" style="max-width:none;margin:0">
+    <h2>ปิดรายการ</h2>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <p class="muted" style="margin:0">ผู้ปิดรายการต้องไม่เคยเป็นผู้สอบสวนรายการนี้</p>
+    <label>ผลการแก้ไข / สรุป <textarea name="note" rows="3" maxlength="1000" required></textarea></label>
+    <label>รูปหลังแก้ไข <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple></label>
+    <button type="submit">ปิดรายการ</button>
+  </form>
+  {% elif actions.close_blocked %}<div class="card" style="max-width:none;margin:0"><p class="muted">คุณเคยเป็นผู้สอบสวนรายการนี้ จึงปิดรายการเองไม่ได้ — ต้องให้ผู้อื่นที่มีสิทธิ์ปิดรายการเป็นผู้ปิด</p></div>
+  {% endif %}
+  {% if actions.people %}
+  <form method="post" action="/incidents/{{ i['id'] }}/people" class="card" style="max-width:none;margin:0">
+    <h2>แก้ไขรายชื่อผู้เกี่ยวข้อง</h2>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    {% for n in range(slots) %}{{ people_slot(n, people[n] if people and n < people|length else none) }}{% endfor %}
+    <button type="submit">บันทึกรายชื่อ (แทนที่รายการเดิมทั้งหมด)</button>
+  </form>
+  {% endif %}
+  {% if actions.reject %}
+  <form method="post" action="/incidents/{{ i['id'] }}/reject" class="card" style="max-width:none;margin:0">
+    <h2>ปฏิเสธรายการ</h2>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>เหตุผล <input name="reason" maxlength="500" required></label>
+    <button type="submit">ปฏิเสธ</button>
+  </form>
+  {% endif %}
+  {% if actions.photos %}
+  <form method="post" action="/incidents/{{ i['id'] }}/photos" enctype="multipart/form-data" class="card" style="max-width:none;margin:0">
+    <h2>แนบรูปเพิ่ม</h2>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>ประเภทรูป <select name="kind"><option value="before">ที่เกิดเหตุ</option>{% if actions.after_photos %}<option value="after">หลังแก้ไข</option>{% endif %}</select></label>
+    <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple required>
+    <button type="submit">แนบรูป</button>
+  </form>
+  {% endif %}
+</div>
+</div>
+<div class="card" style="max-width:none;margin:16px 0 0">
+  <h2>ประวัติการดำเนินการ</h2>
+  <ol style="padding-left:20px;display:grid;gap:8px">
+  {% for e in events %}
+    <li><strong>{{ event_th.get(e['kind'], e['kind']) }}</strong>{% if e['to_status'] and e['from_status'] != e['to_status'] %} → {{ status_th.get(e['to_status'], e['to_status']) }}{% endif %}
+      · {{ e['actor'] or '-' }} · {{ e['at'] }}{% if e['note'] %}<br><span class="muted">{{ e['note'] }}</span>{% endif %}</li>
+  {% endfor %}
+  </ol>
+</div>
+{% endblock %}
