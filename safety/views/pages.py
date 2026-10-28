@@ -8,17 +8,5 @@ from ..security import safety_login_required
 bp = Blueprint("pages", __name__)
 
 
-def _soon(title: str):
-    return render_template("coming_soon.html", title=title)
-
-
-@bp.route("/overview")
-@safety_login_required
-def overview():
-    return _soon("ภาพรวมดำเนินงาน")
-
-
-@bp.route("/overview/departments")
-@safety_login_required
-def overview_departments():
-    return _soon("ภาพรวมตามหน่วยงาน")
+def _soon(title: str, phase: int):
+    return render_template("coming_soon.html", title=title, phase=phase)

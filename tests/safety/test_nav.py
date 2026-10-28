@@ -65,13 +65,6 @@ def test_reporter_sees_only_hazard_registration_in_nav(safety_app):
     assert "ลงทะเบียนบันทึกอันตราย" in html and "ข้อมูลองค์กร" not in html and "ประเภทอันตราย" not in html
 
 
-@pytest.mark.parametrize("path", ["/overview", "/overview/departments"])
-def test_placeholder_pages_200_for_logged_in_and_redirect_for_anonymous(safety_app, path):
-    page = login(safety_app, "viewer").get(path)
-    assert page.status_code == 200 and "เฟส 3" in page.get_data(as_text=True)
-    assert safety_app.test_client().get(path).status_code == 302
-
-
 def test_home_and_admin_pages_use_the_shell(safety_app):
     c = login(safety_app)
     for path in ("/", "/admin/roles", "/admin/users", "/master/hazard-types"):

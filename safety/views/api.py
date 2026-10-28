@@ -5,6 +5,9 @@ import hmac
 
 from flask import Blueprint, abort, current_app, jsonify, request
 
+from .. import stats
+from ..db import get_db
+
 bp = Blueprint("api", __name__, url_prefix="/api")
 
 
@@ -14,4 +17,5 @@ def summary():
     sent = request.headers.get("X-Service-Token", "")
     if not want or not hmac.compare_digest(sent, want):
         abort(401)
-    return jsonify({"open_hazards": 0, "overdue": 0})       # เฟส 3 จะนับจากทะเบียนอันตรายจริง
+    open_hazards, overdue = stats.global_summary(get_db())
+    return jsonify({"open_hazards": open_hazards, "overdue": overdue})

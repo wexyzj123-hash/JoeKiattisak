@@ -1,0 +1,52 @@
+{% extends "layout.html" %}
+{% block title %}ภาพรวมดำเนินงาน · AIAT Safety{% endblock %}
+{% block body %}
+<h1>ภาพรวมดำเนินงาน</h1>
+<div class="tiles" style="margin-bottom:16px">
+  <div class="tile"><span style="color:var(--muted)">เปิดอยู่</span><strong style="font-size:2rem">{{ open_total }}</strong></div>
+  <div class="tile" style="border-color:var(--danger)"><span style="color:var(--muted)">เกินกำหนด</span><strong style="font-size:2rem;color:var(--danger)">{{ overdue }}</strong><span>เกินกำหนด</span></div>
+  {% for k in ('reported', 'assessed', 'assigned', 'closed', 'rejected') %}
+  <div class="tile"><span style="color:var(--muted)">{{ status_th[k] }}</span><strong style="font-size:1.6rem">{{ counts[k] }}</strong></div>
+  {% endfor %}
+</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px">
+  <div class="card" style="max-width:none;margin:0">
+    <h2>รายการเปิดอยู่ตามระดับความเสี่ยง</h2>
+    {% for name, color, n in levels %}
+    <div style="display:grid;grid-template-columns:7rem 1fr 2.5rem;gap:8px;align-items:center;margin:6px 0">
+      <span>{{ name }}</span>
+      <div style="background:var(--line);border-radius:6px;height:14px"><div style="width:{{ (n * 100 / level_peak) | round(1) }}%;background:{{ color }};height:14px;border-radius:6px"></div></div>
+      <strong>{{ n }}</strong>
+    </div>
+    {% else %}<p style="color:var(--muted)">ยังไม่มีรายการเปิดอยู่</p>{% endfor %}
+  </div>
+  <div class="card" style="max-width:none;margin:0;overflow-x:auto">
+    <h2>แผนที่ความเสี่ยง (โอกาส × ความรุนแรง)</h2>
+    <table style="border-collapse:separate;border-spacing:3px">
+      {% for row in grid %}
+      <tr><th style="font-size:.75rem;color:var(--muted)">{{ row[0].s }}</th>
+        {% for c in row %}<td data-cell="{{ c.l }}-{{ c.s }}" data-count="{{ c.count }}" title="คะแนน {{ c.score }}"
+          style="width:44px;height:36px;text-align:center;border-radius:6px;background:{{ c.color }};color:#111;font-weight:700;opacity:{{ 1 if c.count else 0.35 }}">{{ c.count or '' }}</td>{% endfor %}
+      </tr>
+      {% endfor %}
+      <tr><th></th>{% for l in likelihoods %}<th style="font-size:.75rem;color:var(--muted)">{{ l }}</th>{% endfor %}</tr>
+    </table>
+    <small style="color:var(--muted)">แถว = ความรุนแรง · คอลัมน์ = โอกาส · สี = ระดับความเสี่ยงตามเกณฑ์ปัจจุบัน · นับเฉพาะรายการเปิดอยู่ที่ประเมินแล้ว</small>
+  </div>
+</div>
+<div class="card" style="max-width:none;margin:16px 0 0;overflow-x:auto">
+  <h2>แนวโน้ม 12 เดือน</h2>
+  <div style="display:flex;gap:10px;align-items:flex-end;height:160px;min-width:520px">
+    {% for month, reported, closed in trend %}
+    <div style="flex:1;text-align:center">
+      <div style="display:flex;gap:3px;align-items:flex-end;justify-content:center;height:120px">
+        <div title="แจ้ง {{ reported }}" style="width:40%;height:{{ (reported * 100 / trend_peak) | round(1) }}%;min-height:{{ 2 if reported else 0 }}px;background:var(--accent);border-radius:4px 4px 0 0"></div>
+        <div title="ปิด {{ closed }}" style="width:40%;height:{{ (closed * 100 / trend_peak) | round(1) }}%;min-height:{{ 2 if closed else 0 }}px;background:var(--ok);border-radius:4px 4px 0 0"></div>
+      </div>
+      <small style="color:var(--muted)">{{ month }}</small><br><small>{{ reported }}/{{ closed }}</small>
+    </div>
+    {% endfor %}
+  </div>
+  <small><span style="color:var(--accent)">■</span> แจ้ง · <span style="color:var(--ok)">■</span> ปิด (ตัวเลข: แจ้ง/ปิด)</small>
+</div>
+{% endblock %}
