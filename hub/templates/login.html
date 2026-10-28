@@ -1,12 +1,23 @@
 {% extends "base.html" %}
 {% block title %}เข้าสู่ระบบ · AIAT Hub{% endblock %}
-{% block body %}
-<div class="scene">{{ mascot('default', 150) }}<h1>AIAT Hub</h1><p class="muted">ศูนย์กลางเข้าสู่ระบบของ AIAT — เข้าสู่ระบบครั้งเดียว ใช้ได้ทุกระบบ</p></div>
-<form method="post" action="/login?next={{ next | urlencode }}" class="card">
-  <h1>เข้าสู่ระบบ</h1>
-  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-  <label>ชื่อผู้ใช้ <input name="username" autocomplete="username" required autofocus></label>
-  <label>รหัสผ่าน <input name="password" type="password" autocomplete="current-password" required></label>
-  <button type="submit">เข้าสู่ระบบ</button>
-</form>
+{% block shell %}
+<div class="auth-split">
+  <div class="auth-brand">
+    <a class="brand" href="/">{{ shield_logo(44) }}<span><strong>{{ BRAND_TITLE }}</strong><small>{{ BRAND_TAGLINE }}</small></span></a>
+    <div class="auth-art">{{ mascot('default', 280, decorative=True) }}</div>
+    <h2>เข้าสู่ระบบครั้งเดียว ใช้ได้ทุกระบบ</h2>
+    <p>ศูนย์กลางเข้าสู่ระบบของ AIAT — ร่วมกันสร้างที่ทำงานที่ปลอดภัย</p>
+    <div class="auth-foot">{{ aisin_wordmark(110, '#ffffff') }}<small>{{ BRAND_FOOTER }}</small></div>
+  </div>
+  <main class="auth-form">
+    {% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
+    <form method="post" action="/login?next={{ next | urlencode }}" class="card">
+      <h1>เข้าสู่ระบบ</h1>
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <label>ชื่อผู้ใช้ <input name="username" autocomplete="username" required autofocus></label>
+      <label>รหัสผ่าน <input name="password" type="password" autocomplete="current-password" required></label>
+      <button type="submit">เข้าสู่ระบบ</button>
+    </form>
+  </main>
+</div>
 {% endblock %}

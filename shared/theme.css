@@ -196,6 +196,31 @@ table th, table td { text-align: left; padding: 8px 10px; border-bottom: 1px sol
   .hero-art { display: none; }
 }
 
+/* Hub: หน้าเข้าสู่ระบบแบบแบ่งสองฝั่ง + แถบบนของหน้ารวมระบบ */
+.auth-split { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); min-height: 100vh; }
+.auth-brand { background: linear-gradient(160deg, var(--shell-1), var(--shell-2)); color: var(--shell-text); padding: 32px 40px; display: flex; flex-direction: column; gap: 8px; justify-content: space-between; }
+.auth-brand .brand { color: var(--shell-text); }
+.auth-brand h2 { font-size: 1.8rem; margin: 0; }
+.auth-brand p { margin: 0; opacity: .92; }
+.auth-art { display: grid; justify-items: center; padding: 8px 0; }
+.auth-foot { display: grid; gap: 4px; }
+.auth-form { display: grid; align-content: center; padding: 32px 24px; gap: 12px; min-width: 0; }
+.auth-form .card { width: 100%; max-width: 380px; }
+.auth-form .flash { max-width: 380px; margin: 0 auto; width: 100%; }
+.hub-top { display: flex; align-items: center; gap: 10px; padding: 10px 24px; background: linear-gradient(90deg, var(--shell-1), var(--shell-2)); color: var(--shell-text); }
+.hub-top .brand { color: var(--shell-text); margin-right: auto; }
+.hub-top .icon-btn, .hub-top .user-menu summary { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.4); color: var(--shell-text); }
+.hub-top .menu-pop { color: var(--text); }
+.tile .kpi-ic { margin-bottom: 4px; }
+@media (max-width: 800px) {
+  .auth-split { grid-template-columns: minmax(0, 1fr); min-height: 0; }
+  .auth-brand { padding: 20px; }
+  .auth-art svg { width: 110px; height: auto; }
+  .hub-top { padding: 8px 12px; }
+  .hub-top .brand small { display: none; }
+  .hub-top .who { display: none; }
+}
+
 /* มาสคอต: แอนิเมชันเบา ๆ เฉพาะผู้ใช้ที่ไม่ได้ปิดการเคลื่อนไหวในระบบ */
 .mascot { display: block; max-width: 100%; height: auto; }
 @keyframes m-wave { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-6deg); } }

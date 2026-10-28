@@ -1,13 +1,24 @@
 {% extends "base.html" %}
 {% block title %}ตั้งค่าครั้งแรก · AIAT Hub{% endblock %}
-{% block body %}
-<div class="scene">{{ mascot('default', 150) }}<h1>ยินดีต้อนรับสู่ AIAT Hub</h1><p class="muted">เริ่มต้นด้วยการสร้างผู้ดูแลระบบคนแรก</p></div>
-<form method="post" class="card">
-  <h1>สร้างผู้ดูแลระบบคนแรก</h1>
-  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-  <label>ชื่อผู้ใช้ <input name="username" required></label>
-  <label>ชื่อ-นามสกุล <input name="name_th"></label>
-  <label>รหัสผ่าน (อย่างน้อย 8 ตัวอักษร) <input name="password" type="password" minlength="8" required></label>
-  <button type="submit">สร้างผู้ดูแลระบบ</button>
-</form>
+{% block shell %}
+<div class="auth-split">
+  <div class="auth-brand">
+    <a class="brand" href="/">{{ shield_logo(44) }}<span><strong>{{ BRAND_TITLE }}</strong><small>{{ BRAND_TAGLINE }}</small></span></a>
+    <div class="auth-art">{{ mascot('default', 280, decorative=True) }}</div>
+    <h2>ยินดีต้อนรับสู่ AIAT Hub</h2>
+    <p>เริ่มต้นด้วยการสร้างผู้ดูแลระบบคนแรก</p>
+    <div class="auth-foot">{{ aisin_wordmark(110, '#ffffff') }}<small>{{ BRAND_FOOTER }}</small></div>
+  </div>
+  <main class="auth-form">
+    {% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
+    <form method="post" class="card">
+      <h1>สร้างผู้ดูแลระบบคนแรก</h1>
+      <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <label>ชื่อผู้ใช้ <input name="username" required></label>
+      <label>ชื่อ-นามสกุล <input name="name_th"></label>
+      <label>รหัสผ่าน (อย่างน้อย 8 ตัวอักษร) <input name="password" type="password" minlength="8" required></label>
+      <button type="submit">สร้างผู้ดูแลระบบ</button>
+    </form>
+  </main>
+</div>
 {% endblock %}
