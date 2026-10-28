@@ -1,2 +1,34 @@
-# JoeKiattisak
-SCADA
+# AIAT Safety + Hub
+
+ระบบบันทึกและจัดการอันตรายในโรงงาน (**Safety**) แยกเป็นเว็บของตัวเอง และเว็บกลาง (**Hub**) สำหรับเข้าสู่ทุกระบบด้วยการล็อกอินครั้งเดียว (SSO)
+
+- Spec: `docs/superpowers/specs/2026-10-28-aiat-safety-hub-design.md`
+- แผนเฟส 1: `docs/superpowers/plans/2026-10-28-phase1-hub-sso-skeleton.md`
+
+| | Hub | Safety |
+|---|---|---|
+| พอร์ต | 5000 | 5200 |
+| ฐานข้อมูล | `hub/data/hub.db` | `safety/data/safety.db` |
+| หน้าที่ | ล็อกอิน, ผู้ใช้กลาง, ทะเบียนระบบ, ออก SSO token | ระบบความปลอดภัย (ผู้ใช้/บทบาทของตัวเอง) |
+
+## ติดตั้งและเปิดใช้งาน (Python 3.10+)
+
+```bash
+pip install -r requirements.txt
+cp .env.example .env        # แก้ SSO_SECRET (ยาว ≥ 32 ตัวอักษร) และ SERVICE_TOKEN ให้เป็นค่าสุ่ม
+python hub/run.py           # เปิดที่ http://localhost:5000
+python safety/run.py        # เปิดที่ http://localhost:5200 (อีกหน้าต่างหนึ่ง)
+```
+
+1. เปิด Hub ครั้งแรกที่ `/setup` เพื่อสร้างผู้ดูแลระบบคนแรก
+2. ล็อกอิน แล้วกดไทล์ **ความปลอดภัย (Safety)** — เข้า Safety ได้ทันทีโดยไม่ต้องล็อกอินซ้ำ
+3. เพิ่มระบบใหม่ได้ที่ Hub → **ทะเบียนระบบ** (ไม่ต้องแก้โค้ด); จัดการผู้ใช้ที่ Hub → **ผู้ใช้**
+
+`SSO_SECRET` และ `SERVICE_TOKEN` ต้องตรงกันทั้งสองแอป — ผู้ใช้ Hub ที่เป็น `admin` จะได้บทบาท admin ใน Safety ตอนเข้าครั้งแรก (บทบาทหลังจากนั้นจัดการใน Safety เอง)
+
+## ทดสอบ
+
+```bash
+pip install -r requirements-dev.txt
+pytest -q
+```

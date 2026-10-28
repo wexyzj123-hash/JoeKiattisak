@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}ผู้ใช้ · AIAT Hub{% endblock %}
+{% block body %}
+<p><a href="/">← กลับหน้ารวมระบบ</a> · <a href="/admin/apps">ทะเบียนระบบ</a></p>
+<h1>ผู้ใช้ของ Hub</h1>
+<table style="width:100%;border-collapse:collapse">
+<tr><th>ชื่อผู้ใช้</th><th>ชื่อ</th><th>บทบาท</th><th>สถานะ</th><th>ดำเนินการ</th></tr>
+{% for u in users %}
+<tr><td>{{ u['username'] }}</td><td>{{ u['name_th'] }}</td><td>{{ roles[u['role']] }}</td><td>{{ 'ใช้งาน' if u['active'] else 'ปิด' }}</td>
+<td style="display:flex;gap:6px;flex-wrap:wrap">
+<form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ u['id'] }}">
+<input type="hidden" name="action" value="set_role">
+<select name="role">{% for k, v in roles.items() %}<option value="{{ k }}" {{ 'selected' if k == u['role'] }}>{{ v }}</option>{% endfor %}</select>
+<button type="submit">เปลี่ยนบทบาท</button></form>
+<form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ u['id'] }}">
+<input type="hidden" name="action" value="toggle"><button type="submit">{{ 'ปิดใช้งาน' if u['active'] else 'เปิดใช้งาน' }}</button></form>
+<form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ u['id'] }}">
+<input type="hidden" name="action" value="reset_password"><input name="password" type="password" minlength="8" placeholder="รหัสผ่านใหม่" required>
+<button type="submit">ตั้งรหัสผ่านใหม่</button></form></td></tr>
+{% endfor %}
+</table>
+<form method="post" class="card" style="margin:24px 0;max-width:420px">
+  <h2>เพิ่มผู้ใช้</h2>
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="create">
+  <label>ชื่อผู้ใช้ <input name="username" required></label>
+  <label>ชื่อ-นามสกุล <input name="name_th"></label>
+  <label>รหัสผ่าน (อย่างน้อย 8 ตัวอักษร) <input name="password" type="password" minlength="8" required></label>
+  <label>บทบาท <select name="role">{% for k, v in roles.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
+  <button type="submit">เพิ่มผู้ใช้</button>
+</form>
+{% endblock %}

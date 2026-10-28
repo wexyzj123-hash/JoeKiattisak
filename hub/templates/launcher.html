@@ -4,6 +4,7 @@
 <header style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
   <h1>AIAT Hub</h1>
   <form method="post" action="/logout" style="display:flex;gap:10px;align-items:center">
+    {% if g.user['role'] == 'admin' %}<a href="/admin/apps">ทะเบียนระบบ</a> <a href="/admin/users">ผู้ใช้</a>{% endif %}
     <span>{{ g.user['name_th'] }}</span>
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <button type="submit">ออกจากระบบ</button>
