@@ -1,8 +1,12 @@
 """safety/timeutil.py — วันที่ปัจจุบันในจุดเดียว (ทดสอบจำลองวันได้ด้วย monkeypatch)"""
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 
 def today() -> date:
     return date.today()
+
+
+def now() -> datetime:
+    return datetime.now()
