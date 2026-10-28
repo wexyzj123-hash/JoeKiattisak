@@ -9,6 +9,11 @@
 - [ ] เครื่องเซิร์ฟเวอร์มี Python 3.10+ แล้วรัน `pip install -r requirements.txt` (Flask, waitress, Pillow, openpyxl, reportlab)
 - [ ] `python -m pytest -q` ผ่านทั้งหมดบนเครื่องปลายทาง (ต้องลง `requirements-dev.txt` ก่อน)
 
+## 1.5 พอร์ตและปุ่มเชื่อมระบบเดิม
+- ถ้าเครื่องมี UT CMMS / E-Checksheet ใช้พอร์ต 5000 อยู่แล้ว **ไม่ต้องหยุดระบบเดิม** — `install.bat` หาพอร์ตว่างให้ Hub (เช่น 5001) และ Safety (5200) เอง
+- ปุ่มบนหน้า Hub สำหรับเปิดระบบเดิม: ใส่ `UTCMMS_URL=http://<เครื่อง>:5000/` และ `ECHECK_URL=http://<เครื่อง>:5000/echeck/dashboard` ใน `.env` (install.bat ถามให้) หรือเพิ่มที่ Hub → ทะเบียนระบบ เลือก "เปิดลิงก์ตรง" — ปุ่มเปิดแท็บใหม่และไม่ส่ง SSO token ให้ระบบเหล่านั้น
+- (ขั้นสูง) ถ้าต้องการให้ผู้ใช้เข้าผ่านพอร์ตเดียวหลัง reverse proxy ที่ตัด path ให้ตั้ง `HUB_PREFIX=/safety-hub` และ `SAFETY_PREFIX=/safety-hub/app` แล้วให้ `HUB_URL`/`SAFETY_URL` ชี้ path เดียวกัน — แอปเติม prefix ให้ลิงก์ ฟอร์ม redirect และคุกกี้เอง
+
 ## 2. ตั้งค่าความลับ 🔒
 - [ ] `cp .env.example .env` แล้วแก้ค่า (ไฟล์ `.env` ห้าม commit; ความลับไม่ถูกเขียนลงฐานข้อมูล/หน้าจอ/log)
 - [ ] `SSO_SECRET` ยาว ≥ 32 ตัวอักษรแบบสุ่ม และ `SERVICE_TOKEN` แบบสุ่ม — **ต้องเหมือนกันทั้ง Hub และ Safety** (ถ้ายังเป็น `change-me` ระบบไม่เริ่มทำงาน)

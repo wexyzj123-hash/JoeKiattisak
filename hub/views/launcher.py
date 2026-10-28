@@ -78,7 +78,7 @@ def home():
     for r in rows:
         if _allowed(r):
             badge = fetch_badge(r, current_app.config["SERVICE_TOKEN"]) if r["key"] in BADGE_APPS else None
-            apps.append({"key": r["key"], "name_th": r["name_th"], "badge": badge})
+            apps.append({"key": r["key"], "name_th": r["name_th"], "badge": badge, "link": r["link_mode"] == "link"})
     return render_template("launcher.html", apps=apps, any_badge=any(a["badge"] for a in apps))
 
 
@@ -90,6 +90,8 @@ def go(key: str):
         abort(404)
     if not _allowed(row):
         abort(403)
+    if row["link_mode"] == "link":                      # ระบบเดิมที่ไม่มี SSO: เปิดที่อยู่ตรง ๆ ห้ามส่ง token ไปให้
+        return redirect(row["url"])
     token = sign_token(current_app.config["SSO_SECRET"],
                        {"uid": g.user["id"], "name": g.user["name_th"], "roles": [g.user["role"]], "aud": row["key"]})
     return redirect(row["url"].rstrip("/") + "/sso?" + urlencode({"token": token}))

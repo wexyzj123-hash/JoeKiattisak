@@ -1,5 +1,5 @@
 """สร้างไฟล์ .env พร้อมความลับแบบสุ่ม (ไม่ทับไฟล์เดิม) — ใช้โดย install.bat
-ใช้: python tools/make_env.py [ที่อยู่เซิร์ฟเวอร์ เช่น localhost หรือ 192.168.1.10] [พอร์ต Hub (5000)] [พอร์ต Safety (5200)]"""
+ใช้: python tools/make_env.py [ที่อยู่เซิร์ฟเวอร์ เช่น localhost หรือ 192.168.1.10] [พอร์ต Hub (5000)] [พอร์ต Safety (5200)] [URL UT CMMS] [URL E-Checksheet]"""
 import os
 import secrets
 import sys
@@ -17,6 +17,10 @@ SAFETY_PORT={safety_port}
 HUB_URL=http://{host}:{hub_port}
 SAFETY_URL=http://{host}:{safety_port}
 SAFETY_TIMEZONE=Asia/Bangkok
+
+# ปุ่มบน Hub เปิดระบบเดิมโดยตรง (ไม่มี SSO) — เว้นว่างได้ แก้/เพิ่มภายหลังที่ Hub > ทะเบียนระบบ
+UTCMMS_URL={utcmms}
+ECHECK_URL={echeck}
 
 # ช่องทางแจ้งเตือน (ไม่บังคับ — ใส่เฉพาะช่องทางที่ใช้ แล้วเปิดระบบใหม่)
 #TELEGRAM_BOT_TOKEN=
@@ -48,9 +52,16 @@ def main() -> int:
     if not (1024 <= hub_port <= 65535 and 1024 <= safety_port <= 65535) or hub_port == safety_port:
         print("พอร์ตต้องอยู่ระหว่าง 1024-65535 และ Hub กับ Safety ต้องไม่ซ้ำกัน")
         return 2
+    links = []
+    for i in (4, 5):
+        raw = (sys.argv[i] if len(sys.argv) > i else "").strip()
+        if raw and (not raw.lower().startswith(("http://", "https://")) or any(c in raw for c in " \t\r\n\"'")):
+            print("URL ระบบเดิมต้องขึ้นต้นด้วย http:// หรือ https:// และห้ามมีช่องว่าง")
+            return 2
+        links.append(raw)
     with open(PATH, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(TEMPLATE.format(sso=secrets.token_hex(32), svc=secrets.token_hex(24), hub=secrets.token_hex(32),
-                                 safety=secrets.token_hex(32), host=host, hub_port=hub_port, safety_port=safety_port))
+                                 safety=secrets.token_hex(32), host=host, hub_port=hub_port, safety_port=safety_port, utcmms=links[0], echeck=links[1]))
     try:
         os.chmod(PATH, 0o600)
     except OSError:

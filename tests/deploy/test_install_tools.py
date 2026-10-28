@@ -83,3 +83,13 @@ def test_bat_scripts_have_no_multiline_blocks_and_use_ports_from_env():
     assert "localhost:%HUB_PORT%" in start and "ports.py show" in start and "ports.py inuse" in start
     assert "localport=%HUB_PORT%,%SAFETY_PORT%" in auto and "localhost:5000" not in start
     assert "ports.py suggest" in open(os.path.join(bat_dir, "install.bat"), encoding="utf-8").read()
+
+
+def test_make_env_writes_legacy_link_urls_and_validates(tmp_path):
+    r, env = make_env(tmp_path, "localhost", "5001", "5201", "http://192.168.133.129:5000/", "http://192.168.133.129:5000/echeck/dashboard")
+    text = env.read_text(encoding="utf-8").splitlines()
+    assert r.returncode == 0 and "UTCMMS_URL=http://192.168.133.129:5000/" in text and "ECHECK_URL=http://192.168.133.129:5000/echeck/dashboard" in text
+    for bad in ("javascript:alert(1)", "http://a b/", 'http://x"y/'):
+        d = tmp_path / "b"; d.mkdir(exist_ok=True)
+        r2, env2 = make_env(d, "localhost", "5001", "5201", bad, "")
+        assert r2.returncode == 2 and not env2.exists(), bad

@@ -25,6 +25,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         SAFETY_URL=os.environ.get("SAFETY_URL", "http://localhost:5200"),
         SESSION_COOKIE_NAME="aiat_hub_session", SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
     )
+    app.config.setdefault("URL_PREFIX", os.environ.get("HUB_PREFIX", ""))      # path นำหน้าเมื่ออยู่หลังพร็อกซีที่ใช้พอร์ตร่วมกับระบบอื่น
     if test_config:
         app.config.update(test_config)
     validate_secrets(app.config["SSO_SECRET"], app.config["SERVICE_TOKEN"])
@@ -50,4 +51,6 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.register_blueprint(admin.bp)
     app.register_blueprint(auth.bp)
     app.register_blueprint(launcher.bp)
+    from shared.prefix import install_prefix
+    install_prefix(app, app.config.get("URL_PREFIX"))
     return app

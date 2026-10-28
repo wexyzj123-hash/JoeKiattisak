@@ -26,6 +26,7 @@ def create_app(test_config: dict | None = None) -> Flask:
         HUB_URL=os.environ.get("HUB_URL", "http://localhost:5000"),
         SESSION_COOKIE_NAME="aiat_safety_session", PERMANENT_SESSION_LIFETIME=timedelta(hours=8), SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE="Lax",
     )
+    app.config.setdefault("URL_PREFIX", os.environ.get("SAFETY_PREFIX", ""))      # path นำหน้าเมื่ออยู่หลังพร็อกซีที่ใช้พอร์ตร่วมกับระบบอื่น
     if test_config:
         app.config.update(test_config)
     validate_secrets(app.config["SSO_SECRET"], app.config["SERVICE_TOKEN"])
@@ -108,4 +109,6 @@ def create_app(test_config: dict | None = None) -> Flask:
         return {"nav": nav_items(user_permissions(db, g.user), request.path), "unread_count": unread_count(db, g.user["id"]),
                 "role_name": role["name_th"] if role else g.user["role"]}
 
+    from shared.prefix import install_prefix
+    install_prefix(app, app.config.get("URL_PREFIX"))
     return app

@@ -50,7 +50,13 @@ for /f %%p in ('".venv\Scripts\python.exe" tools\ports.py suggest 5200 %HUBP%') 
 set "SAFP="
 set /p SAFP=พอร์ตของ Safety [%SUG_S%]: 
 if "%SAFP%"=="" set "SAFP=%SUG_S%"
-".venv\Scripts\python.exe" tools\make_env.py "%HOSTNAME_IN%" %HUBP% %SAFP% || goto :fail
+echo.
+echo ปุ่มบน Hub สำหรับเปิดระบบเดิม - ใส่ที่อยู่เต็ม เช่น http://192.168.133.129:5000/ หรือกด Enter เพื่อข้าม (เพิ่มทีหลังได้ที่ Hub ทะเบียนระบบ)
+set "UTU="
+set /p UTU=ที่อยู่ UT CMMS: 
+set "ECU="
+set /p ECU=ที่อยู่ E-Checksheet: 
+".venv\Scripts\python.exe" tools\make_env.py "%HOSTNAME_IN%" %HUBP% %SAFP% "%UTU%" "%ECU%" || goto :fail
 :env_done
 
 rem ---- 4) โฟลเดอร์ข้อมูลและสำรอง ----

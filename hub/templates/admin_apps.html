@@ -4,9 +4,9 @@
 <p><a href="/">← กลับหน้ารวมระบบ</a> · <a href="/admin/users">ผู้ใช้</a></p>
 <h1>ทะเบียนระบบ</h1>
 <div class="table-wrap"><table class="table-stack" style="width:100%">
-<tr><th>รหัส</th><th>ชื่อ</th><th>ที่อยู่</th><th>จำกัดบทบาท</th><th>สถานะ</th><th>ดำเนินการ</th></tr>
+<tr><th>รหัส</th><th>ชื่อ</th><th>ที่อยู่</th><th>การเชื่อมต่อ</th><th>จำกัดบทบาท</th><th>สถานะ</th><th>ดำเนินการ</th></tr>
 {% for a in apps %}
-<tr><td>{{ a['key'] }}</td><td>{{ a['name_th'] }}</td><td>{{ a['url'] }}</td><td>{{ roles.get(a['required_role'], 'ทุกคน') }}</td>
+<tr><td>{{ a['key'] }}</td><td>{{ a['name_th'] }}</td><td>{{ a['url'] }}</td><td>{{ 'เปิดลิงก์ตรง' if a['link_mode'] == 'link' else 'SSO' }}</td><td>{{ roles.get(a['required_role'], 'ทุกคน') }}</td>
 <td>{{ 'ใช้งาน' if a['enabled'] else 'ปิด' }}</td>
 <td><form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
 <input type="hidden" name="action" value="toggle"><input type="hidden" name="key" value="{{ a['key'] }}">
@@ -19,6 +19,7 @@
   <label>รหัสระบบ <input name="key" pattern="[a-z0-9_-]{2,32}" required></label>
   <label>ชื่อระบบ <input name="name_th" required></label>
   <label>ที่อยู่ (URL) <input name="url" type="url" required></label>
+  <label>การเชื่อมต่อ <select name="link_mode"><option value="sso">SSO — ระบบที่รองรับล็อกอินครั้งเดียวกับ Hub</option><option value="link">เปิดลิงก์ตรง — ระบบเดิม เช่น UT CMMS / E-Checksheet (ไม่ส่ง token)</option></select></label>
   <label>ไอคอน <input name="icon" value="app"></label>
   <label>จำกัดบทบาท <select name="required_role"><option value="">ทุกคน</option>
     {% for k, v in roles.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>

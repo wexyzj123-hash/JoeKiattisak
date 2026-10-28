@@ -26,11 +26,11 @@
 </section>
 <div class="tiles">
   {% for a in apps %}
-  <a class="tile" href="/go/{{ a['key'] }}">
+  <a class="tile" href="/go/{{ a['key'] }}"{% if a['link'] %} target="_blank" rel="noopener noreferrer"{% endif %}>
     {% if a['badge'] %}<span class="badge">{{ a['badge'] }}<span class="sr-only"> รายการที่ต้องติดตาม</span></span>{% endif %}
     <span class="kpi-ic">{{ icon('shield' if a['key'] == 'safety' else 'layers', 24) }}</span>
     <strong>{{ a['name_th'] }}</strong>
-    <span class="muted">เข้าสู่ระบบ</span>
+    <span class="muted">{{ 'เปิดระบบ (แท็บใหม่)' if a['link'] else 'เข้าสู่ระบบ' }}</span>
   </a>
   {% else %}<p>ยังไม่มีระบบที่คุณเข้าถึงได้</p>{% endfor %}
 </div>

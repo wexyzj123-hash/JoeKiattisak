@@ -42,11 +42,13 @@ def apps():
                 flash("ที่อยู่ระบบต้องขึ้นต้นด้วย http:// หรือ https://")
             elif role not in ("",) + tuple(ROLE_TH):
                 flash("บทบาทที่จำกัดสิทธิ์ไม่ถูกต้อง")
+            elif f.get("link_mode", "sso") not in ("sso", "link"):
+                flash("รูปแบบการเชื่อมต่อไม่ถูกต้อง")
             else:
-                db.execute("""INSERT INTO app_registry(key,name_th,url,icon,required_role,sort) VALUES(?,?,?,?,?,?)
+                db.execute("""INSERT INTO app_registry(key,name_th,url,icon,required_role,sort,link_mode) VALUES(?,?,?,?,?,?,?)
                               ON CONFLICT(key) DO UPDATE SET name_th=excluded.name_th, url=excluded.url,
-                              icon=excluded.icon, required_role=excluded.required_role, sort=excluded.sort""",
-                           (key, name, url, f.get("icon", "app").strip() or "app", role, sort))
+                              icon=excluded.icon, required_role=excluded.required_role, sort=excluded.sort, link_mode=excluded.link_mode""",
+                           (key, name, url, f.get("icon", "app").strip() or "app", role, sort, f.get("link_mode", "sso")))
                 db.commit()
         return redirect("/admin/apps")
     rows = db.execute("SELECT * FROM app_registry ORDER BY sort, id").fetchall()
