@@ -161,6 +161,90 @@ CREATE TABLE IF NOT EXISTS custom_fields (
 CREATE UNIQUE INDEX IF NOT EXISTS uq_custom_fields_key ON custom_fields(COALESCE(hazard_type_id, 0), key);
 """
 
+NOTIFY_EVENTS = ("hazard_reported", "hazard_assessed", "hazard_assigned", "hazard_closed", "hazard_rejected", "due_soon", "overdue")
+NOTIFY_CHANNELS = ("inapp", "telegram", "line", "teams", "email")
+OUTBOX_CHANNELS = ("telegram", "line", "teams", "email")
+OUTBOX_STATUSES = ("pending", "sent", "failed", "dead", "cancelled")
+
+NOTIFY_DDL = f"""
+CREATE TABLE IF NOT EXISTS notifications (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL REFERENCES safety_users(id),
+    event      TEXT NOT NULL,
+    title      TEXT NOT NULL,
+    body       TEXT NOT NULL DEFAULT '',
+    link       TEXT NOT NULL DEFAULT '',
+    hazard_id  INTEGER REFERENCES hazards(id),
+    dedupe_key TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    read_at    TEXT,
+    UNIQUE (user_id, dedupe_key)
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, read_at);
+CREATE TABLE IF NOT EXISTS notify_rules (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    event       TEXT NOT NULL CHECK (event IN ({",".join(repr(e) for e in NOTIFY_EVENTS)})),
+    recipients  TEXT NOT NULL DEFAULT '',
+    channels    TEXT NOT NULL DEFAULT 'inapp',
+    offset_days INTEGER NOT NULL DEFAULT 0,
+    min_score   INTEGER,
+    enabled     INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS notify_outbox (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    channel         TEXT NOT NULL CHECK (channel IN ({",".join(repr(c) for c in OUTBOX_CHANNELS)})),
+    target          TEXT NOT NULL,
+    subject         TEXT NOT NULL DEFAULT '',
+    body            TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ({",".join(repr(s) for s in OUTBOX_STATUSES)})),
+    attempts        INTEGER NOT NULL DEFAULT 0,
+    next_try_at     TEXT NOT NULL,
+    last_error      TEXT NOT NULL DEFAULT '',
+    urgent          INTEGER NOT NULL DEFAULT 0,
+    notification_id INTEGER REFERENCES notifications(id),
+    dedupe_key      TEXT NOT NULL,
+    created_at      TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    sent_at         TEXT,
+    UNIQUE (channel, target, dedupe_key)
+);
+CREATE INDEX IF NOT EXISTS idx_outbox_due ON notify_outbox(status, next_try_at);
+CREATE TABLE IF NOT EXISTS app_settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS job_runs (
+    job         TEXT NOT NULL,
+    run_date    TEXT NOT NULL,
+    finished_at TEXT,
+    PRIMARY KEY (job, run_date)
+);
+"""
+
+DEFAULT_SETTINGS = (("quiet_start", "22:00"), ("quiet_end", "06:00"), ("daily_time", "07:30"))
+_ALL = "inapp,telegram,line,email"
+DEFAULT_RULES = (
+    ("hazard_reported", "role:assessor", "inapp,telegram", 0, None),
+    ("hazard_assessed", "role:dept_head,role:admin", "inapp,telegram,line", 0, 17),
+    ("hazard_assigned", "owner", _ALL, 0, None),
+    ("hazard_closed", "reporter", "inapp", 0, None),
+    ("hazard_rejected", "reporter", "inapp", 0, None),
+    ("due_soon", "owner", "inapp,telegram", 2, None),
+    ("overdue", "owner", _ALL, 1, None),
+    ("overdue", "owner,role:dept_head", _ALL, 3, None),
+    ("overdue", "role:admin,role:dept_head", _ALL, 7, None),
+)
+
+
+def seed_notify(con) -> None:
+    """ค่าตั้งต้นของการแจ้งเตือน — ใส่ครั้งเดียว ไม่ทับ/ไม่เติมกลับสิ่งที่แอดมินแก้หรือลบ"""
+    con.executemany("INSERT OR IGNORE INTO app_settings(key, value) VALUES(?,?)", DEFAULT_SETTINGS)
+    if con.execute("SELECT 1 FROM app_settings WHERE key='notify_rules_seeded'").fetchone() is None:
+        con.executemany("INSERT INTO notify_rules(event, recipients, channels, offset_days, min_score) VALUES(?,?,?,?,?)",
+                        DEFAULT_RULES)
+        con.execute("INSERT INTO app_settings(key, value) VALUES('notify_rules_seeded', '1')")
+    con.commit()
+
+
 DEFAULT_LIKELIHOOD = ("แทบไม่เกิด", "เกิดได้ยาก", "เกิดได้บางครั้ง", "เกิดบ่อย", "เกิดบ่อยมาก")
 DEFAULT_SEVERITY = ("เล็กน้อย", "ปานกลาง", "ร้ายแรง", "รุนแรง", "รุนแรงมาก")
 DEFAULT_LEVELS = (("ต่ำ", 1, 4, "#2ecc71", 30, 0), ("ปานกลาง", 5, 9, "#f1c40f", 14, 0),
@@ -188,9 +272,14 @@ def ensure_schema(con) -> None:
     con.executescript(DDL)
     _add_column(con, "safety_users", "factory_id", "INTEGER")
     _add_column(con, "safety_users", "department_id", "INTEGER")
-    con.executescript(MASTER_DDL + ROLES_DDL + RISK_DDL + HAZARD_DDL + CUSTOM_DDL)
+    _add_column(con, "safety_users", "telegram_chat_id", "TEXT")
+    _add_column(con, "safety_users", "line_user_id", "TEXT")
+    _add_column(con, "safety_users", "email", "TEXT")
+    _add_column(con, "safety_users", "notify_channels", "TEXT NOT NULL DEFAULT 'inapp'")
+    con.executescript(MASTER_DDL + ROLES_DDL + RISK_DDL + HAZARD_DDL + CUSTOM_DDL + NOTIFY_DDL)
     seed_roles(con)
     seed_risk(con)
     _add_column(con, "hazards", "level_requires_approval", "INTEGER NOT NULL DEFAULT 0")
     _add_column(con, "hazards", "version", "INTEGER NOT NULL DEFAULT 0")
+    seed_notify(con)
     con.commit()
