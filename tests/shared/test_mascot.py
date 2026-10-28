@@ -85,7 +85,8 @@ def test_all_coordinates_inside_a_sane_range():
 
 
 @pytest.mark.parametrize("which", ["hub", "safety"])
-def test_jinja_global_returns_markup_not_escaped_in_both_apps(which, hub_app, safety_app):
+def test_jinja_global_returns_markup_not_escaped_in_both_apps(which, hub_app, safety_app, tmp_path, monkeypatch):
+    monkeypatch.setattr("shared.mascot.ASSET_DIR", tmp_path)                          # ไม่มีไฟล์ภาพ → ทดสอบทางเวกเตอร์
     app = hub_app if which == "hub" else safety_app
     out = app.jinja_env.globals["mascot"]("alert", 48, "สวัสดี")
     assert isinstance(out, Markup) and out.startswith("<svg")
@@ -112,9 +113,31 @@ def test_cap_and_chest_carry_the_aisin_lettering(mood):
 
 
 def test_wordmark_scales_and_uses_given_color():
-    from shared.brand import aisin_wordmark
+    import tempfile
+    empty = tempfile.mkdtemp()
+    aisin_wordmark = lambda w, c="currentColor": __import__("shared.brand", fromlist=["x"]).aisin_wordmark(w, c, asset_dir=empty)
     root = parse(aisin_wordmark(200, "#0b3b99"))
     assert root.get("role") == "img" and root.find(SVG + "title").text == "AISIN" and root.get("width") == "200"
     assert 'stroke="#0b3b99"' in aisin_wordmark(200, "#0b3b99")
     assert 'stroke="currentColor"' in aisin_wordmark(200, '"><script>')
     assert parse(aisin_wordmark("bad")).get("width") == "120"
+
+
+def test_wordmark_uses_the_real_logo_files_when_present_white_on_dark(tmp_path):
+    from PIL import Image
+    from shared.brand import aisin_wordmark
+    Image.new("RGBA", (20, 4), (0, 0, 0, 0)).save(tmp_path / "aisin.png")
+    Image.new("RGBA", (20, 4), (0, 0, 0, 0)).save(tmp_path / "aisin-white.png")
+    dark = aisin_wordmark(120, "currentColor", asset_dir=tmp_path)
+    white = aisin_wordmark(120, "#ffffff", asset_dir=tmp_path)
+    assert 'src="/static/brand/aisin.png?v=' in dark and 'src="/static/brand/aisin-white.png?v=' in white
+    assert 'alt="AISIN"' in dark and 'class="wordmark"' in dark and 'width="120"' in dark
+
+
+def test_real_assets_shipped_in_the_repo_are_valid_transparent_pngs():
+    from PIL import Image
+    from shared import brand, mascot
+    files = [brand.ASSET_DIR / n for n in brand.LOGO_FILES] + [mascot.ASSET_DIR / f"{m}.png" for m in MOODS if m != "sleeping"]
+    for f in files:
+        im = Image.open(f)
+        assert im.mode == "RGBA" and im.getchannel("A").getextrema()[0] == 0 and min(im.size) > 100, f

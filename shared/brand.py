@@ -1,7 +1,13 @@
 """shared/brand.py — ตัวอักษร AISIN แบบเวกเตอร์ (เส้น path ล้วน ไม่พึ่งฟอนต์/ไฟล์ภายนอก) ใช้บนหมวกมาสคอต แพตช์ และแถบแบรนด์"""
 from __future__ import annotations
 
+from pathlib import Path
 from xml.sax.saxutils import escape
+
+# โลโก้จริง (PNG พื้นโปร่งใส): aisin.png = สีน้ำเงิน, aisin-white.png = สีขาวสำหรับพื้นเข้ม; ถ้าไม่มีไฟล์ใช้ตัวอักษรเวกเตอร์แทน
+ASSET_DIR = Path(__file__).resolve().parent / "assets" / "brand"
+LOGO_FILES = ("aisin.png", "aisin-white.png")
+LOGO_RATIO = 213 / 1195
 
 TITLE = "Safety 4.0"
 TAGLINE = "Safe People · Safe Workplace · Sustainable Future"
@@ -41,8 +47,8 @@ def aisin_letters(x: float, y: float, w: float, fill: str = "currentColor", cls:
             + "".join(f'<path d="{d}"/>' for d in parts) + "</g>")
 
 
-def aisin_wordmark(width: int = 120, color: str = "currentColor") -> str:
-    """โลโก้คำ AISIN แบบ inline SVG (role=img) ปรับตามความกว้าง"""
+def aisin_wordmark(width: int = 120, color: str = "currentColor", asset_dir=None) -> str:
+    """โลโก้คำ AISIN: ใช้ไฟล์ภาพจริงถ้ามี (สีขาวเมื่อ color เป็นขาว) มิฉะนั้น inline SVG (role=img) ปรับตามความกว้าง"""
     try:
         px = max(24, min(600, int(width)))
     except (TypeError, ValueError):
@@ -50,6 +56,12 @@ def aisin_wordmark(width: int = 120, color: str = "currentColor") -> str:
     if isinstance(width, bool):
         px = 120
     color = color if isinstance(color, str) and color.replace("#", "").replace("-", "").isalnum() else "currentColor"
+    base = Path(asset_dir) if asset_dir is not None else ASSET_DIR
+    white = isinstance(color, str) and color.lower() in ("#fff", "#ffffff", "white")
+    f = base / LOGO_FILES[1 if white else 0]
+    if f.is_file():
+        return (f'<img class="wordmark" src="/static/brand/{f.name}?v={int(f.stat().st_mtime)}" width="{px}" '
+                f'height="{round(px * LOGO_RATIO)}" alt="AISIN" decoding="async">')
     height = round(px / 4.2)
     return (f'<svg xmlns="http://www.w3.org/2000/svg" class="wordmark" viewBox="0 0 100 24" width="{px}" height="{height}" '
             f'role="img" focusable="false"><title>{escape("AISIN")}</title>'

@@ -5,12 +5,16 @@ earth รักษ์โลก (โอบลูกโลก) · alert ปลอ�
 แอนิเมชันทำด้วย CSS ใน theme.css (class mascot-*) และปิดเมื่อผู้ใช้ตั้ง prefers-reduced-motion"""
 from __future__ import annotations
 
+from pathlib import Path
 from xml.sax.saxutils import escape
 
 from shared.brand import aisin_letters
 
 MOODS = ("default", "confident", "thinking", "celebrate", "earth", "alert", "sleeping")
 DEFAULT_LABEL = "น้องเอเอียต"
+# ถ้ามีไฟล์ภาพจริง <ท่า>.png|webp (พื้นโปร่งใส) ในโฟลเดอร์นี้ จะใช้ภาพแทนเวกเตอร์ของท่านั้นโดยอัตโนมัติ
+ASSET_DIR = Path(__file__).resolve().parent / "assets" / "mascot"
+IMAGE_EXTS = {".png": "image/png", ".webp": "image/webp"}
 
 INK = "#1b2433"
 SKIN = "#ffdcb8"
@@ -230,3 +234,24 @@ def mascot_svg(mood: str = "default", size: int = 120, label: str = DEFAULT_LABE
         return head + f'aria-hidden="true" focusable="false">{_scene(mood)}</svg>'
     title = escape(str(label if label is not None else DEFAULT_LABEL), {'"': "&quot;", "'": "&#39;"})
     return head + f'role="img" focusable="false"><title>{title}</title>{_scene(mood)}</svg>'
+
+
+def image_file(mood: str, asset_dir=None):
+    """ไฟล์ภาพจริงของท่านี้ (หรือ None)"""
+    base = Path(asset_dir) if asset_dir is not None else ASSET_DIR
+    for ext in IMAGE_EXTS:
+        f = base / f"{mood}{ext}"
+        if f.is_file():
+            return f
+    return None
+
+
+def mascot_markup(mood: str = "default", size: int = 120, label: str = DEFAULT_LABEL, decorative: bool = False, asset_dir=None) -> str:
+    """ภาพจริงของท่านั้นถ้ามีไฟล์ มิฉะนั้นใช้ SVG เวกเตอร์ (API เดียวกับ mascot_svg)"""
+    mood = mood if mood in MOODS else "default"
+    f = image_file(mood, asset_dir)
+    if f is None:
+        return mascot_svg(mood, size, label, decorative)
+    px = _clamp_size(size)
+    a11y = 'alt="" aria-hidden="true"' if decorative else f'alt="{escape(str(label if label is not None else DEFAULT_LABEL), {chr(34): "&quot;", chr(39): "&#39;"})}"'
+    return (f'<img class="mascot mascot-{mood}" src="/static/mascot/{f.name}?v={int(f.stat().st_mtime)}" width="{px}" {a11y} decoding="async">')

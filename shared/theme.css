@@ -226,6 +226,8 @@ table th, table td { text-align: left; padding: 8px 10px; border-bottom: 1px sol
 
 /* มาสคอต: แอนิเมชันเบา ๆ เฉพาะผู้ใช้ที่ไม่ได้ปิดการเคลื่อนไหวในระบบ */
 .mascot { display: block; max-width: 100%; height: auto; }
+img.mascot { object-fit: contain; }
+.wordmark { max-width: 100%; height: auto; }
 @keyframes m-wave { 0%, 100% { transform: rotate(0deg); } 50% { transform: rotate(-6deg); } }
 @keyframes m-pop { 0%, 100% { transform: translateY(0); opacity: 1; } 50% { transform: translateY(-5px); opacity: .85; } }
 @keyframes m-float { 0%, 100% { transform: translateY(0); opacity: .9; } 50% { transform: translateY(-6px); opacity: 1; } }

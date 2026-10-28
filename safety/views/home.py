@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 
-from flask import Blueprint, current_app, g, redirect, render_template, send_file, session
+from flask import abort, Blueprint, current_app, g, redirect, render_template, send_file, session
 
 from .. import charts, stats
 from ..db import get_db
@@ -25,6 +25,27 @@ def theme_js():
 @bp.route("/static/theme.css")
 def theme_css():
     return send_file(THEME_CSS, mimetype="text/css", max_age=3600)
+
+
+@bp.route("/static/mascot/<name>")
+def mascot_file(name):
+    """ภาพมาสคอตจริง (ถ้ามี) — เฉพาะชื่อท่าที่รู้จักและนามสกุล png/webp เท่านั้น"""
+    from shared import mascot
+    stem, dot, ext = name.rpartition(".")
+    if stem not in mascot.MOODS or "." + ext not in mascot.IMAGE_EXTS:
+        abort(404)
+    f = mascot.image_file(stem)
+    if f is None or f.name != name:
+        abort(404)
+    return send_file(f, mimetype=mascot.IMAGE_EXTS["." + ext], max_age=3600)
+
+
+@bp.route("/static/brand/<name>")
+def brand_file(name):
+    from shared import brand
+    if name not in brand.LOGO_FILES or not (brand.ASSET_DIR / name).is_file():
+        abort(404)
+    return send_file(brand.ASSET_DIR / name, mimetype="image/png", max_age=3600)
 
 
 @bp.route("/")

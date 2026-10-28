@@ -33,8 +33,8 @@ def create_app(test_config: dict | None = None) -> Flask:
 
     hubdb.init_app(app)
     from markupsafe import Markup
-    from shared.mascot import DEFAULT_LABEL, mascot_svg
-    app.jinja_env.globals["mascot"] = lambda mood="default", size=120, label=DEFAULT_LABEL, decorative=False: Markup(mascot_svg(mood, size, label, decorative))
+    from shared.mascot import DEFAULT_LABEL, mascot_markup
+    app.jinja_env.globals["mascot"] = lambda mood="default", size=120, label=DEFAULT_LABEL, decorative=False: Markup(mascot_markup(mood, size, label, decorative))
     from shared.icons import icon
     from shared import brand
     app.jinja_env.globals.update(aisin_wordmark=lambda *a, **k: Markup(brand.aisin_wordmark(*a, **k)), shield_logo=lambda *a, **k: Markup(brand.shield_logo(*a, **k)),
