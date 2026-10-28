@@ -15,5 +15,11 @@ from safety.app import create_app  # noqa: E402
 if __name__ == "__main__":
     from waitress import serve
     port = int(os.environ.get("SAFETY_PORT", "5200"))
+    app = create_app()
+    if os.environ.get("SAFETY_DISABLE_BACKGROUND") != "1":      # ตัวส่งแจ้งเตือน + งานประจำวัน (ตั้ง =1 เพื่อปิด เช่นรันหลายโปรเซส)
+        from safety.delivery import start_worker
+        from safety.scheduler import start_scheduler
+        start_worker(app)
+        start_scheduler(app)
     print(f"safety พร้อมที่ http://0.0.0.0:{port}")
-    serve(create_app(), host="0.0.0.0", port=port)
+    serve(app, host="0.0.0.0", port=port)
