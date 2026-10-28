@@ -65,12 +65,12 @@ New module beside the hazard register (a hazard is a *condition*; an incident is
 - Outputs **Excel (openpyxl)** and **PDF**; PDF library to be chosen in that phase's plan (pure-Python `reportlab` preferred: no system packages; Thai font must be bundled/licensed — to confirm).
 - Submission deadlines: a `report_due` schedule table; reminders reuse notification rules (`report_due_soon`, `report_overdue`) and the daily scheduler; "mark as submitted" keeps an append-only record.
 
-## 6. Open questions for the user (answer before Phase 6 planning)
+## 6. Answers from the user (2026-10-28) and assumptions
 
-1. **"วันปลอดอุบัติเหตุ"** — count days since the last: (a) lost-time accident, (b) any accident needing medical treatment, (c) any accident including first aid? Per factory or per department?
-2. Are **injured-person names** allowed in the system (PII), or only employee numbers?
-3. Is the incident severity scale company-defined (please send it) or should we use the default above?
-4. PDF: is there a Thai company font (e.g. Sarabun/TH Sarabun) we may bundle?
+1. **"วันปลอดอุบัติเหตุ"** counts days since the last **lost-time (หยุดงาน)** accident. Scope (user did not say): computed over the viewer's own factory/department scope, or company-wide for unscoped users — *assumption, change if wrong*.
+2. **Injured-person names are allowed** (PII). Treated as restricted data: visible only to incident investigators/closers/admin and the incident's own reporter; never in notifications, search, lists, dashboards or the audit trail text.
+3. **Severity scale:** "general factory standard" → default injury classes (admin-editable): property damage only · first aid · medical treatment (no lost time) · lost time · permanent disability · fatality; the last three count as lost-time. Near Miss uses the existing risk criteria for *potential* severity.
+4. **Thai font:** a common free Thai font (e.g. Sarabun, SIL OFL) — decided in Phase 8.
 
 ## 7. Delivery plan
 
@@ -78,7 +78,7 @@ New module beside the hazard register (a hazard is a *condition*; an incident is
 |---|---|---|
 | 4 fixes | Review findings of Phase 4 | — |
 | 5 | Safety 4.0 shell, light theme, dashboard, global search, redrawn mascot, icon set, responsive tables | — |
-| 6 | Incident + Near Miss, days-without-accident KPI | answers to §6 |
+| 6 | Incident + Near Miss, days-without-lost-time KPI | answered (§6) |
 | 7 | Safety Patrol + CAPA | Phase 6 (incident source) |
 | 8 | Reports/statistics, PDF/Excel, report deadlines | Phases 6–7 data |
 
