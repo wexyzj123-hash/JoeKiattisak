@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}ผู้ใช้งาน · AIAT Safety{% endblock %}
+{% block body %}
+{% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
+<h1>ผู้ใช้งาน</h1>
+<p style="color:var(--muted)">ผู้ใช้จะปรากฏที่นี่หลังเข้าสู่ระบบผ่าน AIAT Hub ครั้งแรก</p>
+<div class="card" style="max-width:none;margin:0;overflow-x:auto">
+<table style="width:100%;border-collapse:collapse">
+  <tr><th>ชื่อ</th><th>บทบาท</th><th>ขอบเขตหน่วยงาน</th><th>สถานะ</th><th>เข้าครั้งแรก</th><th>ดำเนินการ</th></tr>
+  {% for u in users %}
+  <tr>
+    <td>{{ u['name'] }}</td><td>{{ u['role_name'] or u['role'] }}</td>
+    <td>{{ u['factory_name'] or 'ทุกโรงงาน' }}{% if u['department_name'] %} › {{ u['department_name'] }}{% endif %}</td>
+    <td>{{ 'ใช้งาน' if u['active'] else 'ปิดใช้งาน' }}</td><td>{{ u['created_at'] }}</td>
+    <td style="display:flex;gap:6px;flex-wrap:wrap">
+      <form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ u['id'] }}">
+        <input type="hidden" name="action" value="set_role">
+        <select name="role">{% for r in roles %}<option value="{{ r['key'] }}" {{ 'selected' if r['key'] == u['role'] }}>{{ r['name_th'] }}</option>{% endfor %}</select>
+        <button type="submit">เปลี่ยนบทบาท</button></form>
+      <form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ u['id'] }}">
+        <input type="hidden" name="action" value="set_scope">
+        <select name="factory_id"><option value="">ทุกโรงงาน</option>{% for f in factories %}<option value="{{ f['id'] }}" {{ 'selected' if f['id'] == u['factory_id'] }}>{{ f['name_th'] }}</option>{% endfor %}</select>
+        <select name="department_id"><option value="">ทุกแผนก</option>{% for d in departments %}<option value="{{ d['id'] }}" {{ 'selected' if d['id'] == u['department_id'] }}>{{ d['factory'] }} › {{ d['name_th'] }}</option>{% endfor %}</select>
+        <button type="submit">กำหนดขอบเขต</button></form>
+      <form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ u['id'] }}">
+        <input type="hidden" name="action" value="toggle"><button type="submit">{{ 'ปิดใช้งาน' if u['active'] else 'เปิดใช้งาน' }}</button></form>
+    </td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% endblock %}

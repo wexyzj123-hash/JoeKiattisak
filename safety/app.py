@@ -35,7 +35,8 @@ def create_app(test_config: dict | None = None) -> Flask:
     install_csrf(app)
     app.before_request(load_user)
 
-    from .views import api, home, master, roles, sso
+    from .views import api, home, master, roles, sso, users
+    app.register_blueprint(users.bp)
     app.register_blueprint(master.bp)
     app.register_blueprint(roles.bp)
     app.register_blueprint(api.bp)
