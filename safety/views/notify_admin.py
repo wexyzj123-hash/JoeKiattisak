@@ -51,11 +51,11 @@ def validate_rule(db, form, rule_id: int | None = None) -> tuple[dict | None, li
     for item in (p.strip() for p in form.get("recipients", "").split(",")):
         if not item:
             continue
-        if item in ("reporter", "owner") or (ROLE_RE.match(item) and item[5:] in roles):
+        if item in ("reporter", "owner") or (ROLE_RE.match(item) and item[5:] in roles) or (item.startswith("owner_else:") and ROLE_RE.match("role:" + item[11:]) and item[11:] in roles):
             if item not in recipients:
                 recipients.append(item)
         else:
-            errors.append(f"ผู้รับไม่ถูกต้อง: {clean(item, 40)} (ใช้ reporter, owner หรือ role:<รหัสบทบาทที่มีอยู่>)")
+            errors.append(f"ผู้รับไม่ถูกต้อง: {clean(item, 40)} (ใช้ reporter, owner, owner_else:<บทบาทสำรอง> หรือ role:<รหัสบทบาทที่มีอยู่>)")
     if not recipients and channels != ["teams"]:
         errors.append("ต้องมีผู้รับอย่างน้อย 1 กลุ่ม (เว้นว่างได้เฉพาะเมื่อส่งเข้า Teams อย่างเดียว)")
     offset = _int(form.get("offset_days", "0"))

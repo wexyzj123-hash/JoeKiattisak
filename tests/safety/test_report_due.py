@@ -35,7 +35,7 @@ class W:
         self.head = u("dept_head", "หัวหน้า A", department_id=self.a["d"])
         self.rep = u("reporter", "ผู้แจ้ง")
 
-    def rule(self, key="monthly", dept=None, freq="monthly", day=5, month=None, created="2026-01-01 00:00"):
+    def rule(self, key="monthly", dept=None, freq="monthly", day=5, month=None, created="2026-02-10 00:00"):
         cur = self.db.execute("INSERT INTO report_due(report_key, department_id, frequency, due_day, due_month, created_at) VALUES(?,?,?,?,?,?)",
                               (key, dept, freq, day, month, created))
         self.db.commit()

@@ -34,7 +34,7 @@ class W:
         self.admin = u("admin", "แอดมิน")
         self.reporter = u("reporter", "ผู้แจ้ง")
 
-    def rule(self, dept=None, key="monthly", day=5, created="2026-01-01 00:00"):
+    def rule(self, dept=None, key="monthly", day=5, created="2026-02-10 00:00"):
         cur = self.db.execute("INSERT INTO report_due(report_key, department_id, frequency, due_day, created_at) VALUES(?,?,?,?,?)", (key, dept, "monthly", day, created))
         self.db.commit()
         return cur.lastrowid

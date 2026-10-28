@@ -84,6 +84,14 @@ def recipients_for(db, rule, hazard, actor_id: int | None, owner_fallback_role: 
                         add(u)
             else:
                 add(owner)
+        elif kind.startswith("owner_else:"):                                 # เจ้าของงาน ถ้าไม่มี → ผู้ที่มีบทบาทนี้ในขอบเขต (แอดมินแก้ได้ในกฎ)
+            owner = get(hazard["owner_id"])
+            if owner is not None:
+                add(owner)
+            else:
+                for u in db.execute("SELECT * FROM safety_users WHERE role=? AND active=1 ORDER BY id", (kind[11:],)):
+                    if _covers(db, u, hazard):
+                        add(u)
         elif kind.startswith("role:"):
             for u in db.execute("SELECT * FROM safety_users WHERE role=? AND active=1 ORDER BY id", (kind[5:],)):
                 if _covers(db, u, hazard):
@@ -315,7 +323,7 @@ def emit_patrol(db, event: str, plan_id: int, actor_id: int | None, *, offset_da
         title, body = render_patrol_message(event, plan, {"area": area[0] if area else "", "checklist": cl[0] if cl else "", "due": due,
                                                           "days": days if days is not None else offset_days})
         created = _write_rows(db, event, plan, title, body, f"{due}:{offset_days}", f"p{plan_id}", f"/patrols?plan={plan_id}", None, None, actor_id,
-                              offset_days, False, frozenset({"patrol.perform", "patrol.view"}), frozenset(), "assessor")
+                              offset_days, False, frozenset({"patrol.perform", "patrol.view"}), frozenset())
         db.execute("RELEASE notify")
         return created
     except Exception:                                              # noqa: BLE001

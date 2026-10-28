@@ -312,6 +312,12 @@ def seed_notify(con) -> None:
     if con.execute("SELECT 1 FROM app_settings WHERE key='patrol_rules_seeded'").fetchone() is None:
         con.executemany("INSERT INTO notify_rules(event, recipients, channels, offset_days, min_score) VALUES(?,?,?,?,?)", PATROL_RULES)
         con.execute("INSERT INTO app_settings(key, value) VALUES('patrol_rules_seeded', '1')")
+    if con.execute("SELECT 1 FROM app_settings WHERE key='patrol_fallback_migrated'").fetchone() is None:   # ผู้รับสำรองของกฎรอบตรวจเดิมฝังในโค้ด → ย้ายมาเป็นค่าในกฎ
+        for rid, rec in con.execute("SELECT id, recipients FROM notify_rules WHERE event LIKE 'patrol\\_%' ESCAPE '\\'").fetchall():
+            new = ",".join("owner_else:assessor" if x.strip() == "owner" else x.strip() for x in rec.split(","))
+            if new != rec:
+                con.execute("UPDATE notify_rules SET recipients=? WHERE id=?", (new, rid))
+        con.execute("INSERT INTO app_settings(key, value) VALUES('patrol_fallback_migrated', '1')")
     if con.execute("SELECT 1 FROM app_settings WHERE key='report_rules_seeded'").fetchone() is None:
         con.executemany("INSERT INTO notify_rules(event, recipients, channels, offset_days, min_score) VALUES(?,?,?,?,?)", REPORT_RULES)
         con.execute("INSERT INTO app_settings(key, value) VALUES('report_rules_seeded', '1')")
@@ -594,9 +600,9 @@ PATROL_RULES = (
     ("capa_overdue", "owner", _ALL, 1, None),
     ("capa_overdue", "owner,role:dept_head", _ALL, 3, None),
     ("capa_overdue", "role:admin,role:dept_head", _ALL, 7, None),
-    ("patrol_due", "owner", "inapp", 0, None),
-    ("patrol_overdue", "owner,role:dept_head", "inapp,telegram", 1, None),
-    ("patrol_overdue", "owner,role:dept_head", "inapp,telegram", 5, None),
+    ("patrol_due", "owner_else:assessor", "inapp", 0, None),
+    ("patrol_overdue", "owner_else:assessor,role:dept_head", "inapp,telegram", 1, None),
+    ("patrol_overdue", "owner_else:assessor,role:dept_head", "inapp,telegram", 5, None),
 )
 
 DEFAULT_LIKELIHOOD = ("แทบไม่เกิด", "เกิดได้ยาก", "เกิดได้บางครั้ง", "เกิดบ่อย", "เกิดบ่อยมาก")

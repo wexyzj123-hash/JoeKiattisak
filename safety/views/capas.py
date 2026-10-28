@@ -8,8 +8,9 @@ from flask import Blueprint, abort, flash, g, redirect, render_template, request
 
 from .. import capa, timeutil
 from ..db import get_db
-from ..hazards import risk_area_options, visible_hazard
+from ..hazards import risk_area_options, user_in_scope, visible_hazard
 from ..incidents import visible_incident
+from ..patrol import visible_round
 from ..perms import permission_any, permission_required, user_permissions
 from ..security import safety_login_required
 from .hazards import _int
@@ -61,11 +62,20 @@ def _source_from(raw: str):
     return (kind, sid), f"{row['code']} · {row['title']}"
 
 
+def _owner_choices(db, user, area_id: int | None = None) -> list:
+    """เจ้าของงานที่เลือกได้: ถ้าทราบพื้นที่ = ผู้ที่ขอบเขตครอบคลุมพื้นที่นั้น; ไม่ทราบ = ผู้ที่ขอบเขตทับซ้อนกับผู้สร้าง (ไม่แสดงรายชื่อทั้งบริษัท)"""
+    rows = db.execute("SELECT id, name, factory_id, department_id FROM safety_users WHERE active=1 ORDER BY name").fetchall()
+    if area_id is not None:
+        return [r for r in rows if user_in_scope(db, r, area_id)]
+    return [r for r in rows if (user["factory_id"] is None or r["factory_id"] in (None, user["factory_id"]))
+            and (user["department_id"] is None or r["department_id"] in (None, user["department_id"]))]
+
+
 def _form(values, errors, source_raw, source_title):
     db = get_db()
     return render_template("capa_form.html", values=values, errors=errors, source=source_raw, source_title=source_title, types=capa.TYPE_TH,
                            areas=risk_area_options(db, g.user),
-                           owners=db.execute("SELECT id, name FROM safety_users WHERE active=1 ORDER BY name").fetchall())
+                           owners=_owner_choices(db, g.user))
 
 
 @bp.route("/capas/new", methods=["GET", "POST"])
@@ -110,17 +120,18 @@ def detail(capa_id):
     names = db.execute("SELECT (SELECT name FROM safety_users WHERE id=?) AS owner, (SELECT name FROM safety_users WHERE id=?) AS creator, "
                        "(SELECT name FROM safety_users WHERE id=?) AS done_by, (SELECT name FROM safety_users WHERE id=?) AS verified_by, "
                        "(SELECT name_th FROM risk_areas WHERE id=?) AS area", (c["owner_id"], c["created_by"], c["done_by"], c["verified_by"], c["risk_area_id"])).fetchone()
-    source = None
+    source = None                                                     # แสดงต้นทางเฉพาะที่ผู้ดูมีสิทธิ์เห็นรายการนั้นจริง
     if c["source_kind"] == "hazard":
-        source = db.execute("SELECT id, code, title FROM hazards WHERE id=?", (c["source_id"],)).fetchone()
+        source = visible_hazard(db, g.user, c["source_id"])
     elif c["source_kind"] == "incident":
-        source = db.execute("SELECT id, code, title FROM incidents WHERE id=?", (c["source_id"],)).fetchone()
+        source = visible_incident(db, g.user, c["source_id"])
     elif c["source_kind"] == "patrol":
-        source = db.execute("SELECT r.id, r.code, a.text_th AS title FROM patrol_answers a JOIN patrol_rounds r ON r.id = a.round_id WHERE a.id=?", (c["source_id"],)).fetchone()
+        ans = db.execute("SELECT r.id, r.code, a.text_th AS title FROM patrol_answers a JOIN patrol_rounds r ON r.id = a.round_id WHERE a.id=?", (c["source_id"],)).fetchone()
+        source = ans if ans is not None and visible_round(db, g.user, ans["id"]) is not None else None
     events = db.execute("SELECT e.*, u.name AS actor FROM capa_events e LEFT JOIN safety_users u ON u.id = e.actor_id WHERE e.capa_id=? ORDER BY e.id", (capa_id,)).fetchall()
     return render_template("capa_detail.html", c=c, names=names, source=source, actions=actions, events=events, status_th=capa.STATUS_TH, kind_th=capa.KIND_TH,
                            type_th=capa.TYPE_TH, event_th=capa.EVENT_TH, overdue=bool(status in capa.OPEN_STATES and c["due_date"] < today),
-                           owners=db.execute("SELECT id, name FROM safety_users WHERE active=1 ORDER BY name").fetchall())
+                           owners=_owner_choices(db, g.user, c["risk_area_id"]))
 
 
 def _act(capa_id, fn, *args, perm_ok=True):

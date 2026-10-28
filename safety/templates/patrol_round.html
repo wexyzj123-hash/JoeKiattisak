@@ -28,7 +28,7 @@
     </div>
     <label>หมายเหตุ <input name="note_{{ a['id'] }}" value="{{ a['note'] }}" maxlength="500"></label>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">{{ photo_grid(photos.get(a['id'], [])) }}</div>
-    <label>แนบรูป{{ ' (บังคับถ้าไม่ผ่าน)' if a['require_photo'] }} <input type="file" name="photo_{{ a['id'] }}" accept="image/jpeg,image/png,image/webp" multiple capture="environment"></label>
+    <label>แนบรูป{{ ' (บังคับถ้าไม่ผ่าน)' if a['require_photo'] }} <input type="file" name="photo_{{ a['id'] }}" accept="image/jpeg,image/png,image/webp" multiple></label>
   </fieldset>
   {% endfor %}
   <div style="display:flex;gap:8px;flex-wrap:wrap;position:sticky;bottom:0;background:var(--bg);padding:10px 0">
