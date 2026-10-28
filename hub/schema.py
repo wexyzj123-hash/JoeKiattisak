@@ -27,3 +27,10 @@ CREATE TABLE IF NOT EXISTS app_registry (
 def ensure_schema(con) -> None:
     con.executescript(DDL)
     con.commit()
+
+
+def seed_default_apps(con, safety_url: str) -> None:
+    """ใส่ระบบ Safety เป็นรายการแรกถ้ายังไม่มี (ไม่ทับค่าที่แอดมินแก้แล้ว)"""
+    con.execute("INSERT OR IGNORE INTO app_registry(key,name_th,url,icon,sort) VALUES('safety',?,?,'shield',10)",
+                ("ความปลอดภัย (Safety)", safety_url))
+    con.commit()

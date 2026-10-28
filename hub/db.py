@@ -30,11 +30,12 @@ def close_db(_exc=None) -> None:
 
 
 def init_app(app) -> None:
-    from .schema import ensure_schema
+    from .schema import ensure_schema, seed_default_apps
     os.makedirs(os.path.dirname(os.path.abspath(app.config["DATABASE"])), exist_ok=True)
     con = connect(app.config["DATABASE"])
     try:
         ensure_schema(con)
+        seed_default_apps(con, app.config.get("SAFETY_URL", "http://localhost:5200"))
     finally:
         con.close()
     app.teardown_appcontext(close_db)

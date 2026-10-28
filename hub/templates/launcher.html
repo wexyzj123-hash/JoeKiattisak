@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}ระบบทั้งหมด · AIAT Hub{% endblock %}
+{% block body %}
+<header style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+  <h1>AIAT Hub</h1>
+  <form method="post" action="/logout" style="display:flex;gap:10px;align-items:center">
+    <span>{{ g.user['name_th'] }}</span>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <button type="submit">ออกจากระบบ</button>
+  </form>
+</header>
+<div class="tiles">
+  {% for a in apps %}
+  <a class="tile" href="/go/{{ a['key'] }}">
+    <strong>{{ a['name_th'] }}</strong>
+    <span style="color:var(--muted)">เข้าสู่ระบบ</span>
+  </a>
+  {% else %}<p>ยังไม่มีระบบที่คุณเข้าถึงได้</p>{% endfor %}
+</div>
+{% endblock %}
