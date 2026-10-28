@@ -1,0 +1,29 @@
+{% extends "layout.html" %}
+{% block title %}แผนการตรวจ · Safety 4.0{% endblock %}
+{% block body %}
+<h1>แผนการตรวจความปลอดภัย</h1>
+<p class="muted">ผูกแบบตรวจกับพื้นที่เสี่ยงและความถี่ — ครบรอบนับจากรอบที่ส่งแล้วล่าสุด ถ้าไม่ระบุผู้ตรวจประจำ ระบบแจ้งผู้ประเมินในขอบเขตของพื้นที่</p>
+<div class="card" style="max-width:none;margin:0 0 16px"><div class="table-wrap">
+<table class="table-stack" style="width:100%">
+  <tr><th>แบบตรวจ</th><th>พื้นที่</th><th>ความถี่</th><th>ผู้ตรวจประจำ</th><th>สถานะ</th><th>ดำเนินการ</th></tr>
+  {% for p in rows %}
+  <tr>
+    <td>{{ p['checklist_name'] }}</td><td>{{ p['area_name'] }}</td>
+    <td><select form="pl{{ p['id'] }}" name="frequency" aria-label="ความถี่">{% for k, v in frequencies.items() %}<option value="{{ k }}" {{ 'selected' if p['frequency'] == k }}>{{ v }}</option>{% endfor %}</select></td>
+    <td><select form="pl{{ p['id'] }}" name="inspector_id" aria-label="ผู้ตรวจประจำ"><option value="">— ไม่ระบุ —</option>{% for u in inspectors %}<option value="{{ u['id'] }}" {{ 'selected' if p['inspector_id'] == u['id'] }}>{{ u['name'] }}</option>{% endfor %}</select></td>
+    <td>{{ 'ใช้งาน' if p['active'] else 'ปิดใช้งาน' }}</td>
+    <td><form id="pl{{ p['id'] }}" method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ p['id'] }}">
+      <button name="action" value="update">บันทึก</button> <button name="action" value="toggle">{{ 'ปิดใช้งาน' if p['active'] else 'เปิดใช้งาน' }}</button></form></td>
+  </tr>
+  {% else %}<tr><td colspan="6">ยังไม่มีแผนการตรวจ</td></tr>{% endfor %}
+</table></div></div>
+<form method="post" class="card" style="max-width:520px;margin:0">
+  <h2>เพิ่มแผนการตรวจ</h2>
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="create">
+  <label>แบบตรวจ <select name="checklist_id" required><option value="">— เลือก —</option>{% for c in checklists %}<option value="{{ c['id'] }}">{{ c['code'] }} · {{ c['name_th'] }}</option>{% endfor %}</select></label>
+  <label>พื้นที่เสี่ยง <select name="risk_area_id" required><option value="">— เลือก —</option>{% for a in areas %}<option value="{{ a['id'] }}">{{ a['breadcrumb'] }}</option>{% endfor %}</select></label>
+  <label>ความถี่ <select name="frequency">{% for k, v in frequencies.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
+  <label>ผู้ตรวจประจำ (ไม่บังคับ) <select name="inspector_id"><option value="">— ไม่ระบุ —</option>{% for u in inspectors %}<option value="{{ u['id'] }}">{{ u['name'] }}</option>{% endfor %}</select></label>
+  <button type="submit">เพิ่มแผน</button>
+</form>
+{% endblock %}

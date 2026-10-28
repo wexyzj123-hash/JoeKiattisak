@@ -108,8 +108,13 @@ def world(tmp_path_factory):
     incident_flow.record_investigation(con, adm, inc["closed"], cause, "ขาดป้ายเตือน", "ติดป้าย", "")
     incident_flow.close(con, other_admin, inc["closed"], "ติดป้ายแล้ว")
     con.commit()
+    from safety import patrol_admin
+    clid, _ = patrol_admin.create_checklist(con, adm, {"code": "CL1", "name_th": "ตรวจเครื่องจักรประจำวัน " + "ยาว" * 30})
+    for n in range(4):
+        patrol_admin.add_item(con, adm, clid, {"section": "หมวดความปลอดภัย", "text_th": f"รายการตรวจที่ {n + 1} " + "ข้อความยาว" * 8, "weight": str(n + 1), "require_photo_on_fail": "1" if n % 2 else ""})
+    patrol_admin.create_plan(con, adm, {"checklist_id": str(clid), "risk_area_id": str(ch["a"]), "frequency": "weekly", "inspector_id": ""})
     h, sv = Live(hub), Live(saf)
-    yield {"hub": h, "safety": sv, "hub_cookie": h.cookie({"uid": hub_uid}), "safe_cookie": sv.cookie({"suid": admin}), "hz": hz, "inc": inc, "chain": ch}
+    yield {"hub": h, "safety": sv, "hub_cookie": h.cookie({"uid": hub_uid}), "safe_cookie": sv.cookie({"suid": admin}), "hz": hz, "inc": inc, "checklist": clid, "chain": ch}
     h.close(); sv.close()
 
 
@@ -130,7 +135,8 @@ def pages(world):
         P("sf-departments-new", s, "/master/departments/new", sc),
         P("sf-incidents", s, "/incidents", sc), P("sf-incident-new", s, "/incidents/new", sc),
         P("sf-incident-reported", s, f"/incidents/{world['inc']['reported']}", sc), P("sf-incident-closed", s, f"/incidents/{world['inc']['closed']}", sc),
-        P("sf-injury-admin", s, "/admin/injury-severities", sc), P("sf-incident-stats", s, "/incidents/stats", sc), P("sf-incident-causes", s, "/master/incident-causes", sc),
+        P("sf-injury-admin", s, "/admin/injury-severities", sc),
+        P("sf-checklists", s, "/admin/checklists", sc), P("sf-checklist-items", s, f"/admin/checklists/{world['checklist']}", sc), P("sf-patrol-plans", s, "/admin/patrol-plans", sc), P("sf-incident-stats", s, "/incidents/stats", sc), P("sf-incident-causes", s, "/master/incident-causes", sc),
         P("sf-sso-error", s, "/sso?token=bad"),
     ]
 
@@ -168,7 +174,7 @@ def test_stacked_tables_are_labelled_and_controls_usable_on_narrow_screens(resul
     bad = [(r["name"], r["theme"], r["width"], r["stack"]) for r in results
            if r["stack"]["unlabeled"] or r["stack"]["narrowControls"] or r["stack"]["outside"]]
     assert not bad, json.dumps(bad, ensure_ascii=False)[:3000]
-    assert {r["name"] for r in results if r["stack"]["tables"]} >= {"sf-notify-admin", "sf-users", "sf-custom-fields", "sf-criteria", "sf-incidents", "sf-injury-admin",
+    assert {r["name"] for r in results if r["stack"]["tables"]} >= {"sf-notify-admin", "sf-checklists", "sf-checklist-items", "sf-patrol-plans", "sf-users", "sf-custom-fields", "sf-criteria", "sf-incidents", "sf-injury-admin",
                                                                     "sf-hazards", "sf-factories", "hub-admin-users", "hub-admin-apps"}
 
 

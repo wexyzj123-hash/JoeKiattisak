@@ -44,6 +44,8 @@ MENU = (
         ("เกณฑ์ความเสี่ยง", "/admin/criteria", "alert", "criteria.manage"),
         ("ฟิลด์เพิ่มเติม", "/admin/custom-fields", "puzzle", "criteria.manage"),
         ("ระดับความรุนแรงการบาดเจ็บ", "/admin/injury-severities", "sliders", "criteria.manage"),
+        ("แบบตรวจความปลอดภัย", "/admin/checklists", "clipboard", "patrol.manage"),
+        ("แผนการตรวจ", "/admin/patrol-plans", "clock", "patrol.manage"),
         ("การแจ้งเตือน", "/admin/notifications", "bell", "users.manage"),
     )),
 )
