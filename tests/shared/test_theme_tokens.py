@@ -29,14 +29,16 @@ def block_after(selector: str) -> str:
     return CSS[CSS.index("{", start) + 1: CSS.index("}", start)]
 
 
-DARK = tokens(block_after(":root {"))
-LIGHT = tokens(block_after(':root[data-theme="light"]'))
-LIGHT_MEDIA = tokens(block_after(':root:not([data-theme="dark"])'))
+LIGHT = tokens(block_after(":root {"))                                                  # ธีมสว่างเป็นค่าเริ่มต้น
+DARK = tokens(block_after(':root[data-theme="dark"]'))
+DARK_MEDIA = tokens(block_after(':root:not([data-theme="light"])'))
 
 TEXT_ON_SURFACE = [("text", s) for s in ("bg", "panel", "panel-2")] + [("muted", s) for s in ("bg", "panel", "panel-2")] + \
                   [("link", s) for s in ("bg", "panel", "panel-2")] + [("danger-text", s) for s in ("bg", "panel")] + \
                   [("ok-text", s) for s in ("bg", "panel")] + [("warn-text", s) for s in ("bg", "panel")] + \
-                  [("text", "flash-bg"), ("text", "success-bg"), ("accent-ink", "accent"), ("danger-ink", "danger")]
+                  [("text", "flash-bg"), ("text", "success-bg"), ("accent-ink", "accent"), ("danger-ink", "danger"),
+                   ("primary-ink", "primary"), ("primary-ink", "primary-2"), ("shell-text", "shell-1"), ("shell-text", "shell-2")] + \
+                  []
 
 
 @pytest.mark.parametrize("name, theme", [("dark", DARK), ("light", LIGHT)])
@@ -46,8 +48,28 @@ def test_text_contrast_at_least_4_5_to_1(name, theme, fg, bg):
     assert contrast(theme[fg], theme[bg]) >= 4.5, f"{name}: {fg} {theme[fg]} on {bg} {theme[bg]} = {contrast(theme[fg], theme[bg]):.2f}"
 
 
-def test_light_theme_defined_identically_for_manual_toggle_and_system_preference():
-    assert LIGHT == LIGHT_MEDIA and len(LIGHT) >= 15
+def test_dark_theme_defined_identically_for_manual_toggle_and_system_preference():
+    assert DARK == DARK_MEDIA and len(DARK) >= 20
+
+
+def test_light_is_the_default_and_dark_needs_toggle_or_system_preference():
+    assert CSS.index(":root {") < CSS.index(':root[data-theme="dark"]')
+    assert "prefers-color-scheme: dark" in CSS and "prefers-color-scheme: light" not in CSS
+    assert re.search(r'html \{[^}]*color-scheme: light', CSS)
+
+
+def test_brand_tokens_present():
+    for t in ("primary", "primary-ink", "primary-2", "shell-1", "shell-2", "shell-text"):
+        assert t in LIGHT and t in DARK
+
+
+def test_theme_js_guards_storage_and_head_script_precedes_body():
+    js = open(os.path.join(os.path.dirname(__file__), "..", "..", "shared", "theme.js"), encoding="utf-8").read()
+    assert js.count("try {") >= 2 and "catch" in js
+    root = os.path.join(os.path.dirname(__file__), "..", "..")
+    for tpl in ("safety/templates/base.html", "hub/templates/base.html"):
+        html = open(os.path.join(root, tpl), encoding="utf-8").read()
+        assert html.index("/static/theme.js") < html.index("</head>"), tpl
 
 
 def test_both_themes_define_the_same_token_names():

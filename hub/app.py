@@ -35,6 +35,8 @@ def create_app(test_config: dict | None = None) -> Flask:
     from markupsafe import Markup
     from shared.mascot import DEFAULT_LABEL, mascot_svg
     app.jinja_env.globals["mascot"] = lambda mood="default", size=120, label=DEFAULT_LABEL, decorative=False: Markup(mascot_svg(mood, size, label, decorative))
+    from shared.icons import icon
+    app.jinja_env.globals["icon"] = icon
     install_csrf(app)
     app.before_request(load_user)
 

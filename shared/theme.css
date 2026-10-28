@@ -1,39 +1,45 @@
-/* shared/theme.css — ธีมความปลอดภัยของ AIAT: มืดแบบห้องควบคุม (ค่าเริ่มต้น) และสว่าง
-   สลับได้ 3 ทาง: ตามระบบ (prefers-color-scheme), ปุ่มสลับ (data-theme บน <html>), ค่าที่จำไว้ใน localStorage
+/* shared/theme.css — ธีม "Safety 4.0" ของ AISIN: สว่างเป็นค่าเริ่มต้น และมืดแบบห้องควบคุม
+   สลับได้ 3 ทาง: ตามระบบ (prefers-color-scheme: dark), ปุ่มสลับ (data-theme บน <html>), ค่าที่จำไว้ใน localStorage
    ทุกคู่สีตัวอักษร/พื้นหลังผ่าน WCAG AA (≥ 4.5:1) — ตรวจโดย tests/shared/test_theme_tokens.py
-   หมายเหตุ: บล็อกธีมสว่างสองที่ (ปุ่มสลับ/ตามระบบ) ต้องมีค่าเหมือนกันทุกตัว (มีการทดสอบบังคับ) */
+   หมายเหตุ: บล็อกธีมมืดสองที่ (ปุ่มสลับ/ตามระบบ) ต้องมีค่าเหมือนกันทุกตัว (มีการทดสอบบังคับ) */
 :root {
+  --bg: #eef3fa; --panel: #ffffff; --panel-2: #e4ecf7; --line: #cfdaea;
+  --text: #0b1b2e; --muted: #4a5b73; --link: #0b4fb8;
+  --primary: #0b4fb8; --primary-ink: #ffffff; --primary-2: #1d63d6;
+  --shell-1: #0a3a8f; --shell-2: #1558c9; --shell-text: #ffffff;
+  --accent: #ff9f1c; --accent-ink: #1a1100;
+  --danger: #ff4d4f; --danger-ink: #111111; --danger-text: #b91c1c;
+  --ok-text: #166534; --warn-text: #92400e;
+  --flash-bg: #fee2e2; --flash-line: #b91c1c; --success-bg: #dcfce7; --success-line: #15803d;
+  --focus: #0369a1;
+}
+:root[data-theme="dark"] {
   --bg: #071426; --panel: #0d2038; --panel-2: #0a1c33; --line: #1c3556;
-  --text: #e8eef7; --muted: #9db0c8; --link: #ff9f1c;
+  --text: #e8eef7; --muted: #9db0c8; --link: #7cb4ff;
+  --primary: #5aa0ff; --primary-ink: #061226; --primary-2: #7db4ff;
+  --shell-1: #0a2a63; --shell-2: #0f3f93; --shell-text: #ffffff;
   --accent: #ff9f1c; --accent-ink: #1a1100;
   --danger: #ff4d4f; --danger-ink: #111111; --danger-text: #ff7b7d;
   --ok-text: #4ade80; --warn-text: #facc15;
   --flash-bg: #3a1d1d; --flash-line: #ff4d4f; --success-bg: #12301f; --success-line: #2ecc71;
   --focus: #38bdf8;
 }
-:root[data-theme="light"] {
-  --bg: #f1f5f9; --panel: #ffffff; --panel-2: #e6edf6; --line: #d3dce8;
-  --text: #0b1b2e; --muted: #4f5f76; --link: #9a3412;
-  --accent: #ff9f1c; --accent-ink: #1a1100;
-  --danger: #ff4d4f; --danger-ink: #111111; --danger-text: #b91c1c;
-  --ok-text: #15803d; --warn-text: #92400e;
-  --flash-bg: #fee2e2; --flash-line: #b91c1c; --success-bg: #dcfce7; --success-line: #15803d;
-  --focus: #0369a1;
-}
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-    --bg: #f1f5f9; --panel: #ffffff; --panel-2: #e6edf6; --line: #d3dce8;
-    --text: #0b1b2e; --muted: #4f5f76; --link: #9a3412;
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #071426; --panel: #0d2038; --panel-2: #0a1c33; --line: #1c3556;
+    --text: #e8eef7; --muted: #9db0c8; --link: #7cb4ff;
+    --primary: #5aa0ff; --primary-ink: #061226; --primary-2: #7db4ff;
+    --shell-1: #0a2a63; --shell-2: #0f3f93; --shell-text: #ffffff;
     --accent: #ff9f1c; --accent-ink: #1a1100;
-    --danger: #ff4d4f; --danger-ink: #111111; --danger-text: #b91c1c;
-    --ok-text: #15803d; --warn-text: #92400e;
-    --flash-bg: #fee2e2; --flash-line: #b91c1c; --success-bg: #dcfce7; --success-line: #15803d;
-    --focus: #0369a1;
+    --danger: #ff4d4f; --danger-ink: #111111; --danger-text: #ff7b7d;
+    --ok-text: #4ade80; --warn-text: #facc15;
+    --flash-bg: #3a1d1d; --flash-line: #ff4d4f; --success-bg: #12301f; --success-line: #2ecc71;
+    --focus: #38bdf8;
   }
 }
-html { --radius: 14px; color-scheme: dark; }
-:root[data-theme="light"] { color-scheme: light; }
-@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) { color-scheme: light; } }
+html { --radius: 14px; color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: dark; } }
 
 * { box-sizing: border-box; }
 body { overflow-wrap: break-word; margin: 0; background: var(--bg); color: var(--text); font-family: "Sarabun", "Noto Sans Thai", system-ui, sans-serif; line-height: 1.5; }
@@ -51,16 +57,16 @@ a { color: var(--link); }
 .card, .tile, .content > *, .welcome > * { min-width: 0; }
 label { display: grid; gap: 4px; color: var(--muted); font-size: .9rem; }
 input, textarea, select { min-width: 0; width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; max-width: 100%; }
-input[type="checkbox"], input[type="radio"] { padding: 0; width: 1.1rem; height: 1.1rem; accent-color: var(--accent); }
+input[type="checkbox"], input[type="radio"] { padding: 0; width: 1.1rem; height: 1.1rem; accent-color: var(--primary); }
 input[type="file"] { padding: 8px; }
 textarea { resize: vertical; }
-button, .btn { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 10px; padding: 10px 16px; font: inherit; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-block; }
+button, .btn { background: var(--primary); color: var(--primary-ink); border: 0; border-radius: 10px; padding: 10px 16px; font: inherit; font-weight: 700; cursor: pointer; text-decoration: none; display: inline-block; }
 button:hover, .btn:hover { filter: brightness(1.06); }
 .flash { background: var(--flash-bg); border: 1px solid var(--flash-line); border-radius: 10px; padding: 10px 14px; margin-bottom: 12px; display: flex; gap: 12px; align-items: center; }
 .flash.success { background: var(--success-bg); border-color: var(--success-line); }
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 220px), 1fr)); gap: 16px; }
 .tile { display: grid; gap: 6px; color: inherit; text-decoration: none; position: relative; }
-.tile:hover { border-color: var(--accent); }
+.tile:hover { border-color: var(--primary); }
 .badge { position: absolute; top: 12px; right: 12px; background: var(--danger); color: var(--danger-ink); border-radius: 999px; padding: 2px 9px; font-size: .8rem; font-weight: 700; }
 .chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .8rem; font-weight: 700; color: #111; white-space: nowrap; }
 table { border-collapse: collapse; }
@@ -93,7 +99,7 @@ table th, table td { text-align: left; padding: 8px 10px; border-bottom: 1px sol
 .nav-group { padding: 14px 20px 6px; color: var(--muted); font-size: .8rem; letter-spacing: .04em; }
 .nav-item { display: block; padding: 9px 20px 9px 32px; color: var(--text); text-decoration: none; border-left: 3px solid transparent; }
 .nav-item:hover { background: rgba(127,127,127,.12); }
-.nav-item.active { color: var(--link); border-left-color: var(--accent); background: rgba(255,159,28,.12); font-weight: 700; }
+.nav-item.active { color: var(--link); border-left-color: var(--primary); background: rgba(11,79,184,.12); font-weight: 700; }
 .nav-user { margin-top: auto; padding: 16px 20px 0; display: grid; gap: 8px; color: var(--muted); }
 .content { padding: 24px; min-width: 0; }
 @media (max-width: 800px) {

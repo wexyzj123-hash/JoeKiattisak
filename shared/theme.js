@@ -7,7 +7,7 @@
   function current() {
     var set = root.getAttribute('data-theme');
     if (set) return set;
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   }
   apply(read());
   document.addEventListener('click', function (e) {
