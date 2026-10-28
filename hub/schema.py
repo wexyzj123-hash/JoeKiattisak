@@ -21,6 +21,28 @@ CREATE TABLE IF NOT EXISTS app_registry (
     required_role TEXT NOT NULL DEFAULT '',
     sort          INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS metrics (
+    id        INTEGER PRIMARY KEY AUTOINCREMENT,
+    key       TEXT NOT NULL UNIQUE,
+    zone      TEXT NOT NULL CHECK (zone IN ('env','utility')),
+    name_th   TEXT NOT NULL,
+    unit      TEXT NOT NULL DEFAULT '',
+    direction TEXT NOT NULL DEFAULT 'lower' CHECK (direction IN ('lower','higher')),
+    target    REAL,
+    decimals  INTEGER NOT NULL DEFAULT 0 CHECK (decimals BETWEEN 0 AND 4),
+    sort      INTEGER NOT NULL DEFAULT 0,
+    active    INTEGER NOT NULL DEFAULT 1
+);
+CREATE TABLE IF NOT EXISTS metric_readings (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    metric_id  INTEGER NOT NULL REFERENCES metrics(id),
+    read_date  TEXT NOT NULL,
+    value      REAL NOT NULL,
+    entered_by INTEGER,
+    entered_at TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    UNIQUE (metric_id, read_date)
+);
 """
 
 

@@ -145,7 +145,7 @@ def pages(world):
     hc, sc = world["hub_cookie"], world["safe_cookie"]
     P = lambda name, base, path, ck=None: {"name": name, "url": base.url + path, **({"cookie": ck} if ck else {})}
     return [
-        P("hub-login", h, "/login"), P("hub-launcher", h, "/", hc), P("hub-admin-apps", h, "/admin/apps", hc), P("hub-admin-users", h, "/admin/users", hc),
+        P("hub-login", h, "/login"), {**P("hub-launcher", h, "/", hc), "waitMs": 2600}, P("hub-admin-metrics", h, "/admin/metrics", hc), P("hub-admin-apps", h, "/admin/apps", hc), P("hub-admin-users", h, "/admin/users", hc),
         P("sf-home", s, "/", sc), P("sf-hazards", s, "/hazards", sc), P("sf-hazards-empty-search", s, "/hazards?q=ไม่มีทางเจอ", sc),
         P("sf-hazard-new", s, "/hazards/new", sc), P("sf-hazard-assigned", s, f"/hazards/{hz['assigned']}", sc),
         P("sf-hazard-reported", s, f"/hazards/{hz['reported']}", sc), P("sf-hazard-closed", s, f"/hazards/{hz['closed']}", sc),
@@ -202,7 +202,7 @@ def test_stacked_tables_are_labelled_and_controls_usable_on_narrow_screens(resul
            if r["stack"]["unlabeled"] or r["stack"]["narrowControls"] or r["stack"]["outside"]]
     assert not bad, json.dumps(bad, ensure_ascii=False)[:3000]
     assert {r["name"] for r in results if r["stack"]["tables"]} >= {"sf-notify-admin", "sf-checklists", "sf-checklist-items", "sf-patrol-plans", "sf-patrols", "sf-capas", "sf-report-due", "sf-report-monthly", "sf-users", "sf-custom-fields", "sf-criteria", "sf-incidents", "sf-injury-admin",
-                                                                    "sf-hazards", "sf-factories", "hub-admin-users", "hub-admin-apps"}
+                                                                    "sf-hazards", "sf-factories", "hub-admin-users", "hub-admin-apps", "hub-admin-metrics"}
 
 
 def test_measured_text_contrast_is_at_least_aa_in_both_themes(results):
