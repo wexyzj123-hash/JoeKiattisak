@@ -9,7 +9,7 @@ import sqlite3
 from datetime import date, timedelta
 from typing import Mapping
 
-from . import timeutil
+from . import notify, timeutil
 from .customfields import fields_for_type, validate_custom
 from .hazards import add_event, next_code, risk_area_options, user_in_scope, visible_hazard
 from .perms import user_permissions
@@ -33,7 +33,8 @@ def _need(db, user, perm: str, what: str) -> list[str]:
     return [] if perm in user_permissions(db, user) else [f"คุณไม่มีสิทธิ์{what}"]
 
 
-def _transition(db, hazard, sets: dict, kind: str, user, to_status: str, note: str = "", data: dict | None = None) -> list[str]:
+def _transition(db, hazard, sets: dict, kind: str, user, to_status: str, note: str = "", data: dict | None = None,
+                notify_event: str | None = None) -> list[str]:
     cols = ", ".join(f"{c}=?" for c in sets)
     # ตรวจทั้งสถานะและ version — กันคนตัดหน้าแม้สถานะเดิม (ประเมินซ้ำ/โอนงาน) แล้วบันทึกเหตุการณ์ผิดจากความจริง
     cur = db.execute(f"UPDATE hazards SET {cols}, status=?, version=version+1, updated_at=datetime('now','localtime') "
@@ -43,6 +44,8 @@ def _transition(db, hazard, sets: dict, kind: str, user, to_status: str, note: s
         db.rollback()
         return LOST_RACE
     add_event(db, hazard["id"], user["id"], kind, hazard["status"], to_status, note, data)
+    if notify_event:
+        notify.emit(db, notify_event, hazard["id"], user["id"])       # แถวแจ้งเตือนอยู่ใน transaction เดียวกับการเปลี่ยนสถานะ
     db.commit()
     return []
 
@@ -85,6 +88,7 @@ def report(db, user, form: Mapping) -> tuple[int | None, list[str]]:
             if attempt == 2:
                 return None, ["สร้างรหัสรายการไม่สำเร็จ กรุณาลองอีกครั้ง"]
     add_event(db, cur.lastrowid, user["id"], "reported", None, "reported")
+    notify.emit(db, "hazard_reported", cur.lastrowid, user["id"])
     db.commit()
     return cur.lastrowid, []
 
@@ -120,7 +124,7 @@ def assess(db, user, hazard_id: int, likelihood: int, severity: int, note: str =
         "likelihood": likelihood, "severity": severity, "score": score, "risk_level_id": level["id"],
         "level_name": level["name_th"], "level_color": level["color"],
         "level_requires_approval": level["requires_approval"]}, "assessed", user, "assessed",
-        (note or "").strip()[:NOTE_MAX], {"old": old, "new": new})
+        (note or "").strip()[:NOTE_MAX], {"old": old, "new": new}, "hazard_assessed")
 
 
 def assign(db, user, hazard_id: int, owner_id, due_date: str, note: str = "") -> list[str]:
@@ -151,7 +155,7 @@ def assign(db, user, hazard_id: int, owner_id, due_date: str, note: str = "") ->
         due = today + timedelta(days=level["sla_days"] if level else 0)
     return _transition(db, hazard, {"owner_id": owner, "due_date": due.isoformat()}, "assigned", user, "assigned",
                        (note or "").strip()[:NOTE_MAX], {"old_owner": hazard["owner_id"], "owner": owner,
-                                                         "due_date": due.isoformat()})
+                                                         "due_date": due.isoformat()}, "hazard_assigned")
 
 
 def _owners_ever(db, hazard) -> set[int]:
@@ -177,7 +181,7 @@ def close(db, user, hazard_id: int, note: str) -> list[str]:
         return [f"ผลการแก้ไขยาวเกิน {NOTE_MAX} ตัวอักษร"]
     if hazard["level_requires_approval"] and user["id"] in _owners_ever(db, hazard):
         return [f"รายการระดับ {hazard['level_name']} ต้องให้ผู้ที่ไม่เคยเป็นผู้รับผิดชอบรายการนี้เป็นผู้ปิดรายการ"]
-    return _transition(db, hazard, {"closing_note": note}, "closed", user, "closed", note)
+    return _transition(db, hazard, {"closing_note": note}, "closed", user, "closed", note, notify_event="hazard_closed")
 
 
 def reject(db, user, hazard_id: int, reason: str) -> list[str]:
@@ -189,4 +193,4 @@ def reject(db, user, hazard_id: int, reason: str) -> list[str]:
         return ["กรุณาระบุเหตุผลที่ปฏิเสธ"]
     if len(reason) > NOTE_MAX:
         return [f"เหตุผลยาวเกิน {NOTE_MAX} ตัวอักษร"]
-    return _transition(db, hazard, {"reject_reason": reason}, "rejected", user, "rejected", reason)
+    return _transition(db, hazard, {"reject_reason": reason}, "rejected", user, "rejected", reason, notify_event="hazard_rejected")
