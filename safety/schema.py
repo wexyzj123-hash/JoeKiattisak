@@ -102,6 +102,7 @@ CREATE TABLE IF NOT EXISTS hazards (
     risk_level_id  INTEGER REFERENCES risk_levels(id),
     level_name     TEXT,
     level_color    TEXT,
+    level_requires_approval INTEGER NOT NULL DEFAULT 0,
     status         TEXT NOT NULL DEFAULT 'reported'
                    CHECK (status IN ('reported','assessed','assigned','closed','rejected')),
     owner_id       INTEGER REFERENCES safety_users(id),
@@ -186,4 +187,5 @@ def ensure_schema(con) -> None:
     con.executescript(MASTER_DDL + ROLES_DDL + RISK_DDL + HAZARD_DDL + CUSTOM_DDL)
     seed_roles(con)
     seed_risk(con)
+    _add_column(con, "hazards", "level_requires_approval", "INTEGER NOT NULL DEFAULT 0")
     con.commit()
