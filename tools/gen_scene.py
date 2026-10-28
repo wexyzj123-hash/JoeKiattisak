@@ -19,7 +19,7 @@ def gear(cx, cy, r_out, r_in, teeth):
     return " ".join(pts)
 
 
-add(f'<svg class="tz" viewBox="0 0 {W} {H}" role="img" aria-label="ภาพประกอบโรงงานสามโซน: ความปลอดภัย สิ่งแวดล้อม และ Utility" xmlns="http://www.w3.org/2000/svg">')
+add(f'<svg class="tz" viewBox="0 0 {W} {H}" role="img" aria-label="Plant illustration: Safety, Environment and Utility" xmlns="http://www.w3.org/2000/svg">')
 add('''<defs>
 <linearGradient id="tz-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#06142b"/><stop offset=".62" stop-color="#0d2f66"/><stop offset="1" stop-color="#1b5bc4"/></linearGradient>
 <radialGradient id="tz-glow-a" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffb81c" stop-opacity=".45"/><stop offset="1" stop-color="#ffb81c" stop-opacity="0"/></radialGradient>

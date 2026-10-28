@@ -53,9 +53,14 @@ def theme_css():
 ASSETS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
 
 
-@bp.route("/static/hub/scene.css")
-def scene_css():
-    return send_file(os.path.join(ASSETS, "scene.css"), mimetype="text/css", max_age=300)
+HUB_ASSETS = {"scene.css": "text/css", "login.js": "text/javascript"}
+
+
+@bp.route("/static/hub/<name>")
+def hub_asset(name):
+    if name not in HUB_ASSETS:
+        abort(404)
+    return send_file(os.path.join(ASSETS, name), mimetype=HUB_ASSETS[name], max_age=300)
 
 
 @bp.route("/static/mascot/<name>")

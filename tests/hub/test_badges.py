@@ -59,7 +59,7 @@ def test_launcher_renders_when_badge_fails(hub_app, monkeypatch):
         raise urllib.error.URLError("down")
     monkeypatch.setattr(launcher, "urlopen", boom)
     r = login_as(hub_app).get("/")
-    assert r.status_code == 200 and "ความปลอดภัย (Safety)" in r.get_data(as_text=True)
+    assert r.status_code == 200 and "Safety" in r.get_data(as_text=True)
     assert 'class="badge"' not in r.get_data(as_text=True)
 
 

@@ -38,7 +38,7 @@ def test_launcher_lists_enabled_apps_only(hub_app):
     add_app(hub_app, "off", "ระบบปิดอยู่", enabled=0)
     add_app(hub_app, "on", "ระบบเปิดอยู่")
     html = login_as(hub_app).get("/").get_data(as_text=True)
-    assert "ความปลอดภัย (Safety)" in html and "ระบบเปิดอยู่" in html
+    assert "Safety" in html and "ระบบเปิดอยู่" in html
     assert "ระบบปิดอยู่" not in html
 
 

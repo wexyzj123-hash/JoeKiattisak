@@ -29,11 +29,14 @@ def ensure_schema(con) -> None:
     if "link_mode" not in {r[1] for r in con.execute("PRAGMA table_info(app_registry)")}:
         # sso = ส่งผู้ใช้ไป <url>/sso พร้อม token (ระบบที่รองรับ SSO) | link = เปิดที่อยู่ตรง ๆ (ระบบเดิมที่ไม่มี SSO เช่น UT CMMS / E-Checksheet) ไม่ส่ง token
         con.execute("ALTER TABLE app_registry ADD COLUMN link_mode TEXT NOT NULL DEFAULT 'sso'")
+    # ชื่อตั้งต้นเดิมเป็นภาษาไทย → เปลี่ยนเป็นภาษาอังกฤษ (เฉพาะแถวที่ยังเป็นชื่อตั้งต้นเดิม ไม่แตะที่แอดมินตั้งเอง)
+    for key, old, new in (("safety", "ความปลอดภัย (Safety)", "Safety"), ("utcmms", "UT CMMS (ระบบซ่อมบำรุง)", "UT CMMS")):
+        con.execute("UPDATE app_registry SET name_th=? WHERE key=? AND name_th=?", (new, key, old))
     con.commit()
 
 
 LINK_MODES = ("sso", "link")
-LINK_SEEDS = (("UTCMMS_URL", "utcmms", "UT CMMS (ระบบซ่อมบำรุง)", 20), ("ECHECK_URL", "echeck", "E-Checksheet", 30))
+LINK_SEEDS = (("UTCMMS_URL", "utcmms", "UT CMMS", 20), ("ECHECK_URL", "echeck", "E-Checksheet", 30))
 
 
 def _alive(port: int) -> bool:
@@ -68,5 +71,5 @@ def seed_link_apps(con, env, hub_port: int | None = None, probe=_alive) -> None:
 def seed_default_apps(con, safety_url: str) -> None:
     """ใส่ระบบ Safety เป็นรายการแรกถ้ายังไม่มี (ไม่ทับค่าที่แอดมินแก้แล้ว)"""
     con.execute("INSERT OR IGNORE INTO app_registry(key,name_th,url,icon,sort) VALUES('safety',?,?,'shield',10)",
-                ("ความปลอดภัย (Safety)", safety_url))
+                ("Safety", safety_url))
     con.commit()

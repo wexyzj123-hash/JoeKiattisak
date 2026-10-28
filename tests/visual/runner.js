@@ -44,7 +44,7 @@ const MEASURE = () => {
     const r = el.getBoundingClientRect();
     if (r.width > 0 && r.right > vw + 1) {
       // ข้ามองค์ประกอบที่อยู่ในกล่องที่เลื่อนแนวนอนได้เอง (overflow-x:auto) — ไม่ทำให้หน้าล้น
-      let scrolls = false; for (let n = el.parentElement; n && n !== document.body; n = n.parentElement) { const o = getComputedStyle(n).overflowX; if (o === 'auto' || o === 'scroll') { scrolls = true; break; } }
+      let scrolls = false; for (let n = el.parentElement; n && n !== document.body; n = n.parentElement) { const o = getComputedStyle(n).overflowX; if (o === 'auto' || o === 'scroll' || o === 'hidden' || o === 'clip') { scrolls = true; break; } }
       if (!scrolls) offenders.push(el.tagName.toLowerCase() + (el.className && typeof el.className === 'string' ? '.' + el.className.split(' ')[0] : '') + ' right=' + Math.round(r.right));
     }
   });
