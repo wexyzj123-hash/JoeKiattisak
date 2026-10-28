@@ -32,6 +32,9 @@ def create_app(test_config: dict | None = None) -> Flask:
         app.config["SECRET_KEY"] = hashlib.sha256(("hub-session:" + app.config["SSO_SECRET"]).encode()).hexdigest()
 
     hubdb.init_app(app)
+    from markupsafe import Markup
+    from shared.mascot import DEFAULT_LABEL, mascot_svg
+    app.jinja_env.globals["mascot"] = lambda mood="default", size=120, label=DEFAULT_LABEL: Markup(mascot_svg(mood, size, label))
     install_csrf(app)
     app.before_request(load_user)
 

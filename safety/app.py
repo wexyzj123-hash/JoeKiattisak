@@ -36,6 +36,9 @@ def create_app(test_config: dict | None = None) -> Flask:
     if app.config.get("MAX_CONTENT_LENGTH") is None:           # Flask ตั้งคีย์นี้เป็น None ไว้แล้ว — setdefault ไม่ทำงาน
         app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024
     safetydb.init_app(app)
+    from markupsafe import Markup
+    from shared.mascot import DEFAULT_LABEL, mascot_svg
+    app.jinja_env.globals["mascot"] = lambda mood="default", size=120, label=DEFAULT_LABEL: Markup(mascot_svg(mood, size, label))
     install_csrf(app)
     app.before_request(load_user)
     if app.config.get("HUB_STATUS_CHECK") is None:
