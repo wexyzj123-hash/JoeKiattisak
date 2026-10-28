@@ -72,6 +72,10 @@ New module beside the hazard register (a hazard is a *condition*; an incident is
 3. **Severity scale:** "general factory standard" → default injury classes (admin-editable): property damage only · first aid · medical treatment (no lost time) · lost time · permanent disability · fatality; the last three count as lost-time. Near Miss uses the existing risk criteria for *potential* severity.
 4. **Thai font:** a common free Thai font (e.g. Sarabun, SIL OFL) — decided in Phase 8.
 
+## 6b. Phase 7 assumptions (no user answer needed unless wrong)
+
+Frequencies daily/weekly/monthly; optional item weights (score = weighted pass %, N/A excluded); submitted rounds immutable at DB level; CAPA statuses open → in_progress → done → verified (+ cancelled), verifier must never have been owner nor the person who marked it done; "closing needs verified CAPAs" is a setting that defaults OFF; new permissions `patrol.manage/perform/view`, `capa.create/verify` (existing roles unchanged, admin grants). Details: `docs/superpowers/plans/2026-10-28-phase7-patrol-capa.md`.
+
 ## 7. Delivery plan
 
 | Phase | Scope | Depends on |
