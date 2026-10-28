@@ -3,7 +3,7 @@
 {% block body %}
 <p><a href="/">← กลับหน้ารวมระบบ</a> · <a href="/admin/apps">ทะเบียนระบบ</a></p>
 <h1>ผู้ใช้ของ Hub</h1>
-<table style="width:100%;border-collapse:collapse">
+<div class="table-wrap"><table style="width:100%;border-collapse:collapse">
 <tr><th>ชื่อผู้ใช้</th><th>ชื่อ</th><th>บทบาท</th><th>สถานะ</th><th>ดำเนินการ</th></tr>
 {% for u in users %}
 <tr><td>{{ u['username'] }}</td><td>{{ u['name_th'] }}</td><td>{{ roles[u['role']] }}</td><td>{{ 'ใช้งาน' if u['active'] else 'ปิด' }}</td>
@@ -18,7 +18,7 @@
 <input type="hidden" name="action" value="reset_password"><input name="password" type="password" minlength="8" placeholder="รหัสผ่านใหม่" required>
 <button type="submit">ตั้งรหัสผ่านใหม่</button></form></td></tr>
 {% endfor %}
-</table>
+</table></div>
 <form method="post" class="card" style="margin:24px 0;max-width:420px">
   <h2>เพิ่มผู้ใช้</h2>
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="create">

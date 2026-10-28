@@ -30,7 +30,9 @@
     <td>{{ r['due_date'] or '' }}{% if r['overdue'] %} <span class="chip" style="background:var(--danger)">เกินกำหนด</span>{% endif %}</td>
     <td>{{ r['reporter_name'] }}</td><td>{{ r['owner_name'] or '' }}</td><td>{{ r['reported_at'] }}</td>
   </tr>
-  {% else %}<tr><td colspan="9">ไม่พบรายการ</td></tr>{% endfor %}
+  {% else %}<tr><td colspan="9"><div class="empty-state">
+    {% if f.q or f.status or f.level or f.area or f.mine %}{{ mascot('thinking', 96) }}<p>ไม่พบรายการตามเงื่อนไขที่เลือก ลองปรับตัวกรองดูนะ</p>
+    {% else %}{{ mascot('sleeping', 96) }}<p>ยังไม่มีรายการอันตราย — ถ้าพบสิ่งผิดปกติ แจ้งได้เลย</p>{% endif %}</div></td></tr>{% endfor %}
 </table></div>
 <nav style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;align-items:center">
   {% for p in range(1, pages + 1) %}{% if p == 1 or p == pages or (p - page) | abs <= 2 %}

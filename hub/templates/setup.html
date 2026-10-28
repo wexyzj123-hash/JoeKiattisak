@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}ตั้งค่าครั้งแรก · AIAT Hub{% endblock %}
 {% block body %}
+<div class="scene">{{ mascot('default', 150) }}<h1>ยินดีต้อนรับสู่ AIAT Hub</h1><p class="muted">เริ่มต้นด้วยการสร้างผู้ดูแลระบบคนแรก</p></div>
 <form method="post" class="card">
   <h1>สร้างผู้ดูแลระบบคนแรก</h1>
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">

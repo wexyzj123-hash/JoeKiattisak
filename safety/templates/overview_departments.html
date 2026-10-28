@@ -7,8 +7,8 @@
   <tr><th>โรงงาน</th><th>แผนก</th><th>เปิดอยู่</th><th>เกินกำหนด</th><th>ระดับสูงขึ้นไป</th></tr>
   {% for r in rows %}
   <tr><td>{{ r['factory'] }}</td><td>{{ r['department'] }}</td><td>{{ r['open'] }}</td>
-    <td style="{{ 'color:var(--danger);font-weight:700' if r['overdue'] }}">{{ r['overdue'] }}</td>
-    <td style="{{ 'color:var(--warn);font-weight:700' if r['high_or_above'] }}">{{ r['high_or_above'] }}</td></tr>
+    <td style="{{ 'color:var(--danger-text);font-weight:700' if r['overdue'] }}">{{ r['overdue'] }}</td>
+    <td style="{{ 'color:var(--warn-text);font-weight:700' if r['high_or_above'] }}">{{ r['high_or_above'] }}</td></tr>
   {% else %}<tr><td colspan="5">ไม่พบหน่วยงาน</td></tr>{% endfor %}
 </table></div>
 <p style="color:var(--muted)">"ระดับสูงขึ้นไป" = ระดับที่ต้องอนุมัติ หรือระดับที่คะแนนสูงสุดไม่ต่ำกว่า 75% ของคะแนนเต็ม</p>

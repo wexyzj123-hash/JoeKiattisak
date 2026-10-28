@@ -19,7 +19,7 @@ if __name__ == "__main__":
     if os.environ.get("SAFETY_DISABLE_BACKGROUND") != "1":      # ตัวส่งแจ้งเตือน + งานประจำวัน (ตั้ง =1 เพื่อปิด เช่นรันหลายโปรเซส)
         from safety.delivery import start_worker
         from safety.scheduler import start_scheduler
-        start_worker(app)
+        start_worker(app, interval=float(os.environ.get("SAFETY_DELIVERY_INTERVAL", "30")))
         start_scheduler(app)
     print(f"safety พร้อมที่ http://0.0.0.0:{port}")
     serve(app, host="0.0.0.0", port=port)

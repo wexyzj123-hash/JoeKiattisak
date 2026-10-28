@@ -3,7 +3,7 @@
 {% block body %}
 <p><a href="/">← กลับหน้ารวมระบบ</a> · <a href="/admin/users">ผู้ใช้</a></p>
 <h1>ทะเบียนระบบ</h1>
-<table style="width:100%;border-collapse:collapse">
+<div class="table-wrap"><table style="width:100%;border-collapse:collapse">
 <tr><th>รหัส</th><th>ชื่อ</th><th>ที่อยู่</th><th>จำกัดบทบาท</th><th>สถานะ</th><th></th></tr>
 {% for a in apps %}
 <tr><td>{{ a['key'] }}</td><td>{{ a['name_th'] }}</td><td>{{ a['url'] }}</td><td>{{ roles.get(a['required_role'], 'ทุกคน') }}</td>
@@ -12,7 +12,7 @@
 <input type="hidden" name="action" value="toggle"><input type="hidden" name="key" value="{{ a['key'] }}">
 <button type="submit">{{ 'ปิดใช้งาน' if a['enabled'] else 'เปิดใช้งาน' }}</button></form></td></tr>
 {% endfor %}
-</table>
+</table></div>
 <form method="post" class="card" style="margin:24px 0;max-width:520px">
   <h2>เพิ่ม / แก้ไขระบบ (ใช้รหัสเดิมเพื่อแก้ไข)</h2>
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="save">

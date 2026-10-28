@@ -1,6 +1,9 @@
 {% extends "layout.html" %}
 {% block title %}AIAT Safety{% endblock %}
 {% block body %}
-<h1>สวัสดี {{ g.user['name'] }}</h1>
-<div class="card" style="max-width:none;margin:0"><p>เข้าสู่ระบบความปลอดภัยเรียบร้อย — เลือกเมนูด้านซ้ายเพื่อเริ่มใช้งาน</p></div>
+<div class="welcome">
+  {{ mascot('default', 110) }}
+  <div><h2>สวัสดี {{ g.user['name'] }}</h2><p class="muted">ยินดีต้อนรับสู่ AIAT Safety — เลือกเมนูเพื่อเริ่มใช้งาน หรือแจ้งอันตรายที่พบได้ทันที</p></div>
+</div>
+<div style="display:flex;gap:10px;flex-wrap:wrap"><a class="btn" href="/hazards">ลงทะเบียนบันทึกอันตราย</a><a class="btn" href="/notifications">การแจ้งเตือนของฉัน</a></div>
 {% endblock %}

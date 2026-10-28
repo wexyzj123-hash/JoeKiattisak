@@ -16,6 +16,7 @@ from ..security import login_required
 bp = Blueprint("launcher", __name__)
 THEME_CSS = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
                          "shared", "theme.css")
+THEME_JS = THEME_CSS[:-len("theme.css")] + "theme.js"
 
 
 BADGE_APPS = {"safety"}          # ระบบที่มี /api/summary ให้ Hub ดึงตัวเลข
@@ -38,6 +39,11 @@ def _allowed(app_row) -> bool:
     return app_row["required_role"] in ("", g.user["role"])
 
 
+@bp.route("/static/theme.js")
+def theme_js():
+    return send_file(THEME_JS, mimetype="text/javascript", max_age=3600)
+
+
 @bp.route("/static/theme.css")
 def theme_css():
     return send_file(THEME_CSS, mimetype="text/css", max_age=3600)
@@ -52,7 +58,7 @@ def home():
         if _allowed(r):
             badge = fetch_badge(r, current_app.config["SERVICE_TOKEN"]) if r["key"] in BADGE_APPS else None
             apps.append({"key": r["key"], "name_th": r["name_th"], "badge": badge})
-    return render_template("launcher.html", apps=apps)
+    return render_template("launcher.html", apps=apps, any_badge=any(a["badge"] for a in apps))
 
 
 @bp.route("/go/<key>")

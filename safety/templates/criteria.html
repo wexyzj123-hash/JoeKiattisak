@@ -6,13 +6,13 @@
 {% for e in errors %}<div class="flash">{{ e }}</div>{% endfor %}
 <form method="post">
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:16px">
   {% for kind, title in (('likelihood', 'โอกาสที่จะเกิด'), ('severity', 'ความรุนแรง')) %}
   <div class="card" style="max-width:none;margin:0">
     <h2>{{ title }}</h2>
     <label>จำนวนระดับ (2-10) <input name="{{ kind }}_size" value="{{ v.get(kind ~ '_size', '') }}" inputmode="numeric"></label>
     {% for n in scale_rows %}
-    <div style="display:grid;grid-template-columns:2rem 1fr 1.5fr;gap:6px;align-items:center">
+    <div style="display:grid;grid-template-columns:2rem minmax(0,1fr) minmax(0,1.5fr);gap:6px;align-items:center">
       <strong>{{ n }}</strong>
       <input name="{{ kind }}_label_{{ n }}" value="{{ v.get(kind ~ '_label_' ~ n, '') }}" placeholder="ชื่อระดับ" maxlength="100">
       <input name="{{ kind }}_desc_{{ n }}" value="{{ v.get(kind ~ '_desc_' ~ n, '') }}" placeholder="คำอธิบาย" maxlength="300">

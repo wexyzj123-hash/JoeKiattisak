@@ -19,7 +19,7 @@
     {% if not r['read_at'] %}<form method="post" action="/notifications/{{ r['id'] }}/read"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button type="submit">อ่านแล้ว</button></form>{% endif %}
   </div>
   {% else %}
-  <div class="card" style="max-width:none;margin:0"><p>ยังไม่มีการแจ้งเตือน</p></div>
+  <div class="card" style="max-width:none;margin:0"><div class="empty-state">{{ mascot('sleeping', 96) }}<p>ยังไม่มีการแจ้งเตือน — สบายใจได้ น้องเอเอียตกำลังเฝ้าระวังอยู่</p></div></div>
   {% endfor %}
 </div>
 <nav style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;align-items:center">

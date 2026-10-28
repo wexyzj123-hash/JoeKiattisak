@@ -2,14 +2,15 @@
 {% block title %}ภาพรวมดำเนินงาน · AIAT Safety{% endblock %}
 {% block body %}
 <h1>ภาพรวมดำเนินงาน</h1>
+{% if overdue %}<div class="banner">{{ mascot('alert', 72) }}<div><strong>มีรายการเกินกำหนด {{ overdue }} รายการ</strong><br><a href="/hazards?sort=due_date&dir=asc">ดูรายการที่ต้องติดตาม</a></div></div>{% endif %}
 <div class="tiles" style="margin-bottom:16px">
   <div class="tile"><span style="color:var(--muted)">เปิดอยู่</span><strong style="font-size:2rem">{{ open_total }}</strong></div>
-  <div class="tile" style="border-color:var(--danger)"><span style="color:var(--muted)">เกินกำหนด</span><strong style="font-size:2rem;color:var(--danger)">{{ overdue }}</strong><span>เกินกำหนด</span></div>
+  <div class="tile" style="border-color:var(--danger)"><span class="muted">เกินกำหนด</span><strong style="font-size:2rem;color:var(--danger-text)">{{ overdue }}</strong></div>
   {% for k in ('reported', 'assessed', 'assigned', 'closed', 'rejected') %}
   <div class="tile"><span style="color:var(--muted)">{{ status_th[k] }}</span><strong style="font-size:1.6rem">{{ counts[k] }}</strong></div>
   {% endfor %}
 </div>
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:16px">
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:16px">
   <div class="card" style="max-width:none;margin:0">
     <h2>รายการเปิดอยู่ตามระดับความเสี่ยง</h2>
     {% for name, color, n in levels %}
@@ -22,7 +23,7 @@
   </div>
   <div class="card" style="max-width:none;margin:0;overflow-x:auto">
     <h2>แผนที่ความเสี่ยง (โอกาส × ความรุนแรง)</h2>
-    <table style="border-collapse:separate;border-spacing:3px">
+    <table class="heatmap">
       {% for row in grid %}
       <tr><th style="font-size:.75rem;color:var(--muted)">{{ row[0].s }}</th>
         {% for c in row %}<td data-cell="{{ c.l }}-{{ c.s }}" data-count="{{ c.count }}" title="คะแนน {{ c.score }}"
@@ -47,6 +48,6 @@
     </div>
     {% endfor %}
   </div>
-  <small><span style="color:var(--accent)">■</span> แจ้ง · <span style="color:var(--ok)">■</span> ปิด (ตัวเลข: แจ้ง/ปิด)</small>
+  <small><span style="color:var(--warn-text)">■</span> แจ้ง · <span style="color:var(--ok-text)">■</span> ปิด (ตัวเลข: แจ้ง/ปิด)</small>
 </div>
 {% endblock %}

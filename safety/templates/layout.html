@@ -1,8 +1,15 @@
 {% extends "base.html" %}
+{% block toggle %}{% endblock %}
 {% block shell %}
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand">AIAT Safety</div>
+    <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="เปิด/ปิดเมนู">
+    <div class="sidebar-top">
+      <div class="brand">AIAT Safety</div>
+      <button type="button" class="theme-toggle" data-theme-toggle aria-label="สลับธีมสว่าง/มืด" title="สลับธีมสว่าง/มืด"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg></button>
+      <label for="nav-toggle" class="nav-burger">☰ เมนู</label>
+    </div>
+    <div class="nav-body">
     {% for grp in nav %}
     <div class="nav-group">{{ grp.title }}</div>
     {% for i in grp.items %}<a class="nav-item{{ ' active' if i.active }}" href="{{ i.href }}">{{ i.label }}</a>{% endfor %}
@@ -15,9 +22,13 @@
       <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
       <button type="submit">ออกจากระบบ</button>
     </form>
+    </div>
   </aside>
   <main class="content">
-    {% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
+    {% for category, m in get_flashed_messages(with_categories=true) %}
+    {% if category == 'celebrate' %}<div class="flash success">{{ mascot('celebrate', 56) }}<span>{{ m }}</span></div>
+    {% else %}<div class="flash">{{ m }}</div>{% endif %}
+    {% endfor %}
     {% block body %}{% endblock %}
   </main>
 </div>

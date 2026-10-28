@@ -41,7 +41,7 @@
   <button type="submit">เพิ่มกฎ</button>
 </form>
 
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;margin-bottom:16px">
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px;margin-bottom:16px">
   <form method="post" class="card" style="max-width:none;margin:0">
     <h2>ช่วงเวลาเงียบและงานประจำวัน</h2>
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="settings_save">

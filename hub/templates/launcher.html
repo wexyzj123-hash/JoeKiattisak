@@ -1,21 +1,28 @@
 {% extends "base.html" %}
 {% block title %}ระบบทั้งหมด · AIAT Hub{% endblock %}
+{% block toggle %}{% endblock %}
 {% block body %}
-<header style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
-  <h1>AIAT Hub</h1>
-  <form method="post" action="/logout" style="display:flex;gap:10px;align-items:center">
+<header style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;gap:12px;flex-wrap:wrap">
+  <h1 style="margin:0">AIAT Hub</h1>
+  <form method="post" action="/logout" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+    <button type="button" class="theme-toggle" data-theme-toggle aria-label="สลับธีมสว่าง/มืด" title="สลับธีมสว่าง/มืด"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 0 1 0 18z" fill="currentColor"/></svg></button>
     {% if g.user['role'] == 'admin' %}<a href="/admin/apps">ทะเบียนระบบ</a> <a href="/admin/users">ผู้ใช้</a>{% endif %}
     <span>{{ g.user['name_th'] }}</span>
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
     <button type="submit">ออกจากระบบ</button>
   </form>
 </header>
+<div class="welcome">
+  {{ mascot('alert' if any_badge else 'default', 96) }}
+  <div><h2>สวัสดี {{ g.user['name_th'] }}</h2>
+    <p class="muted">{{ 'มีรายการที่ต้องติดตาม — เปิดระบบที่มีตัวเลขแจ้งเตือนเพื่อดูรายละเอียด' if any_badge else 'เลือกระบบที่ต้องการใช้งาน' }}</p></div>
+</div>
 <div class="tiles">
   {% for a in apps %}
   <a class="tile" href="/go/{{ a['key'] }}">
     {% if a['badge'] %}<span class="badge">{{ a['badge'] }}</span>{% endif %}
     <strong>{{ a['name_th'] }}</strong>
-    <span style="color:var(--muted)">เข้าสู่ระบบ</span>
+    <span class="muted">เข้าสู่ระบบ</span>
   </a>
   {% else %}<p>ยังไม่มีระบบที่คุณเข้าถึงได้</p>{% endfor %}
 </div>

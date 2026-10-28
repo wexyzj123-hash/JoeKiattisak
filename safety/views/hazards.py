@@ -238,6 +238,7 @@ def close(hazard_id):
         return _done(errors, hazard_id)
     errors = workflow.close(get_db(), g.user, hazard_id, request.form.get("note", ""))
     if not errors:
+        flash("ปิดรายการเรียบร้อย — ขอบคุณที่ช่วยให้โรงงานปลอดภัยขึ้น", "celebrate")
         errors = _attach(hazard_id, "after", files)
     return _done(errors, hazard_id)
 

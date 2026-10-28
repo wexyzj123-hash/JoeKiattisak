@@ -25,7 +25,7 @@
         <button type="submit">{{ 'ปิดใช้งาน' if r['active'] else 'เปิดใช้งาน' }}</button></form>
     {% endif %}</td>
   </tr>
-  {% else %}<tr><td colspan="8">ไม่พบข้อมูล</td></tr>{% endfor %}
+  {% else %}<tr><td colspan="8"><div class="empty-state">{{ mascot('thinking' if q else 'sleeping', 80) }}<p>ไม่พบข้อมูล{{ ' ตามคำค้นหา' if q }}</p></div></td></tr>{% endfor %}
 </table>
 </div>
 <nav style="display:flex;gap:6px;margin-top:12px">

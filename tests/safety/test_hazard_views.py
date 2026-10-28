@@ -161,7 +161,8 @@ def test_full_flow_via_http(env):
     assert env.act(asr, hid, "close", note="เปลี่ยนสายแล้ว ตรวจผ่าน").status_code == 302
     html = asr.get(f"/hazards/{hid}").get_data(as_text=True)
     assert env.row(hid)["status"] == "closed" and "เปลี่ยนสายแล้ว ตรวจผ่าน" in html and "สูงมาก" in html
-    order = [html.index(k) for k in ("แจ้งอันตราย", "ประเมินความเสี่ยง", "มอบหมาย", "ปิดรายการ")]
+    timeline = html[html.index("ประวัติการดำเนินการ"):]                                    # เฉพาะส่วนประวัติ (ด้านบนมีข้อความแสดงผลการปิดรายการด้วย)
+    order = [timeline.index(k) for k in ("แจ้งอันตราย", "ประเมินความเสี่ยง", "มอบหมาย", "ปิดรายการ")]
     assert order == sorted(order)
 
 

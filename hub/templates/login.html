@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}เข้าสู่ระบบ · AIAT Hub{% endblock %}
 {% block body %}
+<div class="scene">{{ mascot('default', 150) }}<h1>AIAT Hub</h1><p class="muted">ศูนย์กลางเข้าสู่ระบบของ AIAT — เข้าสู่ระบบครั้งเดียว ใช้ได้ทุกระบบ</p></div>
 <form method="post" action="/login?next={{ next | urlencode }}" class="card">
   <h1>เข้าสู่ระบบ</h1>
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">

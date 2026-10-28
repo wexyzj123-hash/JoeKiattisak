@@ -14,7 +14,7 @@
   {% if h['level_name'] %}<span class="chip" style="background:{{ h['level_color'] }}">{{ h['level_name'] }} (คะแนน {{ h['score'] }})</span>{% endif %}
   {% if overdue %}<span class="chip" style="background:var(--danger)">เกินกำหนด</span>{% endif %}
 </div>
-<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px">
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px">
 <div class="card" style="max-width:none;margin:0">
   <h2>รายละเอียด</h2>
   <p><strong>พื้นที่:</strong> {{ crumb }}</p>

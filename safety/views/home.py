@@ -10,6 +10,12 @@ from ..security import safety_login_required
 bp = Blueprint("home", __name__)
 THEME_CSS = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
                          "shared", "theme.css")
+THEME_JS = THEME_CSS[:-len("theme.css")] + "theme.js"
+
+
+@bp.route("/static/theme.js")
+def theme_js():
+    return send_file(THEME_JS, mimetype="text/javascript", max_age=3600)
 
 
 @bp.route("/static/theme.css")
