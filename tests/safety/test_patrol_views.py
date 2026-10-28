@@ -333,4 +333,4 @@ def test_dashboard_latest_rounds_table_and_capa_overdue_kpi(v):
     v.con.execute("UPDATE capas SET due_date='2026-03-01' WHERE id=?", (cid,)); v.con.commit()
     assert re.search(r'data-kpi="capa-overdue"[^>]*>1<', v.admin.get("/").get_data(as_text=True))
     assert re.search(r'data-kpi="capa-overdue"[^>]*>1<', v.rep.get("/").get_data(as_text=True))                      # เจ้าของเห็นของตน
-    assert len(re.findall(r'class="kpi[ "]', v.admin.get("/").get_data(as_text=True))) == 6
+    assert len(re.findall(r'class="kpi[ "]', v.admin.get("/").get_data(as_text=True))) == 7

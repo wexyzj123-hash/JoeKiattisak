@@ -217,3 +217,24 @@ def test_overview_pages_use_the_premium_stage_and_assets(safety_app):
     assert j.status_code == 200 and j.mimetype == "text/javascript" and "prefers-reduced-motion" in j.get_data(as_text=True)
     assert c.get("/static/safety/evil.js").status_code == 404
     assert 'data-kpi="open"' in c.get("/").get_data(as_text=True)                                        # ค่าจริงยังอยู่ใน HTML (ไม่พึ่ง JS)
+
+
+def test_overview_drilldown_links_open_matching_lists(safety_app):
+    seed(safety_app)
+    c = login(safety_app, "admin")
+    html = c.get("/overview").get_data(as_text=True)
+    for href in ("/hazards?open=1", "/hazards?overdue=1", "/hazards?status=assigned", "/hazards?l=5&s=5"):
+        assert f'href="{href}' in html, href
+    assert codes(c.get("/hazards?l=5&s=5").get_data(as_text=True)) == ["HZ-D-1"]
+
+
+def test_home_ships_drawer_and_trend_hooks(safety_app):
+    seed(safety_app)
+    c = login(safety_app, "admin")
+    html = c.get("/").get_data(as_text=True)
+    assert 'id="trend-chart"' in html and 'id="trend-data"' in html and 'id="drawer-root"' in html and 'data-drawer="hazard:' in html
+    js = c.get("/static/safety/premium.js").get_data(as_text=True)
+    assert "/drawer/" in js and "trend-data" in js and "Escape" in js
+    css = c.get("/static/safety/premium.css").get_data(as_text=True)
+    for cls in (".stepper", ".pill", ".drawer", ".chart-tip", ".pipe-bar"):
+        assert cls in css

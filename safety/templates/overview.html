@@ -7,21 +7,21 @@
 <h1>ภาพรวมดำเนินงาน</h1>
 {% if overdue %}<div class="banner">{{ mascot('alert', 72) }}<div><strong>มีรายการเกินกำหนด {{ overdue }} รายการ</strong><br><a href="/hazards?sort=due_date&dir=asc">ดูรายการที่ต้องติดตาม</a></div></div>{% endif %}
 <div class="tiles" style="margin-bottom:16px">
-  <div class="tile"><span style="color:var(--muted)">เปิดอยู่</span><strong style="font-size:2rem">{{ open_total }}</strong></div>
-  <div class="tile" style="border-color:var(--danger)"><span class="muted">เกินกำหนด</span><strong style="font-size:2rem;color:var(--danger-text)">{{ overdue }}</strong></div>
+  <a class="tile" href="/hazards?open=1"><span style="color:var(--muted)">เปิดอยู่</span><strong style="font-size:2rem">{{ open_total }}</strong></a>
+  <a class="tile" href="/hazards?overdue=1" style="border-color:var(--danger)"><span class="muted">เกินกำหนด</span><strong style="font-size:2rem;color:var(--danger-text)">{{ overdue }}</strong></a>
   {% for k in ('reported', 'assessed', 'assigned', 'closed', 'rejected') %}
-  <div class="tile"><span style="color:var(--muted)">{{ status_th[k] }}</span><strong style="font-size:1.6rem">{{ counts[k] }}</strong></div>
+  <a class="tile" href="/hazards?status={{ k }}"><span style="color:var(--muted)">{{ status_th[k] }}</span><strong style="font-size:1.6rem">{{ counts[k] }}</strong></a>
   {% endfor %}
 </div>
 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:16px">
   <div class="card" style="max-width:none;margin:0">
     <h2>รายการเปิดอยู่ตามระดับความเสี่ยง</h2>
     {% for name, color, n in levels %}
-    <div style="display:grid;grid-template-columns:7rem 1fr 2.5rem;gap:8px;align-items:center;margin:6px 0">
+    <a href="/hazards?open=1&level={{ name | urlencode }}" style="display:grid;grid-template-columns:7rem 1fr 2.5rem;gap:8px;align-items:center;margin:6px 0;color:inherit;text-decoration:none">
       <span>{{ name }}</span>
       <div style="background:var(--line);border-radius:6px;height:14px"><div style="width:{{ (n * 100 / level_peak) | round(1) }}%;background:{{ color }};height:14px;border-radius:6px"></div></div>
       <strong>{{ n }}</strong>
-    </div>
+    </a>
     {% else %}<p style="color:var(--muted)">ยังไม่มีรายการเปิดอยู่</p>{% endfor %}
   </div>
   <div class="card" style="max-width:none;margin:0;overflow-x:auto">
@@ -30,7 +30,7 @@
       {% for row in grid %}
       <tr><th style="font-size:.75rem;color:var(--muted)">{{ row[0].s }}</th>
         {% for c in row %}<td data-cell="{{ c.l }}-{{ c.s }}" data-count="{{ c.count }}" title="คะแนน {{ c.score }}"
-          style="width:44px;height:36px;text-align:center;border-radius:6px;background:{{ c.color }};color:#111;font-weight:700;opacity:{{ 1 if c.count else 0.35 }}">{{ c.count or '' }}</td>{% endfor %}
+          style="width:44px;height:36px;text-align:center;border-radius:6px;background:{{ c.color }};color:#111;font-weight:700;opacity:{{ 1 if c.count else 0.35 }}">{% if c.count %}<a href="/hazards?l={{ c.l }}&s={{ c.s }}" style="color:#111;display:block;text-decoration:none" aria-label="ดู {{ c.count }} รายการ โอกาส {{ c.l }} ความรุนแรง {{ c.s }}">{{ c.count }}</a>{% endif %}</td>{% endfor %}
       </tr>
       {% endfor %}
       <tr><th></th>{% for l in likelihoods %}<th style="font-size:.75rem;color:var(--muted)">{{ l }}</th>{% endfor %}</tr>

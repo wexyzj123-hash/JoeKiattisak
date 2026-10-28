@@ -65,3 +65,17 @@ def trend(rows: list[tuple[str, int, int]], width: int = 600, height: int = 200,
     return Markup(f'<svg xmlns="http://www.w3.org/2000/svg" class="trend" viewBox="0 0 {width} {height}" role="img" '
                   f'aria-label="{escape(title + ": " + summary)}" preserveAspectRatio="xMidYMid meet">'
                   f'<path d="M{left} {top + plot_h} H{width - left}" stroke="var(--line)" stroke-width="1"/>{"".join(parts)}</svg>')
+
+
+def spark(values: list[int], width: int = 120, height: int = 36, pad: int = 3) -> str:
+    """จุดของเส้นแนวโน้มเล็ก (polyline points) — ค่าเท่ากันหมดเป็นเส้นแบนกลางกรอบ; ว่าง = สตริงว่าง"""
+    if not values:
+        return ""
+    lo, hi, n = min(values), max(values), len(values)
+    span = (hi - lo) or 1
+    pts = []
+    for i, v in enumerate(values):
+        x = pad + (width - 2 * pad) * (i / (n - 1) if n > 1 else 0.5)
+        y = height / 2 if hi == lo else pad + (height - 2 * pad) * (1 - (v - lo) / span)
+        pts.append(f"{x:.1f},{y:.1f}")
+    return " ".join(pts)

@@ -82,3 +82,89 @@
 @media (prefers-reduced-motion: reduce) {
   .premium-stage *, .premium-stage *::before, .premium-stage *::after { animation: none !important; transition: none !important; }
 }
+
+/* ===== ป้ายสถานะ (pill) + แถบขั้นตอน (stepper) ===== */
+.pill { --pd: #8a99ad; display: inline-flex; align-items: center; gap: 7px; padding: 3px 11px 3px 9px; border-radius: 999px; font-size: .82rem; font-weight: 700; line-height: 1.5; white-space: nowrap;
+  background: color-mix(in srgb, var(--pd) 17%, transparent); color: color-mix(in srgb, var(--pd) 62%, var(--text)); }
+.pill i { width: 8px; height: 8px; border-radius: 50%; background: var(--pd); box-shadow: 0 0 0 3px color-mix(in srgb, var(--pd) 25%, transparent); }
+.pill-reported, .pill-open { --pd: #2a74e8; } .pill-assessed, .pill-investigating, .pill-done { --pd: #12a594; } .pill-assigned, .pill-in_progress, .pill-actions_set { --pd: #f0a30a; }
+.pill-closed, .pill-verified, .pill-submitted { --pd: #1fa55c; } .pill-late { --pd: #e5484d; } .pill-rejected, .pill-cancelled, .pill-draft { --pd: #8a99ad; }
+
+.stepper { list-style: none; margin: 18px 0 8px; padding: 0; display: flex; }
+.step { position: relative; flex: 1; display: grid; justify-items: center; gap: 8px; text-align: center; font-size: .82rem; color: var(--muted); --sc: var(--primary); }
+.step:not(:first-child)::before { content: ""; position: absolute; top: 13px; right: 50%; width: 100%; height: 3px; border-radius: 2px; background: var(--line); }
+.step.done:not(:first-child)::before, .step.current:not(:first-child)::before { background: var(--sc); }
+.step.bad:not(:first-child)::before { background: #e5484d; }
+.step .dot { position: relative; z-index: 1; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; border: 2px dashed var(--line); background: var(--panel); color: #fff; font-weight: 800; }
+.step.done .dot { border: 0; background: linear-gradient(145deg, color-mix(in srgb, var(--sc) 85%, #fff), var(--sc)); box-shadow: 0 6px 12px -4px var(--sc); }
+.step.current .dot { border: 3px solid var(--sc); background: var(--panel); box-shadow: 0 0 0 5px color-mix(in srgb, var(--sc) 22%, transparent); animation: step-pulse 2.4s ease-in-out infinite; }
+.step.bad .dot { border: 0; background: #e5484d; box-shadow: 0 6px 12px -4px #e5484d; }
+.step.done, .step.current { color: var(--text); font-weight: 700; } .step.bad { color: var(--danger-text); font-weight: 700; }
+@keyframes step-pulse { 50% { box-shadow: 0 0 0 9px color-mix(in srgb, var(--sc) 6%, transparent); } }
+
+/* ===== KPI: เส้นแนวโน้มเล็ก + ส่วนต่างจากเดือนก่อน ===== */
+.premium-stage .kpi .kpi-spark { grid-column: 1 / -1; position: relative; z-index: 1; width: 100%; height: 38px; margin-top: 10px; overflow: visible; }
+.spark-line { fill: none; stroke: var(--ac); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; vector-effect: non-scaling-stroke; clip-path: inset(-6px 0 -6px 0); transition: clip-path 1.2s ease .3s; }
+.premium-stage .kpi .delta { grid-column: 1 / -1; position: relative; z-index: 1; margin-top: 4px; font-size: .82rem; font-weight: 700; color: var(--muted); }
+.delta.up { color: var(--ok-text); } .delta.down { color: var(--danger-text); }
+
+/* ===== กราฟแนวโน้มแบบโต้ตอบ ===== */
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+.card-head h2 { margin: 0; }
+.seg { display: inline-flex; padding: 3px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--line); }
+.seg button { padding: 5px 14px; border-radius: 999px; background: transparent; color: var(--muted); font-size: .85rem; font-weight: 700; }
+.seg button[aria-pressed="true"] { background: var(--primary); color: var(--primary-ink); box-shadow: 0 6px 12px -6px var(--primary); }
+.chart { position: relative; margin-top: 8px; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; }
+.chart.js .chart-fallback { display: none; }
+.ch-grid { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 5; } .ch-axis { fill: var(--muted); font-size: 11px; }
+.ch-line { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 0; transition: stroke-dashoffset 1.2s ease; }
+.ch-line.drawing { stroke-dashoffset: 1; transition: none; }
+.ch-hit { fill: transparent; cursor: pointer; } .ch-hit:hover, .ch-hit:focus { fill: color-mix(in srgb, var(--primary) 9%, transparent); outline: none; }
+.ch-hover { stroke: var(--primary); stroke-width: 1.5; stroke-dasharray: 4 4; opacity: 0; } .ch-dot { opacity: 0; }
+.chart-tip { position: absolute; z-index: 3; pointer-events: none; min-width: 130px; padding: 8px 12px; border-radius: 12px; font-size: .85rem; background: var(--text); color: var(--bg); box-shadow: 0 14px 26px -10px rgba(0, 0, 0, .5); opacity: 0; transform: translateY(4px); transition: opacity .15s, transform .15s; }
+.chart-tip.show { opacity: 1; transform: none; } .chart-tip b { display: block; margin-bottom: 2px; } .chart-tip span { display: flex; justify-content: space-between; gap: 14px; }
+.legend-hint { margin-left: auto; font-size: .8rem; }
+
+/* ===== ท่อสถานะ + แท่งอันดับ + ไทม์ไลน์ ===== */
+.pipe-bar { display: flex; gap: 4px; height: 18px; margin: 10px 0 14px; }
+.pipe-bar > * { border-radius: 999px; min-width: 10px; transition: transform .2s, filter .2s; } .pipe-bar a:hover { transform: scaleY(1.35); filter: brightness(1.1); }
+.seg-reported { background: #2a74e8; } .seg-assessed { background: #12a594; } .seg-assigned { background: #f0a30a; }
+.pipe-list, .bars, .timeline { list-style: none; margin: 0; padding: 0; display: grid; }
+.pipe-list > li > *, .bars > li > * { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px 10px; border-radius: 12px; color: inherit; text-decoration: none; transition: background .2s, transform .2s; }
+.pipe-list a:hover, .bars a:hover, .timeline a:hover { background: color-mix(in srgb, var(--primary) 8%, transparent); transform: translateX(3px); }
+.pipe-list strong, .bars strong { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.bars { gap: 2px; margin-top: 12px; }
+.bars > li > * { display: grid; grid-template-columns: minmax(80px, 34%) minmax(0, 1fr) auto; }
+.bar-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bar-track { height: 9px; border-radius: 6px; background: var(--panel-2); overflow: hidden; } .bar-track i { display: block; height: 100%; border-radius: 6px; background: linear-gradient(90deg, #2a74e8, #6aa5ff); transition: width .9s cubic-bezier(.16, .84, .24, 1); }
+.timeline { gap: 2px; position: relative; }
+.timeline a { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 10px 12px; border-radius: 14px; color: inherit; text-decoration: none; transition: background .2s, transform .2s; }
+.tl-dot { width: 12px; height: 12px; border-radius: 50%; background: #2a74e8; box-shadow: 0 0 0 4px color-mix(in srgb, #2a74e8 22%, transparent); }
+.tl-incident { background: #f0a30a; box-shadow: 0 0 0 4px color-mix(in srgb, #f0a30a 25%, transparent); } .tl-capa { background: #1fa55c; box-shadow: 0 0 0 4px color-mix(in srgb, #1fa55c 25%, transparent); }
+.tl-main { display: grid; min-width: 0; } .tl-main small { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .timeline time { color: var(--muted); font-size: .85rem; white-space: nowrap; }
+.row-open { cursor: pointer; }
+.dash-main { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; }
+@media (max-width: 1000px) { .dash-main { grid-template-columns: minmax(0, 1fr); } }
+
+/* ===== ลิ้นชักรายละเอียด ===== */
+#drawer-root { position: fixed; inset: 0; z-index: 60; }
+#drawer-root[hidden] { display: none; }
+.drawer-scrim { position: absolute; inset: 0; background: rgba(4, 14, 34, .5); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); opacity: 0; transition: opacity .25s; }
+.drawer { position: absolute; top: 0; right: 0; bottom: 0; width: min(460px, 100%); overflow-y: auto; padding: 26px 26px 30px; background: var(--panel); color: var(--text); border-left: 1px solid var(--line);
+  box-shadow: -30px 0 60px -20px rgba(4, 14, 34, .55); transform: translateX(100%); transition: transform .32s cubic-bezier(.16, .84, .24, 1); }
+.drawer:focus { outline: none; }
+#drawer-root.open .drawer-scrim { opacity: 1; } #drawer-root.open .drawer { transform: none; }
+.drawer-close { position: absolute; top: 14px; right: 14px; width: 38px; height: 38px; padding: 0; display: grid; place-items: center; border-radius: 50%; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); }
+.drawer-close svg { transform: rotate(45deg); }
+.drawer-head h2 { margin: 10px 0 2px; font-size: 1.5rem; } .drawer-sub { margin: 0; color: var(--muted); }
+.drawer-tags { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding-right: 44px; } .drawer-kind { color: var(--muted); font-size: .85rem; font-weight: 600; }
+.drawer-chips { margin: 8px 0 0; }
+.facts { display: grid; gap: 0; margin: 14px 0; } .facts > div { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--line); }
+.facts dt { color: var(--muted); } .facts dd { margin: 0; font-weight: 600; text-align: right; }
+.drawer-excerpt { color: var(--muted); font-size: .92rem; line-height: 1.6; }
+.drawer-h { font-size: 1rem; margin: 18px 0 6px; } .drawer-events { list-style: none; margin: 0 0 18px; padding: 0; display: grid; gap: 6px; }
+.drawer-events li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 12px; border-radius: 10px; background: var(--panel-2); } .drawer-events time { color: var(--muted); font-size: .85rem; }
+.drawer-open { display: block; text-align: center; margin-top: 8px; padding: 12px 16px; }
+@media (max-width: 560px) { .drawer { padding: 22px 18px 26px; } }
+@media (prefers-reduced-motion: reduce) { .drawer, .drawer-scrim, .chart-tip { transition: none !important; } }

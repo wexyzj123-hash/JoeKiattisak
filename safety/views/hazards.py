@@ -97,6 +97,19 @@ def index():
     area = _int(request.args.get("area"))
     if area is not None:
         conds.append("h.risk_area_id = ?"); args.append(area)
+    type_id = _int(request.args.get("type"))
+    if type_id is not None:
+        conds.append("h.hazard_type_id = ?"); args.append(type_id)
+    month = request.args.get("month", "")
+    if re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month):
+        conds.append("substr(h.reported_at, 1, 7) = ?"); args.append(month)
+    else:
+        month = ""
+    lik, sev = _int(request.args.get("l")), _int(request.args.get("s"))
+    if lik is not None and sev is not None:                                             # คลิกช่องในแผนที่ความเสี่ยง: เฉพาะที่เปิดอยู่และประเมินแล้ว
+        conds.append("h.likelihood = ? AND h.severity = ? AND h.status IN ('reported','assessed','assigned')"); args += [lik, sev]
+    else:
+        lik = sev = None
     q = request.args.get("q", "").strip()
     if q:
         conds.append("(h.code LIKE ? ESCAPE '\\' OR h.title LIKE ? ESCAPE '\\')"); args += [_like(q)] * 2
@@ -130,7 +143,7 @@ def index():
         [today] + args + [PER_PAGE, (page - 1) * PER_PAGE]).fetchall()
     return render_template("hazard_list.html", rows=rows, page=page, pages=pages, total=total, status_th=STATUS_TH,
                            levels=list_levels(db), areas=risk_area_options(db, g.user), f={
-                               "status": status, "level": level, "area": area or "", "q": q, "mine": request.args.get("mine", ""),
+                               "status": status, "level": level, "area": area or "", "type": type_id or "", "month": month, "l": lik if lik is not None else "", "s": sev if sev is not None else "", "q": q, "mine": request.args.get("mine", ""),
                                "sort": sort, "dir": direction, **{k: "1" if v else "" for k, v in flags.items()}},
                            can_report="hazard.report" in perms)
 

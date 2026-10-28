@@ -5,7 +5,8 @@ import os
 
 from flask import abort, Blueprint, current_app, g, redirect, render_template, send_file, session
 
-from .. import capa, charts, incident_stats, patrol, stats
+from .. import capa, charts, dash, incident_stats, patrol, stats
+from .. import timeutil
 from ..db import get_db
 from ..hazards import STATUS_TH
 from ..perms import user_permissions
@@ -70,8 +71,9 @@ def index():
                               "ORDER BY created_at DESC, id DESC LIMIT 5", (user["id"],)).fetchall()
     lti_days, lti_date = incident_stats.days_without_lost_time(db, user)
     perms = user_permissions(db, user)
+    dd = dash.home_data(db, user)
     return render_template(
-        "home.html", lti_days=lti_days, lti_date=lti_date, capa_overdue=capa.overdue_count(db, user), latest_patrols=patrol.latest_rounds(db, user, 5),
+        "home.html", dd=dd, spark=charts.spark, this_month=timeutil.today().strftime("%Y-%m"), lti_days=lti_days, lti_date=lti_date, capa_overdue=capa.overdue_count(db, user), latest_patrols=patrol.latest_rounds(db, user, 5),
         can_patrol=bool(perms & {"patrol.perform", "patrol.view"}), can_capa=bool(perms & {"capa.create", "capa.verify", "hazard.report", "incident.report", "patrol.perform"}), open_total=counts["reported"] + counts["assessed"] + counts["assigned"], overdue=stats.overdue_count(db, user),
         closed_month=stats.closed_this_month(db, user), high_risk=stats.high_risk_open(db, user),
         donut=donut_svg, legend=legend, trend_svg=charts.trend(trend_rows), trend_rows=trend_rows,
