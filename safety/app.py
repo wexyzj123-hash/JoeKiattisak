@@ -33,7 +33,8 @@ def create_app(test_config: dict | None = None) -> Flask:
     install_csrf(app)
     app.before_request(load_user)
 
-    from .views import home, sso
+    from .views import api, home, sso
+    app.register_blueprint(api.bp)
     app.register_blueprint(sso.bp)
     app.register_blueprint(home.bp)
     return app

@@ -1,8 +1,10 @@
 """hub/views/launcher.py — หน้ารวมระบบ + ส่งผู้ใช้ไปยังแต่ละระบบพร้อม SSO token"""
 from __future__ import annotations
 
+import json
 import os
 from urllib.parse import urlencode
+from urllib.request import Request, urlopen
 
 from flask import Blueprint, abort, current_app, g, redirect, render_template, send_file
 
@@ -14,6 +16,22 @@ from ..security import login_required
 bp = Blueprint("launcher", __name__)
 THEME_CSS = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
                          "shared", "theme.css")
+
+
+BADGE_APPS = {"safety"}          # ระบบที่มี /api/summary ให้ Hub ดึงตัวเลข
+
+
+def fetch_badge(app_row, service_token: str, timeout: float = 2.0) -> int | None:
+    """จำนวนรายการที่ต้องสนใจของระบบนั้น; ทุกความผิดพลาด (ล่ม/ช้า/รูปแบบผิด) → None เพื่อไม่ให้หน้า Hub พัง"""
+    try:
+        req = Request(app_row["url"].rstrip("/") + "/api/summary", headers={"X-Service-Token": service_token})
+        with urlopen(req, timeout=timeout) as resp:
+            if resp.status != 200:
+                return None
+            data = json.loads(resp.read().decode("utf-8"))
+        return int(data["open_hazards"]) + int(data["overdue"])
+    except Exception:       # noqa: BLE001 — badge เป็นของเสริม ห้ามทำให้หน้าแรกล้ม
+        return None
 
 
 def _allowed(app_row) -> bool:
@@ -29,7 +47,12 @@ def theme_css():
 @login_required
 def home():
     rows = get_db().execute("SELECT * FROM app_registry WHERE enabled=1 ORDER BY sort, id").fetchall()
-    return render_template("launcher.html", apps=[r for r in rows if _allowed(r)])
+    apps = []
+    for r in rows:
+        if _allowed(r):
+            badge = fetch_badge(r, current_app.config["SERVICE_TOKEN"]) if r["key"] in BADGE_APPS else None
+            apps.append({"key": r["key"], "name_th": r["name_th"], "badge": badge})
+    return render_template("launcher.html", apps=apps)
 
 
 @bp.route("/go/<key>")

@@ -12,6 +12,7 @@
 <div class="tiles">
   {% for a in apps %}
   <a class="tile" href="/go/{{ a['key'] }}">
+    {% if a['badge'] %}<span class="badge">{{ a['badge'] }}</span>{% endif %}
     <strong>{{ a['name_th'] }}</strong>
     <span style="color:var(--muted)">เข้าสู่ระบบ</span>
   </a>
