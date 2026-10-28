@@ -158,6 +158,14 @@ def test_close_by_any_past_or_present_investigator_refused_even_for_admin(w):
     assert flow.close(w.db, w.admin2, iid, "ปิด") == [] and w.row(iid)["status"] == "closed"
 
 
+def test_admin_who_recorded_the_investigation_cannot_close_it(w):
+    iid = w.new()
+    flow.assign_investigator(w.db, w.admin, iid, w.inv["id"], "")
+    assert flow.record_investigation(w.db, w.admin2, iid, w.cause, "ราก", "มาตรการ", "") == []      # แอดมินบันทึกผลแทนผู้สอบสวน
+    assert flow.close(w.db, w.admin2, iid, "ปิดเอง")[0].startswith("ผู้ที่เคยเป็นผู้สอบสวน")
+    assert flow.close(w.db, w.admin, iid, "ปิดโดยอีกคน") == []
+
+
 def test_close_needs_permission_status_and_note(w):
     iid = w.new()
     assert flow.close(w.db, w.admin, iid, "x")[0].startswith("สถานะ")
@@ -171,7 +179,7 @@ def test_double_submit_close_creates_one_event_and_one_notification(w):
     iid = w.new()
     w.to_actions_set(iid)
     assert flow.close(w.db, w.admin, iid, "ปิด") == []
-    assert flow.close(w.db, w.admin, iid, "ปิด")                                                      # ครั้งที่สอง: สถานะไม่อนุญาตแล้ว
+    assert flow.close(w.db, w.admin, iid, "ปิด") == ["สถานะของรายการนี้ไม่อนุญาตให้ทำรายการดังกล่าว"]   # ครั้งที่สอง: สถานะไม่อนุญาตแล้ว
     assert w.events(iid).count("closed") == 1 and len(w.notes("incident_closed")) == 1
 
 
@@ -249,3 +257,18 @@ def test_unseen_incident_returns_not_found_for_every_step(w):
     for call in (lambda: flow.record_investigation(w.db, other, iid, w.cause, "a", "b", ""), lambda: flow.close(w.db, other, iid, "x"),
                  lambda: flow.reject(w.db, other, iid, "x"), lambda: flow.update_people(w.db, other, iid, {})):
         assert call() == flow.NOT_FOUND
+
+
+def test_forms_with_a_stale_version_are_refused_for_people_and_investigation(w):
+    iid = w.new(people_name_0="เดิม")
+    seen = w.row(iid)["version"]
+    assert flow.update_people(w.db, w.inv, iid, {"people_name_0": "คนแรกแก้", "version": str(seen)}) == []
+    stale = flow.update_people(w.db, w.inv2, iid, {"people_name_0": "คนที่สองแก้ทับ", "version": str(seen)})
+    assert stale == flow.STALE_FORM
+    assert [p["name"] for p in w.db.execute("SELECT name FROM incident_people WHERE incident_id=?", (iid,))] == ["คนแรกแก้"]
+    flow.assign_investigator(w.db, w.admin, iid, w.inv["id"], "")
+    v = w.row(iid)["version"]
+    assert flow.record_investigation(w.db, w.inv, iid, w.cause, "ก", "ข", "", expected_version=v) == []
+    assert flow.record_investigation(w.db, w.admin, iid, w.cause, "ทับ", "ทับ", "", expected_version=v) == flow.STALE_FORM
+    assert w.row(iid)["root_cause"] == "ก"
+    assert flow.update_people(w.db, w.inv, iid, {"people_name_0": "ไม่ส่ง version"}) == []            # ไม่ส่ง version (เรียกจากโค้ด) ยังทำงานได้

@@ -93,6 +93,47 @@ def test_rules_table_rebuilt_keeping_ids_and_admin_edits(tmp_path):
     assert "incident_reported" in con.execute("SELECT sql FROM sqlite_master WHERE name='notify_rules'").fetchone()[0]
 
 
+def test_rebuild_keeps_autoincrement_sequence_and_future_event_lists_trigger_a_rebuild(tmp_path, monkeypatch):
+    import safety.schema as schema
+    con = connect(str(tmp_path / "seq.db"))
+    ensure_schema(con)
+    ids = [r[0] for r in con.execute("SELECT id FROM notify_rules ORDER BY id")]
+    top = max(ids)
+    con.execute("DELETE FROM notify_rules WHERE id=?", (top,)); con.commit()                    # แอดมินลบกฎล่าสุด (ลำดับ AUTOINCREMENT ยังจำไว้)
+    monkeypatch.setattr(schema, "NOTIFY_EVENTS", schema.NOTIFY_EVENTS + ("future_event",))     # เฟสถัดไปเพิ่มเหตุการณ์ → ต้องสร้างตารางใหม่
+    schema.rebuild_notify_rules_if_needed(con)
+    assert "future_event" in con.execute("SELECT sql FROM sqlite_master WHERE name='notify_rules'").fetchone()[0]
+    new_id = con.execute("INSERT INTO notify_rules(event,recipients) VALUES('future_event','owner')").lastrowid
+    assert new_id == top + 1                                                                      # ไม่ใช้รหัสของกฎที่ถูกลบซ้ำ (กัน dedupe key ชน)
+
+
+def test_incident_message_does_not_copy_free_text_closing_note(w):
+    iid = w.inc(closing_note="นายสมชาย กลับมาทำงานแล้ว")
+    head, body = render_incident_message("incident_closed", w.db.execute("SELECT * FROM incidents WHERE id=?", (iid,)).fetchone(), {"area": "พื้นที่ A"})
+    assert "สมชาย" not in head + body and "เหตุทดสอบ" in body
+
+
+def test_incident_notifications_only_reach_people_who_can_open_the_incident(w):
+    w.db.execute("INSERT INTO safety_roles(key,name_th,permissions) VALUES('old_assessor','ผู้ประเมินเดิม','master.view,hazard.report,hazard.assess')")
+    old = add_user(w.db, "old_assessor", "ไม่มีสิทธิ์อุบัติเหตุ")
+    w.db.commit()
+    w.db.execute("UPDATE notify_rules SET recipients='role:old_assessor,role:assessor' WHERE event='incident_reported'"); w.db.commit()
+    emit_incident(w.db, "incident_reported", w.inc(), w.rep)
+    got = {r["user_id"] for r in w.notes()}
+    assert old not in got and w.asr_a in got
+
+
+def test_reassigning_back_or_changing_due_date_notifies_again(w):
+    iid = w.inc(owner_id=w.inv, due_date="2026-03-20")
+    assert emit_incident(w.db, "incident_assigned", iid, w.asr_a) == 1
+    w.db.execute("UPDATE incidents SET owner_id=? WHERE id=?", (w.asr_a, iid)); w.db.commit()
+    assert emit_incident(w.db, "incident_assigned", iid, w.inv) == 1
+    w.db.execute("UPDATE incidents SET owner_id=? WHERE id=?", (w.inv, iid)); w.db.commit()
+    assert emit_incident(w.db, "incident_assigned", iid, w.asr_a) == 0               # กลับมาเป็นคนเดิม วันเดิม → ซ้ำกับครั้งแรก ไม่แจ้งซ้ำ
+    w.db.execute("UPDATE incidents SET due_date='2026-03-25' WHERE id=?", (iid,)); w.db.commit()
+    assert emit_incident(w.db, "incident_assigned", iid, w.asr_a) == 1               # เลื่อนวัน → แจ้งใหม่
+
+
 def test_default_incident_rules_seeded_once(db):
     rows = db.execute("SELECT event, recipients, channels FROM notify_rules WHERE event LIKE 'incident_%' ORDER BY event").fetchall()
     assert [(r["event"], r["recipients"]) for r in rows] == [("incident_assigned", "owner"), ("incident_closed", "reporter"),

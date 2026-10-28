@@ -9,8 +9,8 @@
   {% for r in rows %}
   <tr>
     <td>{{ r['code'] }}</td>
-    <td><input form="sv{{ r['id'] }}" name="name_th" value="{{ r['name_th'] }}" required maxlength="200"></td>
-    <td><input form="sv{{ r['id'] }}" name="rank" value="{{ r['rank'] }}" size="3" inputmode="numeric"></td>
+    <td><input form="sv{{ r['id'] }}" name="name_th" value="{{ r['name_th'] }}" required maxlength="200" aria-label="ชื่อ {{ r['code'] }}"></td>
+    <td><input form="sv{{ r['id'] }}" name="rank" value="{{ r['rank'] }}" size="3" inputmode="numeric" aria-label="ลำดับ {{ r['code'] }}"></td>
     <td><input form="sv{{ r['id'] }}" type="checkbox" name="counts_lost_time" value="1" {{ 'checked' if r['counts_lost_time'] }} aria-label="นับเป็นหยุดงาน {{ r['name_th'] }}"></td>
     <td><input form="sv{{ r['id'] }}" type="checkbox" name="active" value="1" {{ 'checked' if r['active'] }} aria-label="ใช้งาน {{ r['name_th'] }}"></td>
     <td><form id="sv{{ r['id'] }}" method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ r['id'] }}"><button type="submit">บันทึก</button></form></td>

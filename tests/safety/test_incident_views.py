@@ -161,9 +161,35 @@ def test_close_flash_celebrates_and_refusals_are_flashed(v):
     iid = v.make()
     v.post(v.admin, f"/incidents/{iid}/assign", owner_id=str(v.admin.uid), due_date="")
     v.post(v.admin, f"/incidents/{iid}/investigate", cause_id=str(v.cause), root_cause="ก", corrective_action="ข", lost_days="")
-    v.post(v.admin, f"/incidents/{iid}/close", note="ปิดเอง")
-    assert "ปิดรายการอุบัติเหตุเองไม่ได้" in v.admin.get(f"/incidents/{iid}").get_data(as_text=True) or "เคยเป็นผู้สอบสวน" in v.admin.get(f"/incidents/{iid}").get_data(as_text=True)
+    refused = v.admin.post(f"/incidents/{iid}/close", data={"_csrf": csrf(v.admin), "note": "ปิดเอง"}, follow_redirects=True).get_data(as_text=True)
+    assert "ผู้ที่เคยเป็นผู้สอบสวนรายการนี้ปิดรายการเองไม่ได้" in refused and "คุณเคยเป็นผู้สอบสวนรายการนี้" in refused
     assert v.con.execute("SELECT status FROM incidents WHERE id=?", (iid,)).fetchone()[0] == "actions_set"
+    done = v.admin2.post(f"/incidents/{iid}/close", data={"_csrf": csrf(v.admin2), "note": "เรียบร้อย"}, follow_redirects=True).get_data(as_text=True)
+    assert "ปิดรายการเรียบร้อย" in done and "mascot-celebrate" in done
+
+
+def test_forms_carry_the_version_and_stale_submit_is_refused(v):
+    iid = v.make(people_name_0="เดิม")
+    inv = v.inv
+    flow.assign_investigator(v.con, v.user(v.admin), iid, v.inv.uid, "")
+    page = inv.get(f"/incidents/{iid}").get_data(as_text=True)
+    assert len(re.findall(r'name="version" value="1"', page)) >= 2                                    # ฟอร์มสอบสวน + ฟอร์มรายชื่อ
+    r = v.post(inv, f"/incidents/{iid}/people", version="0", people_name_0="เก่าค้างหน้า")
+    assert "ถูกแก้ไขโดยผู้อื่นแล้ว" in inv.get(f"/incidents/{iid}").get_data(as_text=True)
+    assert v.con.execute("SELECT name FROM incident_people WHERE incident_id=?", (iid,)).fetchone()[0] == "เดิม"
+
+
+def test_closed_incident_card_counts_exclude_rejected_on_stats_page(v):
+    for i in range(3):
+        v.make(title=f"เหตุ{i}")
+    v.con.execute("UPDATE incidents SET status='rejected' WHERE title='เหตุ0'"); v.con.commit()
+    html = v.admin.get("/incidents/stats").get_data(as_text=True)
+    assert re.search(r'<span class="kpi-n">2</span><span class="kpi-l">อุบัติเหตุทั้งหมด \(ไม่รวมที่ปฏิเสธ 1\)', html)
+
+
+def test_injury_admin_inputs_are_labelled(v):
+    html = v.admin.get("/admin/injury-severities").get_data(as_text=True)
+    assert html.count('aria-label="ชื่อ ') >= 6 and html.count('aria-label="ลำดับ ') >= 6
 
 
 def test_photo_upload_limit_5_serving_whitelist_and_nosniff(v):

@@ -191,7 +191,8 @@ def investigate(incident_id):
     _load(incident_id)
     f = request.form
     return _done(incident_flow.record_investigation(get_db(), g.user, incident_id, f.get("cause_id"), f.get("root_cause", ""),
-                                                    f.get("corrective_action", ""), f.get("lost_days")), incident_id)
+                                                    f.get("corrective_action", ""), f.get("lost_days"),
+                                                    expected_version=_int(f.get("version"))), incident_id)
 
 
 @bp.route("/<int:incident_id>/close", methods=["POST"])

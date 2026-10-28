@@ -244,15 +244,21 @@ DEFAULT_RULES = (
 
 
 def rebuild_notify_rules_if_needed(con) -> None:
-    """ตารางกฎเก่ามี CHECK ของรายชื่อเหตุการณ์เดิม — สร้างใหม่ให้รับเหตุการณ์อุบัติเหตุ โดยคงรหัส/ค่าที่แอดมินแก้ไว้ (ทำในธุรกรรมเดียว รันซ้ำได้)"""
+    """ตารางกฎเก่ามี CHECK ของรายชื่อเหตุการณ์ที่ตกรุ่น — สร้างใหม่เมื่อรายชื่อใน CHECK ไม่ครบตาม NOTIFY_EVENTS (เฟสไหนเพิ่มเหตุการณ์ก็ทำงานเอง)
+    คงรหัส/ค่าที่แอดมินแก้ไว้ และคงลำดับ AUTOINCREMENT (รหัสกฎที่ลบไปแล้วไม่ถูกใช้ซ้ำ — กัน dedupe key ชน); ทำในธุรกรรมเดียว รันซ้ำได้"""
     sql = con.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='notify_rules'").fetchone()
-    if sql is None or "incident_reported" in sql[0]:
+    if sql is None or all(f"'{e}'" in sql[0] for e in NOTIFY_EVENTS):
         return
     con.commit()
+    seq = con.execute("SELECT seq FROM sqlite_sequence WHERE name='notify_rules'").fetchone()
     con.executescript("BEGIN;" + _rules_table("notify_rules_new")
                       + "INSERT INTO notify_rules_new(id,event,recipients,channels,offset_days,min_score,enabled) "
                         "SELECT id,event,recipients,channels,offset_days,min_score,enabled FROM notify_rules;"
                         "DROP TABLE notify_rules; ALTER TABLE notify_rules_new RENAME TO notify_rules; COMMIT;")
+    if seq is not None:
+        if con.execute("UPDATE sqlite_sequence SET seq=MAX(seq, ?) WHERE name='notify_rules'", (seq[0],)).rowcount == 0:
+            con.execute("INSERT INTO sqlite_sequence(name, seq) VALUES('notify_rules', ?)", (seq[0],))
+        con.commit()
 
 
 INCIDENT_RULES = (

@@ -130,7 +130,7 @@ def pages(world):
         P("sf-departments-new", s, "/master/departments/new", sc),
         P("sf-incidents", s, "/incidents", sc), P("sf-incident-new", s, "/incidents/new", sc),
         P("sf-incident-reported", s, f"/incidents/{world['inc']['reported']}", sc), P("sf-incident-closed", s, f"/incidents/{world['inc']['closed']}", sc),
-        P("sf-injury-admin", s, "/admin/injury-severities", sc), P("sf-incident-causes", s, "/master/incident-causes", sc),
+        P("sf-injury-admin", s, "/admin/injury-severities", sc), P("sf-incident-stats", s, "/incidents/stats", sc), P("sf-incident-causes", s, "/master/incident-causes", sc),
         P("sf-sso-error", s, "/sso?token=bad"),
     ]
 

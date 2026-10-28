@@ -59,7 +59,7 @@
   {% if actions.investigate %}
   <form method="post" action="/incidents/{{ i['id'] }}/investigate" class="card" style="max-width:none;margin:0">
     <h2>บันทึกผลสอบสวนและมาตรการ</h2>
-    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="version" value="{{ i['version'] }}">
     <label>สาเหตุหลัก <select name="cause_id" required><option value="">— เลือก —</option>
       {% for c in causes %}<option value="{{ c['id'] }}" {{ 'selected' if i['cause_id'] == c['id'] }}>{{ c['name_th'] }}</option>{% endfor %}</select></label>
     <label>สาเหตุราก (ทำไม-ทำไม 5 ครั้ง) <textarea name="root_cause" rows="4" maxlength="2000" required>{{ i['root_cause'] }}</textarea></label>
@@ -83,7 +83,7 @@
   {% if actions.people %}
   <form method="post" action="/incidents/{{ i['id'] }}/people" class="card" style="max-width:none;margin:0">
     <h2>แก้ไขรายชื่อผู้เกี่ยวข้อง</h2>
-    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="version" value="{{ i['version'] }}">
     {% for n in range(slots) %}{{ people_slot(n, people[n] if people and n < people|length else none) }}{% endfor %}
     <button type="submit">บันทึกรายชื่อ (แทนที่รายการเดิมทั้งหมด)</button>
   </form>

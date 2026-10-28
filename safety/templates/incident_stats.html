@@ -7,7 +7,7 @@
     <span class="kpi-l">{% if days is not none %}วันปลอดอุบัติเหตุ (หยุดงาน) · ล่าสุด {{ last }}{% else %}วันปลอดอุบัติเหตุ — ยังไม่มีอุบัติเหตุหยุดงานที่บันทึก{% endif %}</span></div>
   {% for k in ('accident', 'near_miss') %}
   <a class="kpi {{ 'kpi-danger' if k == 'accident' }}" href="/incidents?kind={{ k }}"><span class="kpi-ic">{{ icon('alert', 22) }}</span>
-    <span class="kpi-n">{{ counts[k].values() | sum }}</span><span class="kpi-l">{{ kind_th[k] }}ทั้งหมด (ไม่รวมที่ปฏิเสธ {{ counts[k]['rejected'] }})</span></a>
+    <span class="kpi-n">{{ counts[k].values() | sum - counts[k]['rejected'] }}</span><span class="kpi-l">{{ kind_th[k] }}ทั้งหมด (ไม่รวมที่ปฏิเสธ {{ counts[k]['rejected'] }})</span></a>
   {% endfor %}
 </div>
 <div class="dash-grid">

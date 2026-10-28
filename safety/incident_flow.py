@@ -16,6 +16,7 @@ from .perms import user_permissions
 NOTE_MAX, TEXT_MAX, LOST_DAYS_MAX = 1000, 2000, 3650
 DEFAULT_DUE_DAYS = 14
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+STALE_FORM = ["ข้อมูลรายการนี้ถูกแก้ไขโดยผู้อื่นแล้ว กรุณารีเฟรชหน้าแล้วทำรายการใหม่"]
 
 
 def _int(value) -> int | None:
@@ -62,6 +63,8 @@ def investigators_ever(db, inc) -> set[int]:
         except ValueError:
             continue
         found |= {data.get("owner"), data.get("old_owner")} - {None}
+    for row in db.execute("SELECT actor_id FROM incident_events WHERE incident_id=? AND kind='investigated'", (inc["id"],)):
+        found |= {row["actor_id"]} - {None}                # แอดมินที่บันทึกผลสอบสวนแทนก็นับเป็นผู้สอบสวน (four-eyes)
     return found
 
 
@@ -96,10 +99,13 @@ def assign_investigator(db, user, incident_id: int, owner_id, due_date: str, not
                        "incident_assigned")
 
 
-def record_investigation(db, user, incident_id: int, cause_id, root_cause: str, corrective_action: str, lost_days) -> list[str]:
+def record_investigation(db, user, incident_id: int, cause_id, root_cause: str, corrective_action: str, lost_days,
+                         expected_version: int | None = None) -> list[str]:
     inc, errors = _open_for(db, user, "incident.investigate", "บันทึกผลสอบสวน", incident_id, ("investigating", "actions_set"))
     if errors:
         return errors
+    if expected_version is not None and expected_version != inc["version"]:
+        return STALE_FORM
     if user["id"] != inc["owner_id"] and user["role"] != "admin":
         return ["เฉพาะผู้สอบสวนที่ได้รับมอบหมายหรือผู้ดูแลระบบเท่านั้นที่บันทึกผลสอบสวนได้"]
     cause = _int(cause_id)
@@ -156,6 +162,8 @@ def update_people(db, user, incident_id: int, form: Mapping) -> list[str]:
     inc, errors = _open_for(db, user, "incident.investigate", "แก้ไขรายชื่อผู้เกี่ยวข้อง", incident_id, OPEN_STATUSES)
     if errors:
         return errors
+    if _int(form.get("version")) is not None and _int(form.get("version")) != inc["version"]:
+        return STALE_FORM
     people, perrors = parse_people(form)
     if perrors:
         return perrors

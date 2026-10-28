@@ -9,6 +9,7 @@ from datetime import date
 from typing import Mapping
 
 from .hazards import user_in_scope
+from .perms import user_permissions
 from .schema import NOTIFY_EVENTS, OUTBOX_CHANNELS
 
 log = logging.getLogger("safety.notify")
@@ -112,7 +113,7 @@ def _queue_external(db, channel: str, target: str, title: str, body: str, urgent
 
 
 def _write_rows(db, event: str, rec, title: str, body: str, stage: str, ref: str, link: str, hazard_id, incident_id,
-                actor_id, offset_days, urgent_base: bool) -> int:
+                actor_id, offset_days, urgent_base: bool, require_any: frozenset = frozenset()) -> int:
     """เขียนแถวแจ้งเตือน/คิวส่งตามกฎของเหตุการณ์ (ใช้ร่วมกันระหว่างอันตรายและอุบัติเหตุ); คืนจำนวนแถวในระบบที่สร้างใหม่"""
     created = 0
     for rule in db.execute("SELECT * FROM notify_rules WHERE event=? AND enabled=1 ORDER BY id", (event,)).fetchall():
@@ -122,6 +123,8 @@ def _write_rows(db, event: str, rec, title: str, body: str, stage: str, ref: str
         channels = set(_split(rule["channels"]))
         urgent = int(urgent_base or (event == "overdue" and rule["offset_days"] >= 3))
         for user in recipients_for(db, rule, rec, actor_id):
+            if require_any and not (require_any & user_permissions(db, user)):
+                continue                                       # ไม่แจ้งคนที่เปิดรายการนี้ไม่ได้ (ลิงก์จะ 404)
             note_id = None
             if "inapp" in channels:
                 cur = db.execute("INSERT OR IGNORE INTO notifications(user_id, event, title, body, link, hazard_id, incident_id, dedupe_key) "
@@ -180,7 +183,7 @@ def render_incident_message(event: str, incident, extra: Mapping | None = None) 
     head, tail = {
         "incident_reported": (f"แจ้ง{kind}ใหม่ {code}", f"{title}{where}"),
         "incident_assigned": (f"มอบหมายสอบสวน{kind} {code}", f"{title}{due}{where}"),
-        "incident_closed": (f"ปิดรายการ{kind} {code}", f"{title} · ผลการแก้ไข: {clean(incident['closing_note'], 200)}"),
+        "incident_closed": (f"ปิดรายการ{kind} {code}", f"{title}{where}"),                  # ไม่คัดลอกข้อความอิสระ (อาจมีชื่อบุคคล)
     }.get(event, (f"แจ้งเตือน {code}", title))
     return clean(head, TITLE_MAX), clean(tail, BODY_MAX)
 
@@ -198,9 +201,10 @@ def emit_incident(db, event: str, incident_id: int, actor_id: int | None) -> int
             return 0
         area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (inc["risk_area_id"],)).fetchone()
         title, body = render_incident_message(event, inc, {"area": area[0] if area else ""})
-        stage = str(inc["owner_id"]) if event == "incident_assigned" else "1"
+        stage = f"{inc['owner_id']}:{inc['due_date']}" if event == "incident_assigned" else "1"
         created = _write_rows(db, event, inc, title, body, stage, f"i{incident_id}", f"/incidents/{incident_id}", None, incident_id,
-                              actor_id, None, bool(inc["lost_time"] or inc["level_requires_approval"]))
+                              actor_id, None, bool(inc["lost_time"] or inc["level_requires_approval"]),
+                              frozenset({"incident.report", "incident.investigate", "incident.close"}))
         db.execute("RELEASE notify")
         return created
     except Exception:                                              # noqa: BLE001
