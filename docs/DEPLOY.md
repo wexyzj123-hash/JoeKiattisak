@@ -2,6 +2,8 @@
 
 ทำตามลำดับ ติ๊กทีละข้อ ข้อที่มีเครื่องหมาย 🔒 เกี่ยวกับความปลอดภัย — อย่าข้าม
 
+> **Windows:** ใช้ชุด Zip ติดตั้ง (`python tools/build_release.py` สร้างที่ `dist/`) — แตกไฟล์แล้วดับเบิลคลิก `install.bat` → `start.bat` (อ่าน `READ_ME_FIRST.txt` ในชุด) สคริปต์ทำข้อ 1–3 ให้เอง
+
 ## 1. เตรียมโค้ด
 - [ ] merge สาขา `claude/vibrant-knuth-8b04r0` เข้า `main` (ผ่าน PR)
 - [ ] เครื่องเซิร์ฟเวอร์มี Python 3.10+ แล้วรัน `pip install -r requirements.txt` (Flask, waitress, Pillow, openpyxl, reportlab)
