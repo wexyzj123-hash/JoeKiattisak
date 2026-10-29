@@ -125,7 +125,7 @@ def test_hub_logout_also_signs_out_of_safety(hub_app):
     login(c)
     r = c.post("/logout", data={"_csrf": csrf(c)})
     html = r.get_data(as_text=True)
-    assert 'data-signout="http://safety.test/signout?quiet=1"' in html and "/static/hub/logout.js" in html and 'href="/login"' in html
+    assert 'data-signout="http://safety.test/signout?quiet=1"' in html and "/static/hub/logout.js" in html and 'href="/"' in html
 
 
 def test_logout_page_swaps_loopback_safety_url_to_the_host_the_user_opened(hub_app):
@@ -143,4 +143,4 @@ def test_logout_never_strands_the_user_when_safety_is_down(hub_app):
     c = hub_app.test_client()
     login(c)
     js = c.get("/static/hub/logout.js")
-    assert js.status_code == 200 and "location.replace('/login')" in js.get_data(as_text=True) and "setTimeout(go" in js.get_data(as_text=True)
+    assert js.status_code == 200 and "location.replace('/')" in js.get_data(as_text=True) and "setTimeout(go" in js.get_data(as_text=True)

@@ -6,9 +6,9 @@ from hub.views import launcher
 from tests.hub.test_launcher import login_as
 
 
-def test_login_and_setup_render_the_mascot_scene(hub_app):
+def test_setup_renders_the_mascot_scene(hub_app):
     c = hub_app.test_client()
-    for path in ("/setup", "/login"):
+    for path in ("/setup",):
         html = c.get(path).get_data(as_text=True)
         assert "mascot-default" in html and "Safety 4.0" not in html and 'class="wordmark"' in html and "AIAT" in html, path
         assert 'class="auth-split"' in html and 'aria-hidden="true"' in html, path

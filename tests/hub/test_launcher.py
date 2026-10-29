@@ -30,8 +30,29 @@ def add_app(app, key, name, enabled=1, required_role=""):
         (key, name, f"http://{key}.test", "app", enabled, required_role))
 
 
-def test_launcher_requires_login(hub_app):
-    assert hub_app.test_client().get("/").status_code == 302
+def test_launcher_is_public_but_sso_apps_need_login(hub_app, monkeypatch):
+    from hub.views import launcher
+    monkeypatch.setattr(launcher, "fetch_badge", lambda *a, **k: 9)
+    add_app(hub_app, "staff", "เฉพาะหัวหน้า", required_role="supervisor")
+    c = hub_app.test_client()
+    r = c.get("/")
+    html = r.get_data(as_text=True)
+    assert r.status_code == 200 and "Safety" in html and "เฉพาะหัวหน้า" not in html          # ไม่ล็อกอิน: เห็นเฉพาะระบบที่ไม่จำกัดบทบาท
+    assert 'href="/login"' in html and "user-menu" not in html and 'class="badge"' not in html   # ไม่โชว์ตัวเลขภายใน
+    assert "เข้าสู่ระบบครั้งเดียว" not in html
+    r = c.get("/go/safety")
+    assert r.status_code == 302 and "/login?next=/go/safety" in r.headers["Location"]
+    assert c.get("/go/staff").status_code == 302
+
+
+def test_legacy_link_apps_open_without_login_but_role_limited_ones_do_not(hub_app):
+    add_app(hub_app, "cmms", "CMMS")
+    sql(hub_app, "UPDATE app_registry SET link_mode='link', url='http://cmms.test/' WHERE key='cmms'")
+    add_app(hub_app, "adm", "เฉพาะแอดมิน", required_role="admin")
+    sql(hub_app, "UPDATE app_registry SET link_mode='link' WHERE key='adm'")
+    c = hub_app.test_client()
+    assert c.get("/go/cmms").headers["Location"] == "http://cmms.test/"
+    assert "/login" in c.get("/go/adm").headers["Location"]
 
 
 def test_launcher_lists_enabled_apps_only(hub_app):

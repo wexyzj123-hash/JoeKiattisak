@@ -80,8 +80,8 @@ def test_bat_scripts_have_no_multiline_blocks_and_use_ports_from_env():
             assert not line.rstrip().endswith("("), f"{name}:{n} บล็อกหลายบรรทัดใน batch เปราะกับวงเล็บในข้อความ"
     start = open(os.path.join(bat_dir, "start.bat"), encoding="utf-8").read()
     auto = open(os.path.join(bat_dir, "autostart.bat"), encoding="utf-8").read()
-    assert "localhost:%HUB_PORT%" in start and "ports.py show" in start and "ports.py inuse" in start
-    assert "localport=%HUB_PORT%,%SAFETY_PORT%" in auto and "localhost:5000" not in start
+    assert "service.py start" in start and "localhost:5000" not in start                 # พอร์ตอ่านจาก .env ใน service.py ไม่ฝังใน .bat
+    assert "localport=%HUB_PORT%,%SAFETY_PORT%" in auto
     assert "ports.py suggest" in open(os.path.join(bat_dir, "install.bat"), encoding="utf-8").read()
 
 

@@ -6,7 +6,7 @@ import os
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from flask import Blueprint, abort, current_app, g, redirect, render_template, request, send_file
+from flask import Blueprint, abort, current_app, g, redirect, render_template, request, send_file, url_for
 
 from shared.sso import sign_token
 from shared.urls import public_url
@@ -37,7 +37,8 @@ def fetch_badge(app_row, service_token: str, timeout: float = 2.0) -> int | None
 
 
 def _allowed(app_row) -> bool:
-    return app_row["required_role"] in ("", g.user["role"])
+    role = g.user["role"] if g.get("user") else None          # ยังไม่ล็อกอิน: เห็นเฉพาะระบบที่ไม่จำกัดบทบาท
+    return app_row["required_role"] == "" or app_row["required_role"] == role
 
 
 @bp.route("/static/theme.js")
@@ -85,28 +86,31 @@ def brand_file(name):
 
 
 @bp.route("/")
-@login_required
 def home():
+    """หน้าแรกของ Hub: ดูรายการระบบได้โดยไม่ต้องล็อกอิน — กดเข้าระบบที่ต้องยืนยันตัวตน (เช่น Safety) แล้วจึงถามรหัสผ่าน"""
     rows = get_db().execute("SELECT * FROM app_registry WHERE enabled=1 ORDER BY sort, id").fetchall()
     apps = []
     for r in rows:
         if _allowed(r):
-            badge = fetch_badge(r, current_app.config["SERVICE_TOKEN"]) if r["key"] in BADGE_APPS else None
+            badge = fetch_badge(r, current_app.config["SERVICE_TOKEN"]) if g.user and r["key"] in BADGE_APPS else None   # ตัวเลขภายในเห็นเฉพาะผู้ล็อกอิน
             apps.append({"key": r["key"], "name_th": r["name_th"], "badge": badge, "link": r["link_mode"] == "link"})
-    pending = get_db().execute("SELECT COUNT(*) FROM users WHERE pending=1").fetchone()[0] if g.user["role"] == "admin" else 0
+    pending = get_db().execute("SELECT COUNT(*) FROM users WHERE pending=1").fetchone()[0] if g.user and g.user["role"] == "admin" else 0
     return render_template("launcher.html", apps=apps, any_badge=any(a["badge"] for a in apps), pending=pending)
 
 
 @bp.route("/go/<key>")
-@login_required
 def go(key: str):
     row = get_db().execute("SELECT * FROM app_registry WHERE key=? AND enabled=1", (key,)).fetchone()
     if row is None:
         abort(404)
+    if row["link_mode"] == "link":                      # ระบบเดิมที่ไม่มี SSO: เปิดที่อยู่ตรง ๆ (มีหน้าล็อกอินของตัวเอง) ห้ามส่ง token ไปให้
+        if not _allowed(row):
+            return redirect(url_for("auth.login", next=request.full_path.rstrip("?"))) if g.user is None else abort(403)
+        return redirect(public_url(row["url"], request.host))
+    if g.user is None:                                  # ระบบที่ใช้บัญชีของ Hub: ต้องล็อกอินก่อน แล้วกลับมาที่นี่เพื่อเข้าระบบต่อ
+        return redirect(url_for("auth.login", next=request.full_path.rstrip("?")))
     if not _allowed(row):
         abort(403)
-    if row["link_mode"] == "link":                      # ระบบเดิมที่ไม่มี SSO: เปิดที่อยู่ตรง ๆ ห้ามส่ง token ไปให้
-        return redirect(public_url(row["url"], request.host))
     token = sign_token(current_app.config["SSO_SECRET"],
                        {"uid": g.user["id"], "name": g.user["name_th"], "roles": [g.user["role"]], "aud": row["key"],
                         "org": "|".join(g.user[k] for k in ("req_factory", "req_department", "req_line") if g.user[k])})

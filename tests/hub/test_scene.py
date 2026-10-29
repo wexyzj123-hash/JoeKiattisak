@@ -4,9 +4,9 @@ from hub.views import launcher
 from tests.hub.test_launcher import login_as
 
 
-def test_login_setup_and_launcher_show_the_three_zone_scene(hub_app, monkeypatch):
+def test_setup_and_launcher_show_the_three_zone_scene(hub_app, monkeypatch):
     monkeypatch.setattr(launcher, "fetch_badge", lambda *a, **k: None)
-    pages = {"/login": hub_app.test_client().get("/login"), "/setup": hub_app.test_client().get("/setup"), "/": login_as(hub_app).get("/")}
+    pages = {"/setup": hub_app.test_client().get("/setup"), "/": login_as(hub_app).get("/")}
     for path, r in pages.items():
         html = r.get_data(as_text=True)
         assert r.status_code == 200 and 'class="tz"' in html and "Plant illustration: Safety, Environment and Utility" in html, path
@@ -65,3 +65,24 @@ def test_gate_page_has_depth_layers_accent_tiles_and_assets(hub_app, monkeypatch
     r = c.get("/static/hub/gate.js")
     assert r.status_code == 200 and r.mimetype == "text/javascript" and "prefers-reduced-motion" in r.get_data(as_text=True)
     assert "perspective" in c.get("/static/hub/scene.css").get_data(as_text=True)
+
+
+def test_login_pages_are_safety_only_with_animated_safety_scene_and_no_mascot_or_other_zones(hub_app):
+    c = hub_app.test_client()
+    from tests.hub.test_auth import add_user
+    add_user(hub_app)
+    for path in ("/login", "/register"):
+        html = c.get(path).get_data(as_text=True)
+        assert 'class="ss"' in html and "AIAT Safety" in html and "<b>Safety</b>" in html, path
+        assert "mascot" not in html and "Environment" not in html and "Utility" not in html and 'class="tz"' not in html, path
+        assert "เข้าสู่ระบบครั้งเดียว" not in html and "ใช้ได้ทุกระบบ" not in html and "ทุกระบบที่คุณมีสิทธิ์" not in html, path
+        assert html.count('id="ss-glow"') == 1 and 'id="ss-gold"' in html and "Safety 4.0" not in html, path
+        assert not re.search(r"<script|onload=|href=\"http", html.split('class="ss"', 1)[1].split("</svg>", 1)[0]), path
+    assert 'href="/"' in c.get("/login").get_data(as_text=True)                                  # ลิงก์กลับหน้า Hub
+
+
+def test_safety_scene_css_has_the_animations_and_reduced_motion_fallback(hub_app):
+    css = hub_app.test_client().get("/static/hub/scene.css").get_data(as_text=True)
+    for k in ("ss-orbit", "ss-ring", "ss-check", "ss-tape", "ss-shield", "ss-spark"):
+        assert f".{k}" in css, k
+    assert ".ss *, .ss { animation: none !important" in css

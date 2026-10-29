@@ -106,7 +106,7 @@ def register():
 
 @bp.route("/logout", methods=["GET", "POST"])   # GET: Safety ส่งผู้ใช้มาออกจากระบบกลาง
 def logout():
-    """ล้าง session ของ Hub แล้วแสดงหน้าสั้น ๆ ที่สั่ง Safety ล้าง session ของตัวเองเบื้องหลัง จากนั้นเข้าหน้าล็อกอินของ Hub เสมอ
+    """ล้าง session ของ Hub แล้วแสดงหน้าสั้น ๆ ที่สั่ง Safety ล้าง session ของตัวเองเบื้องหลัง จากนั้นกลับหน้า Hub (เข้าดูได้โดยไม่ต้องล็อกอิน) เสมอ
     (ไม่ redirect ไปหา Safety ตรง ๆ เพราะถ้า Safety ปิดอยู่หรือที่อยู่เข้าไม่ถึง ผู้ใช้จะค้างหน้าผิดพลาดของเบราว์เซอร์)"""
     session.clear()
     safety = get_db().execute("SELECT url FROM app_registry WHERE key='safety' AND enabled=1").fetchone()

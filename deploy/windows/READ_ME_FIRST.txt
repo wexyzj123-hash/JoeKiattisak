@@ -10,7 +10,8 @@ AIAT Safety + Hub  —  ชุดติดตั้งสำหรับ Windows
 
 ไฟล์ในชุดนี้
   install.bat    ติดตั้ง Python venv + ไลบรารี + สร้าง .env (ความลับสุ่ม) + ตรวจระบบ
-  start.bat      เปิด Hub และ Safety ตามพอร์ตใน .env (เตือนถ้าพอร์ตถูกใช้อยู่)
+  start.bat      เปิด Hub และ Safety เบื้องหลัง (ไม่มีหน้าต่างค้าง) ตามพอร์ตใน .env แล้วเปิดเบราว์เซอร์ — เตือนถ้าพอร์ตถูกใช้อยู่
+  RestartPortal.bat  เปิดระบบใหม่โดยไม่ต้องติดตั้งใหม่ (ใช้หลังอัปเดตเวอร์ชัน หรือเมื่อระบบค้าง) ถ้าเวอร์ชันใหม่มีไลบรารีเพิ่มจะติดตั้งให้เอง
   stop.bat       ปิดระบบ
   backup.bat     สำรองฐานข้อมูลและรูปภาพไว้ที่โฟลเดอร์ backup\  (คัดลอกออกจากเครื่องเป็นประจำ)
   firewall.bat   (Run as administrator, ทำครั้งเดียว) เปิดไฟร์วอลล์ให้เครื่องอื่นในวง LAN เข้าผ่าน IP ได้
@@ -24,10 +25,10 @@ AIAT Safety + Hub  —  ชุดติดตั้งสำหรับ Windows
   ถ้าติดตั้งไปแล้วและต้องการเปลี่ยน: แก้ HUB_URL / SAFETY_URL ใน .env แล้วแก้ที่อยู่ระบบที่ Hub > ทะเบียนระบบ
 
 อัปเกรดเวอร์ชัน
-  stop.bat > backup.bat > แตกไฟล์ใหม่ทับ (ไม่ทับ .env, hub\data, safety\data) > install.bat > start.bat
+  backup.bat > แตกไฟล์ใหม่ทับ (ไม่ทับ .env, hub\data, safety\data) > RestartPortal.bat  (ไม่ต้องรัน install.bat ซ้ำ — RestartPortal ปิด ติดตั้งไลบรารีที่เพิ่ม และเปิดใหม่ให้ในขั้นเดียว)
   ฐานข้อมูลอัปเกรดตัวเองตอนเปิดระบบ
 
 หมายเหตุ
-  - แจ้งเตือน Telegram/LINE/Teams/อีเมล: ใส่ค่าใน .env (ดูตัวอย่างที่ถูกคอมเมนต์ไว้) แล้ว stop.bat > start.bat
+  - แจ้งเตือน Telegram/LINE/Teams/อีเมล: ใส่ค่าใน .env (ดูตัวอย่างที่ถูกคอมเมนต์ไว้) แล้วดับเบิลคลิก RestartPortal.bat
   - ถ้าต้องการฟอนต์ Sarabun ใน PDF วาง Sarabun-Regular.ttf และ Sarabun-Bold.ttf ที่ shared\assets\fonts\
   - ใช้งานจริงควรวาง reverse proxy ที่มี https หน้าระบบ (ดู docs\DEPLOY.md)

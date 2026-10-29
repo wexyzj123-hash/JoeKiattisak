@@ -33,6 +33,7 @@ echo กำลังสร้าง .venv ...
 echo กำลังติดตั้งไลบรารี - ต้องต่ออินเทอร์เน็ต ...
 ".venv\Scripts\python.exe" -m pip install --upgrade pip >nul
 ".venv\Scripts\python.exe" -m pip install -r requirements.txt || goto :fail
+".venv\Scripts\python.exe" tools\service.py markdeps
 
 rem ---- 3) สร้าง .env (ความลับสุ่ม + ที่อยู่ + พอร์ต) ----
 if exist ".env" goto :env_done
@@ -79,10 +80,11 @@ echo [!] เครื่องอื่นในวง LAN จะเปิดไ
 echo.
 echo ============================================================
 echo  ติดตั้งเสร็จแล้ว  (Hub พอร์ต %HUB_PORT% / Safety พอร์ต %SAFETY_PORT%)
-echo   1) ดับเบิลคลิก start.bat เพื่อเปิดระบบ
+echo   1) ดับเบิลคลิก start.bat เพื่อเปิดระบบ (ทำงานเบื้องหลัง ไม่มีหน้าต่างค้าง)
 echo   2) เปิดเว็บที่ Hub แล้วสร้างผู้ดูแลระบบคนแรกที่หน้า /setup
 echo   3) ทำตามรายการตรวจสอบใน docs\DEPLOY.md
 echo  ให้เปิดระบบอัตโนมัติเมื่อเปิดเครื่อง: คลิกขวา autostart.bat แล้วเลือก Run as administrator
+echo  อัปเดตเวอร์ชันภายหลัง: แตก Zip ใหม่ทับ แล้วดับเบิลคลิก RestartPortal.bat (ไม่ต้องรัน install.bat อีก)
 echo  เปลี่ยนพอร์ตภายหลัง: แก้ HUB_PORT / SAFETY_PORT / HUB_URL / SAFETY_URL ใน .env
 echo ============================================================
 pause

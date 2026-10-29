@@ -160,6 +160,7 @@ def main(out: str) -> None:
     con.execute("UPDATE notifications SET created_at=created_at"); con.commit()
 
     h, s = Live(hub), Live(saf)
+    hc.execute("UPDATE app_registry SET url=? WHERE key='safety'", (s.url,)); hc.commit()                     # ให้ Hub ดึงรายชื่อโรงงาน/แผนก/ไลน์จาก Safety ตัวสาธิตได้
     job = {"out": out, "hub": h.url, "safety": s.url, "hub_cookie": h.cookie({"uid": hub_admin}),
            "cookies": {k: s.cookie({"suid": v}) for k, v in (("admin", admin), ("reporter", somchai), ("assessor", wipa), ("head", prasit))},
            "ids": {"h1": h1, "h2": h2, "h3": h3, "h4": h4, "h5": h5, "h6": h6, "inc1": inc1, "inc2": inc2, "cp1": cp1, "cp2": cp2, "round": rid, "draft": draft, "checklist": cl},

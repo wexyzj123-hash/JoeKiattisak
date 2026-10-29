@@ -2,14 +2,7 @@
 {% block title %}ส่งคำขอแล้ว · AIAT Hub{% endblock %}
 {% block shell %}
 <div class="auth-split">
-  <div class="auth-brand">
-    <a class="brand brand-aisin" href="/" aria-label="AISIN">{{ aisin_wordmark(150, '#ffffff') }}</a>
-    <div class="auth-art">{{ mascot('default', 280, decorative=True) }}</div>
-    <h2>เข้าสู่ระบบครั้งเดียว ใช้ได้ทุกระบบ</h2>
-    <p>ศูนย์กลางเข้าสู่ระบบของ AIAT — ร่วมกันสร้างที่ทำงานที่ปลอดภัย</p>
-    {% include "_scene_block.html" %}
-    <div class="auth-foot"><small>{{ BRAND_FOOTER }}</small></div>
-  </div>
+  {% include "_auth_brand.html" %}
   <main class="auth-form" id="auth-stage">
     <span class="orb orb-a" aria-hidden="true"></span><span class="orb orb-b" aria-hidden="true"></span><span class="orb orb-c" aria-hidden="true"></span>
     {% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}

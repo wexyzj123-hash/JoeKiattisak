@@ -14,6 +14,8 @@ process.stdin.on('end', async () => {
   // ---- Hub ----
   add('hub-login', { app: 'hub', who: null, url: '/login' });
   add('hub-launcher', { app: 'hub', who: 'hub', url: '/' });
+  add('hub-launcher-public', { app: 'hub', who: null, url: '/' });
+  add('hub-register', { app: 'hub', who: null, url: '/register', full: true, fill: { username: 'somying.k', name_th: 'สมหญิง ใจดี', factory_id: { label: /บางนา/ }, department_id: { label: /ผลิต/ }, line_id: { label: /ประกอบ/ } } });
   add('hub-users', { app: 'hub', who: 'hub', url: '/admin/users', full: true });
   add('hub-apps', { app: 'hub', who: 'hub', url: '/admin/apps', full: true });
   // ---- ผู้แจ้ง ----

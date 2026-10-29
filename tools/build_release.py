@@ -8,7 +8,7 @@ from datetime import date
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 NAME = "AIAT-Safety-Hub"
 INCLUDE_DIRS = ("hub", "safety", "shared", "docs")
-INCLUDE_TOOLS = ("make_env.py", "selfcheck.py", "backup.py", "ports.py")
+INCLUDE_TOOLS = ("make_env.py", "selfcheck.py", "backup.py", "ports.py", "service.py")
 INCLUDE_FILES = ("requirements.txt", ".env.example", "README.md")
 SKIP_DIRS = {"__pycache__", "data", "superpowers", ".pytest_cache"}
 TEXT_EXT = (".bat", ".txt")
