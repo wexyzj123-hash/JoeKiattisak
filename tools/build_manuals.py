@@ -13,7 +13,7 @@ SIDEBAR, TOPBAR = 264, 66
 
 # ชื่อภาพ → (โหมด, ความสูงสูงสุด) ; body = ตัดแถบเมนู+แถบบนออก, full = ทั้งหน้า, top = ครึ่งบนของเนื้อหา
 CROPS = {
-    "home-reporter": ("full", None), "home-mobile": ("full", None), "hazard-form-mobile": ("full", None), "hub-login": ("full", None), "hub-launcher": ("full", None),
+    "home-reporter": ("full", None), "home-mobile": ("full", None), "hazard-form-mobile": ("full", None), "hub-login": ("full", None), "hub-register": ("full", None), "hub-launcher": ("full", None),
     "drawer": ("full", None), "home-admin": ("body", 1500),
 }
 BODY_MAX = {"admin-criteria": 1500, "hazard-form": 640, "hazard-form-filled": 760, "notifications": 560, "profile": 560, "hazard-list": 620, "search": 520, "capa-list": 620, "patrol-list": 640,

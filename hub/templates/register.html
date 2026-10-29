@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}ขอสร้างบัญชี · AIAT Hub{% endblock %}
+{% block shell %}
+<div class="auth-split">
+  <div class="auth-brand">
+    <a class="brand brand-aisin" href="/" aria-label="AISIN">{{ aisin_wordmark(150, '#ffffff') }}</a>
+    <div class="auth-art">{{ mascot('default', 280, decorative=True) }}</div>
+    <h2>เข้าสู่ระบบครั้งเดียว ใช้ได้ทุกระบบ</h2>
+    <p>ศูนย์กลางเข้าสู่ระบบของ AIAT — ร่วมกันสร้างที่ทำงานที่ปลอดภัย</p>
+    {% include "_scene_block.html" %}
+    <div class="auth-foot"><small>{{ BRAND_FOOTER }}</small></div>
+  </div>
+  <main class="auth-form" id="auth-stage">
+    <span class="orb orb-a" aria-hidden="true"></span><span class="orb orb-b" aria-hidden="true"></span><span class="orb orb-c" aria-hidden="true"></span>
+    {% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
+    <div class="login-card-wrap">
+      <form method="post" action="/register" class="card login-card">
+        <span class="seal" aria-hidden="true">{{ icon('user', 26) }}</span>
+        <h1>ขอสร้างบัญชี</h1>
+        <p class="login-sub">กรอกข้อมูลแล้วรอผู้ดูแลระบบอนุมัติ — จะเข้าสู่ระบบได้เมื่ออนุมัติแล้ว</p>
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <label>ชื่อผู้ใช้ (อังกฤษ/ตัวเลข 3-32 ตัว) <span class="field"><span class="ic">{{ icon('user', 18) }}</span><input name="username" value="{{ values.get('username', '') }}" autocomplete="username" pattern="[A-Za-z0-9._-]{3,32}" required autofocus></span></label>
+        <label>ชื่อ-นามสกุล <span class="field"><span class="ic">{{ icon('user', 18) }}</span><input name="name_th" value="{{ values.get('name_th', '') }}" maxlength="100" required></span></label>
+        <label>รหัสผ่าน (อย่างน้อย 8 ตัวอักษร) <span class="field"><span class="ic">{{ icon('shield', 18) }}</span><input name="password" type="password" autocomplete="new-password" minlength="8" required></span></label>
+        <label>ยืนยันรหัสผ่าน <span class="field"><span class="ic">{{ icon('shield', 18) }}</span><input name="password2" type="password" autocomplete="new-password" minlength="8" required></span></label>
+        <button type="submit" class="go"><span>ส่งคำขอ</span></button>
+      </form>
+    </div>
+    <p class="login-foot"><a href="/login">← กลับไปเข้าสู่ระบบ</a></p>
+    <p class="login-foot">AIAT Hub · AISIN Autoparts (Thailand)</p>
+  </main>
+</div>
+<script src="/static/hub/login.js" defer></script>
+{% endblock %}

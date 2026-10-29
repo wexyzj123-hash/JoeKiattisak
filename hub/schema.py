@@ -9,7 +9,8 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL,
     role          TEXT NOT NULL DEFAULT 'viewer'
                   CHECK (role IN ('admin','supervisor','technician','viewer')),
-    active        INTEGER NOT NULL DEFAULT 1
+    active        INTEGER NOT NULL DEFAULT 1,
+    pending       INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS app_registry (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,6 +27,8 @@ CREATE TABLE IF NOT EXISTS app_registry (
 
 def ensure_schema(con) -> None:
     con.executescript(DDL)
+    if "pending" not in {r[1] for r in con.execute("PRAGMA table_info(users)")}:
+        con.execute("ALTER TABLE users ADD COLUMN pending INTEGER NOT NULL DEFAULT 0")      # 1 = สมัครเองและรอผู้ดูแลอนุมัติ
     if "link_mode" not in {r[1] for r in con.execute("PRAGMA table_info(app_registry)")}:
         # sso = ส่งผู้ใช้ไป <url>/sso พร้อม token (ระบบที่รองรับ SSO) | link = เปิดที่อยู่ตรง ๆ (ระบบเดิมที่ไม่มี SSO เช่น UT CMMS / E-Checksheet) ไม่ส่ง token
         con.execute("ALTER TABLE app_registry ADD COLUMN link_mode TEXT NOT NULL DEFAULT 'sso'")

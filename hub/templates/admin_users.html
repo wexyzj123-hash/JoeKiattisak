@@ -3,6 +3,24 @@
 {% block body %}
 <p><a href="/">← กลับหน้ารวมระบบ</a> · <a href="/admin/apps">ทะเบียนระบบ</a></p>
 <h1>ผู้ใช้ของ Hub</h1>
+{% if pending %}
+<section class="card" id="pending" style="max-width:none;margin:0 0 24px;border-color:var(--warn, #d89a1a)">
+  <h2>รออนุมัติ ({{ pending | length }})</h2>
+  <p style="color:var(--muted)">ผู้ใช้ที่ขอสร้างบัญชีเองจากหน้าเข้าสู่ระบบ ยังเข้าระบบไม่ได้จนกว่าคุณจะอนุมัติ ตรวจว่าเป็นพนักงานจริงก่อนอนุมัติ และเลือกบทบาทที่เหมาะสม</p>
+  <div class="table-wrap"><table class="table-stack" style="width:100%">
+  <tr><th>ชื่อผู้ใช้</th><th>ชื่อ-นามสกุล</th><th>ดำเนินการ</th></tr>
+  {% for u in pending %}
+  <tr><td data-label="ชื่อผู้ใช้">{{ u['username'] }}</td><td data-label="ชื่อ-นามสกุล">{{ u['name_th'] }}</td>
+  <td data-label="ดำเนินการ" style="display:flex;gap:6px;flex-wrap:wrap">
+  <form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ u['id'] }}"><input type="hidden" name="action" value="approve">
+  <select name="role" aria-label="บทบาท">{% for k, v in roles.items() %}<option value="{{ k }}" {{ 'selected' if k == 'viewer' }}>{{ v }}</option>{% endfor %}</select>
+  <button type="submit">อนุมัติ</button></form>
+  <form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ u['id'] }}"><input type="hidden" name="action" value="reject"><button type="submit">ปฏิเสธ</button></form>
+  </td></tr>
+  {% endfor %}
+  </table></div>
+</section>
+{% endif %}
 <div class="table-wrap"><table class="table-stack" style="width:100%">
 <tr><th>ชื่อผู้ใช้</th><th>ชื่อ</th><th>บทบาท</th><th>สถานะ</th><th>ดำเนินการ</th></tr>
 {% for u in users %}
