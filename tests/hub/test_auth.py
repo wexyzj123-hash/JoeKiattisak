@@ -66,7 +66,8 @@ def test_logout_clears_session(hub_app):
     add_user(hub_app)
     c = hub_app.test_client()
     login(c)
-    assert c.post("/logout", data={"_csrf": csrf(c)}).status_code == 302
+    r = c.post("/logout", data={"_csrf": csrf(c)})
+    assert r.status_code == 200 and "no-store" in r.headers["Cache-Control"]
     with c.session_transaction() as s:
         assert "uid" not in s
 
@@ -91,7 +92,7 @@ def test_get_logout_clears_session_for_safety_redirect(hub_app):
     c = hub_app.test_client()
     login(c)
     r = c.get("/logout")
-    assert r.status_code == 302 and r.headers["Location"] == "http://safety.test/signout"
+    assert r.status_code == 200 and 'data-signout="http://safety.test/signout?quiet=1"' in r.get_data(as_text=True)
     with c.session_transaction() as s:
         assert "uid" not in s
 
@@ -123,4 +124,23 @@ def test_hub_logout_also_signs_out_of_safety(hub_app):
     c = hub_app.test_client()
     login(c)
     r = c.post("/logout", data={"_csrf": csrf(c)})
-    assert r.headers["Location"] == "http://safety.test/signout"
+    html = r.get_data(as_text=True)
+    assert 'data-signout="http://safety.test/signout?quiet=1"' in html and "/static/hub/logout.js" in html and 'href="/login"' in html
+
+
+def test_logout_page_swaps_loopback_safety_url_to_the_host_the_user_opened(hub_app):
+    add_user(hub_app)
+    con = connect(hub_app.config["DATABASE"])
+    con.execute("UPDATE app_registry SET url='http://localhost:5200' WHERE key='safety'"); con.commit()
+    c = hub_app.test_client()
+    login(c)
+    html = c.get("/logout", headers={"Host": "192.168.1.5:5001"}).get_data(as_text=True)
+    assert 'data-signout="http://192.168.1.5:5200/signout?quiet=1"' in html                 # ไม่ส่งผู้ใช้ไป localhost ของเครื่องตัวเอง
+
+
+def test_logout_never_strands_the_user_when_safety_is_down(hub_app):
+    add_user(hub_app)
+    c = hub_app.test_client()
+    login(c)
+    js = c.get("/static/hub/logout.js")
+    assert js.status_code == 200 and "location.replace('/login')" in js.get_data(as_text=True) and "setTimeout(go" in js.get_data(as_text=True)

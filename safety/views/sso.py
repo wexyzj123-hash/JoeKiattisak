@@ -35,12 +35,15 @@ def sso():
         db.rollback()
         return _deny()
     role = "admin" if "admin" in (claims.get("roles") or []) else "reporter"   # ใช้ตอนสร้างครั้งแรกเท่านั้น
-    db.execute("INSERT OR IGNORE INTO safety_users(hub_uid, name, role) VALUES(?,?,?)",
-               (hub_uid, str(claims.get("name", "")), role))
+    org = " › ".join(p.strip()[:100] for p in str(claims.get("org", "")).split("|") if p.strip())[:300]
+    db.execute("INSERT OR IGNORE INTO safety_users(hub_uid, name, role, requested_org) VALUES(?,?,?,?)",
+               (hub_uid, str(claims.get("name", "")), role, org))
     user = db.execute("SELECT * FROM safety_users WHERE hub_uid=?", (hub_uid,)).fetchone()
     if not user["active"]:
         db.commit()
         return _deny()
+    if org and not user["requested_org"]:
+        db.execute("UPDATE safety_users SET requested_org=? WHERE id=?", (org, user["id"]))
     if user["name"] != claims.get("name", user["name"]):
         db.execute("UPDATE safety_users SET name=? WHERE id=?", (str(claims["name"]), user["id"]))
     db.commit()

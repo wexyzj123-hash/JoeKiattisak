@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import os
 
-from flask import abort, Blueprint, current_app, g, redirect, render_template, send_file, session
+from flask import abort, Blueprint, current_app, g, make_response, redirect, render_template, request, send_file, session
 
 from .. import capa, charts, dash, incident_stats, patrol, stats
 from .. import timeutil
@@ -86,6 +86,10 @@ def index():
 def signout():
     """Hub เรียกหลังผู้ใช้ออกจากระบบกลาง — ล้าง session ของ Safety แล้วกลับหน้าล็อกอินของ Hub"""
     session.clear()
+    if request.args.get("quiet") == "1":                  # Hub เรียกเบื้องหลังตอนออกจากระบบ — ไม่ต้องพาไปไหน
+        resp = make_response("", 204)
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
     return redirect(hub_public("/login"))
 
 

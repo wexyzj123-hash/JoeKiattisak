@@ -10,7 +10,14 @@ CREATE TABLE IF NOT EXISTS users (
     role          TEXT NOT NULL DEFAULT 'viewer'
                   CHECK (role IN ('admin','supervisor','technician','viewer')),
     active        INTEGER NOT NULL DEFAULT 1,
-    pending       INTEGER NOT NULL DEFAULT 0
+    pending       INTEGER NOT NULL DEFAULT 0,
+    req_factory   TEXT NOT NULL DEFAULT '',
+    req_department TEXT NOT NULL DEFAULT '',
+    req_line      TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS app_registry (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -29,6 +36,9 @@ def ensure_schema(con) -> None:
     con.executescript(DDL)
     if "pending" not in {r[1] for r in con.execute("PRAGMA table_info(users)")}:
         con.execute("ALTER TABLE users ADD COLUMN pending INTEGER NOT NULL DEFAULT 0")      # 1 = สมัครเองและรอผู้ดูแลอนุมัติ
+    for col in ("req_factory", "req_department", "req_line"):                              # โรงงาน/แผนก/ไลน์ที่ผู้ขอบัญชีระบุเอง (ข้อมูลอ้างอิงให้ผู้อนุมัติ)
+        if col not in {r[1] for r in con.execute("PRAGMA table_info(users)")}:
+            con.execute(f"ALTER TABLE users ADD COLUMN {col} TEXT NOT NULL DEFAULT ''")
     if "link_mode" not in {r[1] for r in con.execute("PRAGMA table_info(app_registry)")}:
         # sso = ส่งผู้ใช้ไป <url>/sso พร้อม token (ระบบที่รองรับ SSO) | link = เปิดที่อยู่ตรง ๆ (ระบบเดิมที่ไม่มี SSO เช่น UT CMMS / E-Checksheet) ไม่ส่ง token
         con.execute("ALTER TABLE app_registry ADD COLUMN link_mode TEXT NOT NULL DEFAULT 'sso'")

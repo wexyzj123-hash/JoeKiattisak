@@ -8,7 +8,7 @@
   <tr><th>ชื่อ</th><th>บทบาท</th><th>ขอบเขตหน่วยงาน</th><th>สถานะ</th><th>เข้าครั้งแรก</th><th>ดำเนินการ</th></tr>
   {% for u in users %}
   <tr>
-    <td>{{ u['name'] }}</td><td>{{ u['role_name'] or u['role'] }}</td>
+    <td>{{ u['name'] }}{% if u['requested_org'] %}<br><small style="color:var(--muted)">ระบุเองว่า: {{ u['requested_org'] }}</small>{% endif %}</td><td>{{ u['role_name'] or u['role'] }}</td>
     <td>{{ u['factory_name'] or 'ทุกโรงงาน' }}{% if u['department_name'] %} › {{ u['department_name'] }}{% endif %}</td>
     <td>{{ 'ใช้งาน' if u['active'] else 'ปิดใช้งาน' }}</td><td>{{ u['created_at'] }}</td>
     <td style="display:flex;gap:6px;flex-wrap:wrap">

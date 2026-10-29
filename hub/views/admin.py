@@ -7,6 +7,7 @@ import sqlite3
 from flask import Blueprint, flash, g, redirect, render_template, request
 
 from ..db import get_db
+from ..settings import registration_open, set_setting
 from ..security import MIN_PASSWORD, ROLE_TH, hash_password, role_required
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -78,6 +79,9 @@ def users():
                     db.commit()
                 except sqlite3.IntegrityError:
                     flash("ชื่อผู้ใช้นี้มีอยู่แล้ว")
+        elif action == "set_registration":
+            set_setting(db, "self_register", "1" if f.get("open") == "1" else "0")
+            flash("เปิดรับคำขอสร้างบัญชีด้วยตนเองแล้ว" if f.get("open") == "1" else "ปิดรับคำขอสร้างบัญชีด้วยตนเองแล้ว (คำขอที่ค้างอยู่ยังอนุมัติหรือปฏิเสธได้)")
         elif target is None:
             flash("ไม่พบผู้ใช้")
         elif action == "approve":
@@ -122,4 +126,4 @@ def users():
         return redirect("/admin/users")
     rows = db.execute("SELECT * FROM users WHERE pending=0 ORDER BY id").fetchall()
     pending = db.execute("SELECT * FROM users WHERE pending=1 ORDER BY id").fetchall()
-    return render_template("admin_users.html", users=rows, pending=pending, roles=ROLE_TH)
+    return render_template("admin_users.html", users=rows, pending=pending, roles=ROLE_TH, reg_open=registration_open(db))

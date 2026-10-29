@@ -24,7 +24,7 @@
         <button type="submit" class="go"><span>เข้าสู่ระบบ</span></button>
       </form>
     </div>
-    <p class="login-foot"><a href="/register">ยังไม่มีบัญชี? ขอสร้างบัญชี</a> · ผู้ดูแลระบบต้องอนุมัติก่อนใช้งาน</p>
+    {% if can_register %}<p class="login-foot"><a href="/register">ยังไม่มีบัญชี? ขอสร้างบัญชี</a> · ผู้ดูแลระบบต้องอนุมัติก่อนใช้งาน</p>{% endif %}
     <p class="login-foot">AIAT Hub · AISIN Autoparts (Thailand)</p>
   </main>
 </div>

@@ -630,6 +630,7 @@ def _add_column(con, table: str, column: str, ddl: str) -> None:
 
 def ensure_schema(con) -> None:
     con.executescript(DDL)
+    _add_column(con, "safety_users", "requested_org", "TEXT NOT NULL DEFAULT ''")        # ที่ผู้ใช้ระบุเองตอนขอบัญชีที่ Hub (ข้อมูลอ้างอิงให้แอดมิน ไม่ใช่ขอบเขตสิทธิ์)
     _add_column(con, "safety_users", "factory_id", "INTEGER")
     _add_column(con, "safety_users", "department_id", "INTEGER")
     _add_column(con, "safety_users", "telegram_chat_id", "TEXT")

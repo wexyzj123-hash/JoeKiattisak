@@ -53,7 +53,7 @@ def theme_css():
 ASSETS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets")
 
 
-HUB_ASSETS = {"scene.css": "text/css", "login.js": "text/javascript", "gate.js": "text/javascript"}
+HUB_ASSETS = {"scene.css": "text/css", "login.js": "text/javascript", "gate.js": "text/javascript", "register.js": "text/javascript", "logout.js": "text/javascript"}
 
 
 @bp.route("/static/hub/<name>")
@@ -93,7 +93,8 @@ def home():
         if _allowed(r):
             badge = fetch_badge(r, current_app.config["SERVICE_TOKEN"]) if r["key"] in BADGE_APPS else None
             apps.append({"key": r["key"], "name_th": r["name_th"], "badge": badge, "link": r["link_mode"] == "link"})
-    return render_template("launcher.html", apps=apps, any_badge=any(a["badge"] for a in apps))
+    pending = get_db().execute("SELECT COUNT(*) FROM users WHERE pending=1").fetchone()[0] if g.user["role"] == "admin" else 0
+    return render_template("launcher.html", apps=apps, any_badge=any(a["badge"] for a in apps), pending=pending)
 
 
 @bp.route("/go/<key>")
@@ -107,5 +108,6 @@ def go(key: str):
     if row["link_mode"] == "link":                      # ระบบเดิมที่ไม่มี SSO: เปิดที่อยู่ตรง ๆ ห้ามส่ง token ไปให้
         return redirect(public_url(row["url"], request.host))
     token = sign_token(current_app.config["SSO_SECRET"],
-                       {"uid": g.user["id"], "name": g.user["name_th"], "roles": [g.user["role"]], "aud": row["key"]})
+                       {"uid": g.user["id"], "name": g.user["name_th"], "roles": [g.user["role"]], "aud": row["key"],
+                        "org": "|".join(g.user[k] for k in ("req_factory", "req_department", "req_line") if g.user[k])})
     return redirect(public_url(row["url"].rstrip("/"), request.host) + "/sso?" + urlencode({"token": token}))
