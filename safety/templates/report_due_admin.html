@@ -1,0 +1,41 @@
+{% extends "layout.html" %}
+{% block title %}กำหนดส่งรายงาน · Safety 4.0{% endblock %}
+{% block body %}
+<h1>กำหนดส่งรายงาน</h1>
+<p class="muted">งวดรายเดือน: ส่งรายงานของเดือนก่อนในวันที่กำหนดของเดือนถัดไป · งวดรายปี: ส่งรายงานของปีก่อน ระบบเตือนก่อนครบกำหนดและเมื่อเลยกำหนดตามกฎที่หน้า "การแจ้งเตือน" — งวดที่บันทึกว่าส่งแล้วจะไม่ถูกเตือนอีก</p>
+<div class="card" style="max-width:none;margin:0 0 16px"><div class="table-wrap">
+<table class="table-stack" style="width:100%">
+  <tr><th>รายงาน</th><th>แผนก</th><th>ความถี่</th><th>วันที่</th><th>เดือน (รายปี)</th><th>งวดถัดไป/ค้างส่ง</th><th>สถานะ</th><th>ดำเนินการ</th></tr>
+  {% for x in rows %}{% set r = x.rule %}{% set s = x.status %}
+  <tr>
+    <td>{{ names[r['report_key']] }}</td><td>{{ x.dept or 'ทุกแผนก' }}</td>
+    <td><select form="rd{{ r['id'] }}" name="frequency" aria-label="ความถี่">{% for k, v in frequencies.items() %}<option value="{{ k }}" {{ 'selected' if r['frequency'] == k }}>{{ v }}</option>{% endfor %}</select></td>
+    <td><input form="rd{{ r['id'] }}" name="due_day" type="number" min="1" max="28" value="{{ r['due_day'] }}" aria-label="วันที่ครบกำหนด" style="width:70px"></td>
+    <td><select form="rd{{ r['id'] }}" name="due_month" aria-label="เดือนที่ครบกำหนด (รายปี)"><option value="">—</option>{% for m in months %}<option value="{{ loop.index }}" {{ 'selected' if r['due_month'] == loop.index }}>{{ m }}</option>{% endfor %}</select></td>
+    <td>{% if r['active'] %}งวด {{ s.period }} · ครบ {{ s.due }}{% else %}—{% endif %}</td>
+    <td>{% if r['active'] %}{% if s.state == 'overdue' %}<span class="chip" style="background:var(--danger)">เกินกำหนด {{ s.days }} วัน</span>
+      {% elif s.state == 'due' %}<span class="chip">ครบกำหนดวันนี้</span>{% else %}{{ 'ส่งแล้ว' if s.submitted else 'อีก ' ~ s.days ~ ' วัน' }}{% endif %}{% else %}ปิดใช้งาน{% endif %}</td>
+    <td><form id="rd{{ r['id'] }}" method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ r['id'] }}">
+      <button name="action" value="save">บันทึก</button> <button name="action" value="toggle">{{ 'ปิดใช้งาน' if r['active'] else 'เปิดใช้งาน' }}</button></form>
+      {% if r['active'] and s.state in ('overdue', 'due') %}<form method="post" style="margin-top:6px"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="submit">
+        <input type="hidden" name="report_key" value="{{ r['report_key'] }}"><input type="hidden" name="department_id" value="{{ r['department_id'] or '' }}"><input type="hidden" name="period" value="{{ s.period }}">
+        <button>บันทึกว่าส่งแล้ว ({{ s.period }})</button></form>{% endif %}</td>
+  </tr>
+  {% else %}<tr><td colspan="8">ยังไม่มีกำหนดส่งรายงาน</td></tr>{% endfor %}
+</table></div></div>
+<form method="post" class="card" style="max-width:520px;margin:0 0 16px">
+  <h2>เพิ่มกำหนดส่งรายงาน</h2>
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="save">
+  <label>รายงาน <select name="report_key">{% for k, v in names.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
+  <label>แผนก <select name="department_id">{% if unscoped %}<option value="">ทุกแผนก (ทั้งบริษัท)</option>{% endif %}{% for d in departments %}<option value="{{ d['id'] }}">{{ d['factory'] }} / {{ d['name_th'] }}</option>{% endfor %}</select></label>
+  <label>ความถี่ <select name="frequency">{% for k, v in frequencies.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select></label>
+  <label>วันที่ครบกำหนด (1–28) <input name="due_day" type="number" min="1" max="28" value="5" required></label>
+  <label>เดือนที่ครบกำหนด (เฉพาะรายปี) <select name="due_month"><option value="">—</option>{% for m in months %}<option value="{{ loop.index }}">{{ m }}</option>{% endfor %}</select></label>
+  <button type="submit">เพิ่มกำหนดส่ง</button>
+</form>
+<section class="card" style="max-width:none;margin:0"><h2>ประวัติการส่งรายงาน</h2>
+  <div class="table-wrap"><table class="table-stack" style="width:100%"><tr><th>รายงาน</th><th>แผนก</th><th>งวด</th><th>ผู้บันทึก</th><th>เมื่อ</th><th>หมายเหตุ</th></tr>
+  {% for h in history %}<tr><td>{{ names[h['report_key']] }}</td><td>{{ h['dept_name'] or 'ทุกแผนก' }}</td><td>{{ h['period'] }}</td><td>{{ h['who'] }}</td><td>{{ h['submitted_at'] }}</td><td>{{ h['note'] }}</td></tr>
+  {% else %}<tr><td colspan="6">ยังไม่มีการบันทึกการส่งรายงาน</td></tr>{% endfor %}</table></div>
+</section>
+{% endblock %}

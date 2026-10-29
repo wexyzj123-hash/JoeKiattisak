@@ -1,0 +1,77 @@
+{% extends "layout.html" %}
+{% block title %}การแจ้งเตือน · AIAT Safety{% endblock %}
+{% macro channel_boxes(form_id, selected) -%}
+{% for c in channels %}<label style="display:inline-flex;gap:4px;align-items:center;margin-right:8px"><input form="{{ form_id }}" type="checkbox" name="channels" value="{{ c }}" {{ 'checked' if c in selected }}> {{ channel_th[c] }}</label>{% endfor %}
+{%- endmacro %}
+{% block body %}
+<h1>การแจ้งเตือน</h1>
+{% if no_enabled %}<div class="flash">ตอนนี้ปิดกฎทั้งหมด — จะไม่มีการแจ้งเตือนใดเกิดขึ้นจนกว่าจะเปิดกฎอย่างน้อยหนึ่งข้อ</div>{% endif %}
+
+<div class="card" style="max-width:none;margin:0 0 16px;overflow-x:auto">
+  <h2>กฎการแจ้งเตือน</h2>
+  <p style="color:var(--muted)">ผู้รับ: <code>reporter</code> (ผู้แจ้ง), <code>owner</code> (ผู้รับผิดชอบ), <code>role:&lt;รหัสบทบาท&gt;</code> (เฉพาะผู้ที่ขอบเขตครอบคลุมรายการ) คั่นด้วยเครื่องหมายจุลภาค ·
+  "เกินกำหนด" หลายกฎ = ยกระดับ L1–L3 (วันที่ 1 / 3 / 7 หลังครบกำหนด) · รหัสบทบาทที่มี: {% for r in roles %}<code>{{ r['key'] }}</code> {% endfor %}</p>
+  <table class="table-stack" style="width:100%">
+    <tr><th>เหตุการณ์</th><th>ผู้รับ</th><th>ช่องทาง</th><th>วัน</th><th>คะแนนขั้นต่ำ</th><th>สถานะ</th><th>ดำเนินการ</th></tr>
+    {% for r in rules %}
+    <tr>
+      <td><select form="r{{ r['id'] }}" name="event">{% for e in events %}<option value="{{ e }}" {{ 'selected' if e == r['event'] }}>{{ event_th[e] }}</option>{% endfor %}</select></td>
+      <td><input form="r{{ r['id'] }}" name="recipients" value="{{ r['recipients'] }}" size="28"></td>
+      <td>{{ channel_boxes('r' ~ r['id'], r['channels'].split(',')) }}</td>
+      <td><input form="r{{ r['id'] }}" name="offset_days" value="{{ r['offset_days'] }}" size="3"></td>
+      <td><input form="r{{ r['id'] }}" name="min_score" value="{{ r['min_score'] if r['min_score'] is not none else '' }}" size="4"></td>
+      <td>{{ 'เปิด' if r['enabled'] else 'ปิด' }}</td>
+      <td><form id="r{{ r['id'] }}" method="post" style="display:flex;gap:4px"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ r['id'] }}">
+        <button name="action" value="rule_update">บันทึก</button><button name="action" value="rule_toggle">{{ 'ปิด' if r['enabled'] else 'เปิด' }}</button><button name="action" value="rule_delete">ลบ</button></form></td>
+    </tr>
+    {% endfor %}
+  </table>
+</div>
+
+<form method="post" class="card" style="max-width:none;margin:0 0 16px">
+  <h2>เพิ่มกฎ</h2>
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="rule_create">
+  <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end">
+    <label>เหตุการณ์ <select name="event">{% for e in events %}<option value="{{ e }}">{{ event_th[e] }}</option>{% endfor %}</select></label>
+    <label>ผู้รับ <input name="recipients" placeholder="reporter,owner,role:admin" size="30"></label>
+    <label>จำนวนวัน <input name="offset_days" value="0" size="3"></label>
+    <label>คะแนนขั้นต่ำ <input name="min_score" size="4"></label>
+  </div>
+  <div>{% for c in channels %}<label style="display:inline-flex;gap:4px;align-items:center;margin-right:8px"><input type="checkbox" name="channels" value="{{ c }}" {{ 'checked' if c == 'inapp' }}> {{ channel_th[c] }}</label>{% endfor %}</div>
+  <button type="submit">เพิ่มกฎ</button>
+</form>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px;margin-bottom:16px">
+  <form method="post" class="card" style="max-width:none;margin:0">
+    <h2>ช่วงเวลาเงียบและงานประจำวัน</h2>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="settings_save">
+    <label>ช่วงเวลาเงียบ เริ่ม (HH:MM) <input name="quiet_start" value="{{ settings.get('quiet_start', '22:00') }}" size="6"></label>
+    <label>ช่วงเวลาเงียบ สิ้นสุด (HH:MM) <input name="quiet_end" value="{{ settings.get('quiet_end', '06:00') }}" size="6"></label>
+    <label>เวลารันงานประจำวัน (เตือนครบกำหนด + สำรองข้อมูล) <input name="daily_time" value="{{ settings.get('daily_time', '07:30') }}" size="6"></label>
+    <small style="color:var(--muted)">ช่วงเงียบหน่วงเฉพาะข้อความภายนอกที่ไม่เร่งด่วน (กระดิ่งในระบบไม่ถูกหน่วง) · เริ่ม = สิ้นสุด หมายถึงไม่มีช่วงเงียบ</small>
+    <button type="submit">บันทึก</button>
+  </form>
+  <div class="card" style="max-width:none;margin:0">
+    <h2>สถานะช่องทาง</h2>
+    <p style="color:var(--muted)">โทเค็นและรหัสผ่านตั้งในไฟล์ <code>.env</code> เท่านั้น ไม่แสดงในหน้านี้</p>
+    {% for c in ('telegram', 'line', 'teams', 'email') %}<p><strong>{{ channel_th[c] }}:</strong> {{ status[c] }}</p>{% endfor %}
+    <form method="post" style="display:flex;gap:8px;flex-wrap:wrap"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <button name="action" value="send_test">ส่งข้อความทดสอบถึงฉัน</button><button name="action" value="run_daily_now">รันงานประจำวันตอนนี้</button></form>
+  </div>
+</div>
+
+<div class="card" style="max-width:none;margin:0;overflow-x:auto">
+  <h2>คิวข้อความภายนอก</h2>
+  <p>{% for k, label in status_th.items() %}{{ label }}: <strong>{{ counts.get(k, 0) }}</strong> · {% endfor %}</p>
+  <table class="table-stack" style="width:100%">
+    <tr><th>#</th><th>ช่องทาง</th><th>ปลายทาง</th><th>หัวข้อ</th><th>สถานะ</th><th>ครั้ง</th><th>ลองถัดไป</th><th>ข้อผิดพลาด</th><th></th></tr>
+    {% for o in outbox %}
+    <tr><td>{{ o['id'] }}</td><td>{{ channel_th[o['channel']] }}</td><td>{{ o['shown'] }}</td><td>{{ o['subject'] }}</td><td>{{ status_th[o['status']] }}</td>
+      <td>{{ o['attempts'] }}</td><td>{{ o['next_try_at'] }}</td><td>{{ o['last_error'] }}</td>
+      <td><form method="post" style="display:flex;gap:4px"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ o['id'] }}">
+        {% if o['status'] in ('dead', 'failed') %}<button name="action" value="outbox_retry">ส่งใหม่</button>{% endif %}
+        {% if o['status'] in ('pending', 'failed') %}<button name="action" value="outbox_cancel">ยกเลิก</button>{% endif %}</form></td></tr>
+    {% else %}<tr><td colspan="9">ไม่มีข้อความค้าง</td></tr>{% endfor %}
+  </table>
+</div>
+{% endblock %}

@@ -1,0 +1,370 @@
+"""safety/notify.py — ศูนย์กลางการแจ้งเตือน: ใครต้องได้รับ (ตามกฎใน notify_rules), ข้อความ, และการเขียนแถวแจ้งเตือน/คิวส่ง
+ทุกอย่างเขียนลงฐานข้อมูลใน transaction ของผู้เรียก (ไม่ commit, ไม่เรียกเครือข่าย) — การส่งจริงเป็นหน้าที่ของ delivery.py
+ปัญหาในการแจ้งเตือนต้องไม่ทำให้ขั้นตอนหลักล้ม: emit() ครอบด้วย SAVEPOINT และกลืนข้อผิดพลาด (บันทึก log)"""
+from __future__ import annotations
+
+import logging
+import re
+from datetime import date
+from typing import Mapping
+
+from .hazards import user_in_scope
+from .perms import user_permissions
+from .schema import NOTIFY_EVENTS, OUTBOX_CHANNELS
+
+log = logging.getLogger("safety.notify")
+
+TITLE_MAX, BODY_MAX, FIELD_MAX = 150, 500, 200
+CHAT_RE = re.compile(r"^-?\d{1,20}$")
+LINE_RE = re.compile(r"^U[0-9a-f]{32}$")
+UNSAFE_RE = re.compile(r"[\x00-\x1f\x7f-\x9f  ]")
+
+
+def clean(text, limit: int) -> str:
+    """ข้อความธรรมดาบรรทัดเดียว: ตัดอักขระควบคุม/ขึ้นบรรทัดใหม่ เหลือช่องว่างเดียว และจำกัดความยาว"""
+    return re.sub(r"\s+", " ", UNSAFE_RE.sub(" ", "" if text is None else str(text))).strip()[:limit]
+
+
+def valid_contact(channel: str, user) -> str | None:
+    """ค่าติดต่อของผู้ใช้สำหรับช่องทางนั้นถ้ารูปแบบถูกต้อง ไม่เช่นนั้น None"""
+    field = {"telegram": "telegram_chat_id", "line": "line_user_id", "email": "email"}.get(channel)
+    try:
+        value = user[field] if field else None
+    except (KeyError, IndexError):
+        return None
+    if not isinstance(value, str):
+        return None
+    if channel == "telegram":
+        return value if CHAT_RE.match(value) else None
+    if channel == "line":
+        return value if LINE_RE.match(value) else None
+    if len(value) > 254 or re.search(r"[\s\x00-\x1f\x7f]", value) or value.count("@") != 1:
+        return None
+    local, domain = value.split("@")
+    return value if local and "." in domain and not domain.startswith(".") and not domain.endswith(".") else None
+
+
+def _split(text) -> list[str]:
+    return [p.strip() for p in str(text or "").split(",") if p.strip()]
+
+
+def _covers(db, user, rec) -> bool:
+    """ขอบเขตของผู้ใช้ครอบคลุมรายการหรือไม่ — รายงานมี department_id (ว่าง = ทั้งบริษัท: เฉพาะผู้ไม่มีขอบเขต), รายการอื่นใช้พื้นที่เสี่ยง"""
+    try:
+        dept = rec["department_id"]
+    except (KeyError, IndexError):
+        return user_in_scope(db, user, rec["risk_area_id"])
+    if dept is None:
+        return user["factory_id"] is None and user["department_id"] is None
+    conds, args = ["d.id = ?"], [dept]
+    if user["factory_id"] is not None:
+        conds.append("d.factory_id = ?"); args.append(user["factory_id"])
+    if user["department_id"] is not None:
+        conds.append("d.id = ?"); args.append(user["department_id"])
+    return db.execute(f"SELECT 1 FROM departments d WHERE {' AND '.join(conds)}", args).fetchone() is not None
+
+
+def recipients_for(db, rule, hazard, actor_id: int | None, owner_fallback_role: str | None = None) -> list:
+    """ผู้ใช้ที่ใช้งานอยู่ตามกฎ: reporter / owner / role:<key> (เฉพาะผู้ที่ขอบเขตครอบคลุมรายการ); ไม่รวมผู้กระทำเอง ไม่ซ้ำ"""
+    found: dict[int, object] = {}
+
+    def add(row):
+        if row is not None and row["active"] and row["id"] != actor_id:
+            found.setdefault(row["id"], row)
+
+    get = lambda uid: db.execute("SELECT * FROM safety_users WHERE id=?", (uid,)).fetchone() if uid else None
+    for kind in _split(rule["recipients"]):
+        if kind == "reporter":
+            add(get(hazard["reported_by"]))
+        elif kind == "owner":
+            owner = get(hazard["owner_id"])
+            if owner is None and owner_fallback_role:                        # ไม่มีผู้ตรวจประจำแผน → ผู้ที่มีบทบาทนี้ในขอบเขต
+                for u in db.execute("SELECT * FROM safety_users WHERE role=? AND active=1 ORDER BY id", (owner_fallback_role,)):
+                    if _covers(db, u, hazard):
+                        add(u)
+            else:
+                add(owner)
+        elif kind.startswith("owner_else:"):                                 # เจ้าของงาน ถ้าไม่มี → ผู้ที่มีบทบาทนี้ในขอบเขต (แอดมินแก้ได้ในกฎ)
+            owner = get(hazard["owner_id"])
+            if owner is not None:
+                add(owner)
+            else:
+                for u in db.execute("SELECT * FROM safety_users WHERE role=? AND active=1 ORDER BY id", (kind[11:],)):
+                    if _covers(db, u, hazard):
+                        add(u)
+        elif kind.startswith("role:"):
+            for u in db.execute("SELECT * FROM safety_users WHERE role=? AND active=1 ORDER BY id", (kind[5:],)):
+                if _covers(db, u, hazard):
+                    add(u)
+    return list(found.values())
+
+
+def render_message(event: str, hazard, extra: Mapping | None = None) -> tuple[str, str]:
+    extra = extra or {}
+    code, title = clean(hazard["code"], 40), clean(hazard["title"], FIELD_MAX)
+    area = clean(extra.get("area"), FIELD_MAX)
+    level = f" · ระดับ {clean(hazard['level_name'], 40)} ({hazard['score']})" if hazard["level_name"] else ""
+    due = f" · ครบกำหนด {clean(hazard['due_date'], 10)}" if hazard["due_date"] else ""
+    where = f" · พื้นที่ {area}" if area else ""
+    days = extra.get("days")
+    head, tail = {
+        "hazard_reported": (f"แจ้งอันตรายใหม่ {code}", f"{title}{where}"),
+        "hazard_assessed": (f"ประเมินความเสี่ยง {code}", f"{title}{level}{where}"),
+        "hazard_assigned": (f"มอบหมายงานแก้ไข {code}", f"{title}{due}{where}"),
+        "hazard_closed": (f"ปิดรายการอันตราย {code}", f"{title} · ผลการแก้ไข: {clean(hazard['closing_note'], 200)}"),
+        "hazard_rejected": (f"รายการถูกปฏิเสธ {code}", f"{title} · เหตุผล: {clean(extra.get('reason') or hazard['reject_reason'], 200)}"),
+        "due_soon": (f"ใกล้ครบกำหนด {code} (อีก {days} วัน)", f"{title}{level}{due}{where}"),
+        "overdue": (f"เกินกำหนด {code} ({days} วัน)", f"{title}{level}{due}{where}"),
+    }.get(event, (f"แจ้งเตือน {code}", title))
+    return clean(head, TITLE_MAX), clean(tail, BODY_MAX)
+
+
+def _stage(event: str, hazard, offset_days: int | None) -> str:
+    if event in ("due_soon", "overdue"):
+        return str(offset_days)
+    if event == "hazard_assigned":
+        return f"{hazard['owner_id']}:{hazard['due_date']}"
+    if event == "hazard_assessed":
+        return str(hazard["score"])
+    return "1"
+
+
+def _rule_matches(rule, event: str, hazard, offset_days: int | None) -> bool:
+    if event in ("due_soon", "overdue", "capa_due_soon", "capa_overdue", "patrol_due", "patrol_overdue", "report_due_soon", "report_overdue") and rule["offset_days"] != offset_days:
+        return False
+    if event == "hazard_assessed" and rule["min_score"] is not None:
+        return hazard["score"] is not None and hazard["score"] >= rule["min_score"]
+    return True
+
+
+def _queue_external(db, channel: str, target: str, title: str, body: str, urgent: int, notification_id, key: str) -> None:
+    db.execute("INSERT OR IGNORE INTO notify_outbox(channel, target, subject, body, urgent, notification_id, dedupe_key, next_try_at) "
+               "VALUES(?,?,?,?,?,?,?, datetime('now','localtime'))", (channel, target, title, body, urgent, notification_id, key))
+
+
+def _write_rows(db, event: str, rec, title: str, body: str, stage: str, ref: str, link: str, hazard_id, incident_id,
+                actor_id, offset_days, urgent_base: bool, require_any: frozenset = frozenset(), allow_ids: frozenset = frozenset(),
+                owner_fallback_role: str | None = None) -> int:
+    """เขียนแถวแจ้งเตือน/คิวส่งตามกฎของเหตุการณ์ (ใช้ร่วมกันระหว่างอันตรายและอุบัติเหตุ); คืนจำนวนแถวในระบบที่สร้างใหม่"""
+    created = 0
+    for rule in db.execute("SELECT * FROM notify_rules WHERE event=? AND enabled=1 ORDER BY id", (event,)).fetchall():
+        if not _rule_matches(rule, event, rec, offset_days):
+            continue
+        key = f"{event}:{ref}:{rule['id']}:{stage}"
+        channels = set(_split(rule["channels"]))
+        urgent = int(urgent_base or (event in ("overdue", "capa_overdue", "report_overdue") and rule["offset_days"] >= 3))
+        for user in recipients_for(db, rule, rec, actor_id, owner_fallback_role):
+            if require_any and user["id"] not in allow_ids and not (require_any & user_permissions(db, user)):
+                continue                                       # ไม่แจ้งคนที่เปิดรายการนี้ไม่ได้ (ลิงก์จะ 404)
+            note_id = None
+            if "inapp" in channels:
+                cur = db.execute("INSERT OR IGNORE INTO notifications(user_id, event, title, body, link, hazard_id, incident_id, dedupe_key) "
+                                 "VALUES(?,?,?,?,?,?,?,?)", (user["id"], event, title, body, link, hazard_id, incident_id, key))
+                if cur.rowcount != 1:
+                    continue                                   # เคยแจ้งผู้ใช้คนนี้สำหรับขั้นนี้แล้ว — ไม่ซ้ำ ทั้งในระบบและช่องทางอื่น
+                created += 1
+                note_id = cur.lastrowid
+            opted = set(_split(user["notify_channels"]))
+            for channel in OUTBOX_CHANNELS:
+                if channel == "teams" or channel not in channels or channel not in opted:
+                    continue
+                target = valid_contact(channel, user)
+                if target:
+                    _queue_external(db, channel, target, title, body, urgent, note_id, key)
+        if "teams" in channels:                                # ประกาศกลุ่มหนึ่งข้อความต่อกฎ+รายการ+ขั้น
+            _queue_external(db, "teams", "teams", title, body, urgent, None, key)
+    return created
+
+
+def emit(db, event: str, hazard_id: int, actor_id: int | None, *, offset_days: int | None = None,
+         today: date | None = None, stage: str | None = None, days: int | None = None) -> int:
+    """เขียนการแจ้งเตือนตามกฎของเหตุการณ์นี้ คืนจำนวนแถวแจ้งเตือนในระบบที่สร้างใหม่; ไม่ throw ไม่ commit"""
+    if event not in NOTIFY_EVENTS or event.startswith("incident_"):
+        return 0
+    db.execute("SAVEPOINT notify")
+    try:
+        hazard = db.execute("SELECT * FROM hazards WHERE id=?", (hazard_id,)).fetchone()
+        if hazard is None:
+            db.execute("RELEASE notify")
+            return 0
+        area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (hazard["risk_area_id"],)).fetchone()
+        title, body = render_message(event, hazard, {"area": area[0] if area else "", "days": days if days is not None else offset_days})
+        stage = stage if stage is not None else _stage(event, hazard, offset_days)
+        created = _write_rows(db, event, hazard, title, body, stage, str(hazard_id), f"/hazards/{hazard_id}", hazard_id, None,
+                              actor_id, offset_days, bool(hazard["level_requires_approval"]))
+        db.execute("RELEASE notify")
+        return created
+    except Exception:                                              # noqa: BLE001 — การแจ้งเตือนต้องไม่ทำให้ขั้นตอนหลักล้ม
+        log.exception("emit(%s, hazard=%s) failed; rolled back", event, hazard_id)
+        db.execute("ROLLBACK TO notify")
+        db.execute("RELEASE notify")
+        return 0
+
+
+KIND_TH = {"accident": "อุบัติเหตุ", "near_miss": "Near Miss"}
+
+
+def render_incident_message(event: str, incident, extra: Mapping | None = None) -> tuple[str, str]:
+    """ข้อความแจ้งเตือนอุบัติเหตุ: รหัส ประเภท หัวข้อ พื้นที่ เท่านั้น — ไม่มีชื่อ/รหัสพนักงานของผู้เกี่ยวข้องเด็ดขาด"""
+    extra = extra or {}
+    code, title = clean(incident["code"], 40), clean(incident["title"], FIELD_MAX)
+    kind = KIND_TH.get(incident["kind"], "อุบัติเหตุ")
+    where = f" · พื้นที่ {clean(extra.get('area'), FIELD_MAX)}" if extra.get("area") else ""
+    due = f" · ครบกำหนด {clean(incident['due_date'], 10)}" if incident["due_date"] else ""
+    head, tail = {
+        "incident_reported": (f"แจ้ง{kind}ใหม่ {code}", f"{title}{where}"),
+        "incident_assigned": (f"มอบหมายสอบสวน{kind} {code}", f"{title}{due}{where}"),
+        "incident_closed": (f"ปิดรายการ{kind} {code}", f"{title}{where}"),                  # ไม่คัดลอกข้อความอิสระ (อาจมีชื่อบุคคล)
+    }.get(event, (f"แจ้งเตือน {code}", title))
+    return clean(head, TITLE_MAX), clean(tail, BODY_MAX)
+
+
+def emit_incident(db, event: str, incident_id: int, actor_id: int | None) -> int:
+    """แจ้งเตือนเหตุการณ์อุบัติเหตุตามกฎ; สัญญาเดียวกับ emit (SAVEPOINT, ไม่ throw, ไม่ commit)"""
+    if event not in NOTIFY_EVENTS or not event.startswith("incident_"):
+        return 0
+    db.execute("SAVEPOINT notify")
+    try:
+        inc = db.execute("SELECT i.*, COALESCE(s.counts_lost_time, 0) AS lost_time FROM incidents i "
+                         "LEFT JOIN injury_severities s ON s.id = i.injury_severity_id WHERE i.id=?", (incident_id,)).fetchone()
+        if inc is None:
+            db.execute("RELEASE notify")
+            return 0
+        area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (inc["risk_area_id"],)).fetchone()
+        title, body = render_incident_message(event, inc, {"area": area[0] if area else ""})
+        stage = f"{inc['owner_id']}:{inc['due_date']}" if event == "incident_assigned" else "1"
+        created = _write_rows(db, event, inc, title, body, stage, f"i{incident_id}", f"/incidents/{incident_id}", None, incident_id,
+                              actor_id, None, bool(inc["lost_time"] or inc["level_requires_approval"]),
+                              frozenset({"incident.report", "incident.investigate", "incident.close"}))
+        db.execute("RELEASE notify")
+        return created
+    except Exception:                                              # noqa: BLE001
+        log.exception("emit_incident(%s, incident=%s) failed; rolled back", event, incident_id)
+        db.execute("ROLLBACK TO notify")
+        db.execute("RELEASE notify")
+        return 0
+
+
+# ---------- CAPA และ Safety Patrol ----------
+def render_capa_message(event: str, capa, extra: Mapping | None = None) -> tuple[str, str]:
+    """ข้อความแจ้งเตือน CAPA: รหัส หัวข้อ พื้นที่ กำหนดส่ง เท่านั้น — ไม่คัดลอกข้อความอิสระ (หมายเหตุ/รายละเอียด)"""
+    extra = extra or {}
+    code, title = clean(capa["code"], 40), clean(capa["title"], FIELD_MAX)
+    where = f" · พื้นที่ {clean(extra.get('area'), FIELD_MAX)}" if extra.get("area") else ""
+    due = f" · ครบกำหนด {clean(capa['due_date'], 10)}"
+    days = extra.get("days")
+    head, tail = {
+        "capa_assigned": (f"มอบหมาย CAPA {code}", f"{title}{due}{where}"),
+        "capa_done": (f"CAPA ดำเนินการเสร็จ รอยืนยัน {code}", f"{title}{where}"),
+        "capa_verified": (f"CAPA ยืนยันผลแล้ว {code}", f"{title}{where}"),
+        "capa_reopened": (f"CAPA ถูกตีกลับให้แก้ไข {code}", f"{title}{due}{where}"),
+        "capa_due_soon": (f"CAPA ใกล้ครบกำหนด {code} (อีก {days} วัน)", f"{title}{due}{where}"),
+        "capa_overdue": (f"CAPA เกินกำหนด {code} ({days} วัน)", f"{title}{due}{where}"),
+    }.get(event, (f"แจ้งเตือน CAPA {code}", title))
+    return clean(head, TITLE_MAX), clean(tail, BODY_MAX)
+
+
+def render_patrol_message(event: str, plan, extra: Mapping | None = None) -> tuple[str, str]:
+    extra = extra or {}
+    name = clean(extra.get("checklist"), FIELD_MAX)
+    where = f" · พื้นที่ {clean(extra.get('area'), FIELD_MAX)}" if extra.get("area") else ""
+    due = clean(extra.get("due"), 10)
+    days = extra.get("days")
+    head, tail = {
+        "patrol_due": (f"ถึงรอบตรวจความปลอดภัย: {name}", f"ครบกำหนด {due}{where}"),
+        "patrol_overdue": (f"เลยรอบตรวจความปลอดภัย {days} วัน: {name}", f"ครบกำหนด {due}{where}"),
+    }.get(event, (f"แจ้งเตือนการตรวจ: {name}", f"{due}{where}"))
+    return clean(head, TITLE_MAX), clean(tail, BODY_MAX)
+
+
+def emit_capa(db, event: str, capa_id: int, actor_id: int | None, *, offset_days: int | None = None, days: int | None = None) -> int:
+    """แจ้งเตือนเหตุการณ์ของ CAPA ตามกฎ; สัญญาเดียวกับ emit (SAVEPOINT, ไม่ throw, ไม่ commit)"""
+    if event not in NOTIFY_EVENTS or not event.startswith("capa_"):
+        return 0
+    db.execute("SAVEPOINT notify")
+    try:
+        capa = db.execute("SELECT c.*, c.created_by AS reported_by FROM capas c WHERE c.id=?", (capa_id,)).fetchone()
+        if capa is None:
+            db.execute("RELEASE notify")
+            return 0
+        area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (capa["risk_area_id"],)).fetchone()
+        title, body = render_capa_message(event, capa, {"area": area[0] if area else "", "days": days if days is not None else offset_days})
+        if event in ("capa_due_soon", "capa_overdue"):
+            stage = f"{offset_days}:{capa['owner_id']}:{capa['due_date']}"       # ย้ายเจ้าของ/เลื่อนกำหนด → เตือนรอบใหม่
+        elif event == "capa_assigned":
+            stage = f"{capa['owner_id']}:{capa['due_date']}"
+        elif event in ("capa_done", "capa_reopened"):
+            stage = str(capa["reopen_count"])
+        else:
+            stage = "1"
+        created = _write_rows(db, event, capa, title, body, stage, f"c{capa_id}", f"/capas/{capa_id}", None, None, actor_id, offset_days, False,
+                              frozenset({"capa.create", "capa.verify"}), frozenset({capa["owner_id"], capa["created_by"]}))
+        db.execute("RELEASE notify")
+        return created
+    except Exception:                                              # noqa: BLE001
+        log.exception("emit_capa(%s, capa=%s) failed; rolled back", event, capa_id)
+        db.execute("ROLLBACK TO notify")
+        db.execute("RELEASE notify")
+        return 0
+
+
+def emit_patrol(db, event: str, plan_id: int, actor_id: int | None, *, offset_days: int | None = None, days: int | None = None, due: str = "") -> int:
+    """แจ้งเตือนครบรอบ/เลยรอบตรวจของแผนการตรวจ (ผู้ตรวจประจำแผน หรือผู้ประเมินในขอบเขตถ้าไม่ได้กำหนด)"""
+    if event not in NOTIFY_EVENTS or not event.startswith("patrol_"):
+        return 0
+    db.execute("SAVEPOINT notify")
+    try:
+        plan = db.execute("SELECT p.*, p.inspector_id AS owner_id, p.created_by AS reported_by FROM patrol_plans p WHERE p.id=?", (plan_id,)).fetchone()
+        if plan is None:
+            db.execute("RELEASE notify")
+            return 0
+        area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (plan["risk_area_id"],)).fetchone()
+        cl = db.execute("SELECT name_th FROM checklists WHERE id=?", (plan["checklist_id"],)).fetchone()
+        title, body = render_patrol_message(event, plan, {"area": area[0] if area else "", "checklist": cl[0] if cl else "", "due": due,
+                                                          "days": days if days is not None else offset_days})
+        created = _write_rows(db, event, plan, title, body, f"{due}:{offset_days}", f"p{plan_id}", f"/patrols?plan={plan_id}", None, None, actor_id,
+                              offset_days, False, frozenset({"patrol.perform", "patrol.view"}), frozenset())
+        db.execute("RELEASE notify")
+        return created
+    except Exception:                                              # noqa: BLE001
+        log.exception("emit_patrol(%s, plan=%s) failed; rolled back", event, plan_id)
+        db.execute("ROLLBACK TO notify")
+        db.execute("RELEASE notify")
+        return 0
+
+
+def render_report_message(event: str, extra: Mapping | None = None) -> tuple[str, str]:
+    extra = extra or {}
+    name = clean(extra.get("report"), FIELD_MAX)
+    days = extra.get("days")
+    where = f" · แผนก {clean(extra.get('department'), FIELD_MAX)}" if extra.get("department") else ""
+    tail = f"งวด {clean(extra.get('period'), 10)}{where} · ครบกำหนด {clean(extra.get('due'), 10)}"
+    head = {"report_due_soon": f"ใกล้ครบกำหนดส่งรายงาน (อีก {days} วัน): {name}",
+            "report_overdue": f"เกินกำหนดส่งรายงาน {days} วัน: {name}"}.get(event, f"แจ้งเตือนการส่งรายงาน: {name}")
+    return clean(head, TITLE_MAX), clean(tail, BODY_MAX)
+
+
+def emit_report(db, event: str, rule_id: int, actor_id: int | None, *, period: str, due: str, offset_days: int, days: int) -> int:
+    """แจ้งเตือนกำหนดส่งรายงาน (ผู้รับตามกฎ ในขอบเขตของแผนกที่รายงานเกี่ยวข้อง); สัญญาเดียวกับ emit (SAVEPOINT, ไม่ throw, ไม่ commit)"""
+    if event not in NOTIFY_EVENTS or not event.startswith("report_"):
+        return 0
+    from .reports import REPORTS
+    db.execute("SAVEPOINT notify")
+    try:
+        rule = db.execute("SELECT * FROM report_due WHERE id=?", (rule_id,)).fetchone()
+        if rule is None:
+            db.execute("RELEASE notify")
+            return 0
+        dept = db.execute("SELECT name_th FROM departments WHERE id=?", (rule["department_id"],)).fetchone() if rule["department_id"] else None
+        title, body = render_report_message(event, {"report": REPORTS.get(rule["report_key"], rule["report_key"]), "period": period,
+                                                    "department": dept[0] if dept else "", "due": due, "days": days})
+        rec = {"department_id": rule["department_id"], "risk_area_id": None, "reported_by": rule["created_by"], "owner_id": None}
+        created = _write_rows(db, event, rec, title, body, f"{period}:{due}:{offset_days}", f"rd{rule_id}", f"/reports/{rule['report_key']}", None, None, actor_id,
+                              offset_days, False, frozenset({"report.export", "report.manage"}))
+        db.execute("RELEASE notify")
+        return created
+    except Exception:                                              # noqa: BLE001
+        log.exception("emit_report(%s, rule=%s) failed; rolled back", event, rule_id)
+        db.execute("ROLLBACK TO notify")
+        db.execute("RELEASE notify")
+        return 0

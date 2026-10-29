@@ -1,0 +1,30 @@
+{% extends "layout.html" %}
+{% block title %}การแจ้งเตือนของฉัน · AIAT Safety{% endblock %}
+{% block body %}
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+  <h1>การแจ้งเตือนของฉัน</h1>
+  <div style="display:flex;gap:8px;align-items:center">
+    <a class="btn" href="?unread={{ '' if only_unread else '1' }}">{{ 'แสดงทั้งหมด' if only_unread else 'เฉพาะที่ยังไม่อ่าน' }}</a>
+    <form method="post" action="/notifications/read-all"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button type="submit">อ่านทั้งหมด</button></form>
+  </div>
+</div>
+<div style="display:grid;gap:10px;margin-top:12px">
+  {% for r in rows %}
+  <div class="card note{{ ' unread' if not r['read_at'] }}" style="max-width:none;margin:0;display:flex;justify-content:space-between;gap:12px;align-items:start;{{ 'border-left:4px solid var(--accent)' if not r['read_at'] }}">
+    <div>
+      <a href="/notifications/go/{{ r['id'] }}"><strong>{{ r['title'] }}</strong></a>
+      <div>{{ r['body'] }}</div>
+      <small style="color:var(--muted)">{{ r['created_at'] }}</small>
+    </div>
+    {% if not r['read_at'] %}<form method="post" action="/notifications/{{ r['id'] }}/read"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button type="submit">อ่านแล้ว</button></form>{% endif %}
+  </div>
+  {% else %}
+  <div class="card" style="max-width:none;margin:0"><div class="empty-state">{{ mascot('sleeping', 96) }}<p>ยังไม่มีการแจ้งเตือน — สบายใจได้ น้องเอเอียตกำลังเฝ้าระวังอยู่</p></div></div>
+  {% endfor %}
+</div>
+<nav style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;align-items:center">
+  {% for p in range(1, pages + 1) %}{% if p == 1 or p == pages or (p - page) | abs <= 2 %}
+  <a class="btn" style="{{ 'opacity:.6' if p != page }}" href="?{{ 'unread=1&' if only_unread }}page={{ p }}">{{ p }}</a>{% endif %}{% endfor %}
+  <span style="color:var(--muted)">ทั้งหมด {{ total }} รายการ</span>
+</nav>
+{% endblock %}

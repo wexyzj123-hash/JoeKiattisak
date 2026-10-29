@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+{% block title %}โปรไฟล์ของฉัน · AIAT Safety{% endblock %}
+{% block body %}
+<h1>โปรไฟล์ของฉัน</h1>
+<p style="color:var(--muted)">กระดิ่งในระบบใช้ได้เสมอ — กรอกข้อมูลติดต่อและเลือกช่องทางด้านล่างเพื่อรับแจ้งเตือนนอกระบบ (ข้อมูลนี้ใช้ส่งแจ้งเตือนเท่านั้น)</p>
+{% for e in errors %}<div class="flash">{{ e }}</div>{% endfor %}
+<form method="post" class="card" style="max-width:560px;margin:0">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <p><strong>{{ g.user['name'] }}</strong></p>
+  {% for key, field, label in channels %}
+  <label>{{ label }} <input name="{{ field }}" value="{{ values.get(field) or '' }}" maxlength="254" autocomplete="off"></label>
+  <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="channels" value="{{ key }}" {{ 'checked' if key in chosen }}> รับแจ้งเตือนทาง {{ label }}</label>
+  {% endfor %}
+  <small style="color:var(--muted)">Telegram: เลข chat id ของคุณ · LINE: user id ขึ้นต้นด้วย U ตามด้วย 32 ตัวอักษร · ล้างช่องเพื่อลบข้อมูลติดต่อ</small>
+  <button type="submit">บันทึก</button>
+</form>
+{% endblock %}

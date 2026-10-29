@@ -1,0 +1,98 @@
+{% extends "layout.html" %}
+{% block title %}{{ h['code'] }} · AIAT Safety{% endblock %}
+{% macro photo_grid(items) -%}
+{% if items %}<div style="display:flex;gap:8px;flex-wrap:wrap">
+  {% for a in items %}<a href="/hazards/{{ h['id'] }}/files/{{ a['id'] }}" target="_blank" rel="noopener">
+    <img src="/hazards/{{ h['id'] }}/files/{{ a['id'] }}" alt="{{ a['orig_name'] }}" title="{{ a['orig_name'] }}" style="height:110px;border-radius:8px;border:1px solid var(--line)"></a>{% endfor %}
+</div>{% else %}<span style="color:var(--muted)">ไม่มีรูป</span>{% endif %}
+{%- endmacro %}
+{% block body %}
+<p><a href="/hazards">← กลับรายการ</a></p>
+<h1>{{ h['code'] }} · {{ h['title'] }}</h1>
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+  <span class="chip" style="background:var(--panel);border:1px solid var(--line);color:var(--text)">{{ status_th[h['status']] }}</span>
+  {% if h['level_name'] %}<span class="chip" style="background:{{ h['level_color'] }}">{{ h['level_name'] }} (คะแนน {{ h['score'] }})</span>{% endif %}
+  {% if overdue %}<span class="chip" style="background:var(--danger)">เกินกำหนด</span>{% endif %}
+</div>
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px">
+<div class="card" style="max-width:none;margin:0">
+  <h2>รายละเอียด</h2>
+  <p><strong>พื้นที่:</strong> {{ crumb }}</p>
+  <p><strong>ประเภท:</strong> {{ refs['type_name'] }} · <strong>แหล่งที่มา:</strong> {{ refs['source_name'] }}</p>
+  <p><strong>ผู้แจ้ง:</strong> {{ refs['reporter'] }} · {{ h['reported_at'] }}</p>
+  <p style="white-space:pre-wrap">{{ h['description'] }}</p>
+  {% for label, value in custom %}<p><strong>{{ label }}:</strong> {{ value }}</p>{% endfor %}
+  {% if h['level_name'] %}<p><strong>การประเมิน:</strong> โอกาส {{ h['likelihood'] }} × ความรุนแรง {{ h['severity'] }} = {{ h['score'] }}</p>{% endif %}
+  {% if h['owner_id'] %}<p><strong>ผู้รับผิดชอบ:</strong> {{ refs['owner'] }} · <strong>ครบกำหนด:</strong> {{ h['due_date'] }}</p>{% endif %}
+  {% if h['closing_note'] %}<p><strong>ผลการแก้ไข:</strong> {{ h['closing_note'] }}</p>{% endif %}
+  {% if h['reject_reason'] %}<p><strong>เหตุผลที่ปฏิเสธ:</strong> {{ h['reject_reason'] }}</p>{% endif %}
+  <h3>รูปก่อนแก้ไข</h3>{{ photo_grid(photos['before']) }}
+  <h3>รูปหลังแก้ไข</h3>{{ photo_grid(photos['after']) }}
+</div>
+<div style="display:grid;gap:16px;align-content:start">
+  {% if actions.assess %}
+  <form method="post" action="/hazards/{{ h['id'] }}/assess" class="card" style="max-width:none;margin:0">
+    <h2>{{ 'ประเมินใหม่' if h['status'] == 'assessed' else 'ประเมินความเสี่ยง' }}</h2>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>โอกาสที่จะเกิด <select name="likelihood">{% for s in scales['likelihood'] %}<option value="{{ s['level'] }}" {{ 'selected' if h['likelihood'] == s['level'] }}>{{ s['level'] }} — {{ s['label_th'] }}</option>{% endfor %}</select></label>
+    <label>ความรุนแรง <select name="severity">{% for s in scales['severity'] %}<option value="{{ s['level'] }}" {{ 'selected' if h['severity'] == s['level'] }}>{{ s['level'] }} — {{ s['label_th'] }}</option>{% endfor %}</select></label>
+    <label>หมายเหตุ <input name="note" maxlength="1000"></label>
+    <button type="submit">บันทึกการประเมิน</button>
+  </form>
+  {% endif %}
+  {% if actions.assign %}
+  <form method="post" action="/hazards/{{ h['id'] }}/assign" class="card" style="max-width:none;margin:0">
+    <h2>{{ 'เปลี่ยนผู้รับผิดชอบ' if h['status'] == 'assigned' else 'มอบหมายผู้รับผิดชอบ' }}</h2>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>ผู้รับผิดชอบ <select name="owner_id" required><option value="">— เลือก —</option>
+      {% for o in owners %}<option value="{{ o['id'] }}" {{ 'selected' if h['owner_id'] == o['id'] }}>{{ o['name'] }} ({{ o['role'] }})</option>{% endfor %}</select></label>
+    <label>วันครบกำหนด (เว้นว่าง = ตาม SLA ของระดับความเสี่ยง) <input type="date" name="due_date" value="{{ h['due_date'] or '' }}"></label>
+    <label>หมายเหตุ <input name="note" maxlength="1000"></label>
+    <button type="submit">มอบหมาย</button>
+  </form>
+  {% endif %}
+  {% if actions.close %}
+  <form method="post" action="/hazards/{{ h['id'] }}/close" enctype="multipart/form-data" class="card" style="max-width:none;margin:0">
+    <h2>ปิดรายการ</h2>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    {% if h['level_requires_approval'] %}<p style="color:var(--muted)">ระดับนี้ต้องให้ผู้อื่นที่ไม่ใช่ผู้รับผิดชอบเป็นผู้ปิดรายการ</p>{% endif %}
+    <label>ผลการแก้ไข <textarea name="note" rows="3" maxlength="1000" required></textarea></label>
+    <label>รูปหลังแก้ไข <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple></label>
+    <button type="submit">ปิดรายการ</button>
+  </form>
+  {% endif %}
+  {% if actions.reject %}
+  <form method="post" action="/hazards/{{ h['id'] }}/reject" class="card" style="max-width:none;margin:0">
+    <h2>ปฏิเสธรายการ</h2>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>เหตุผล <input name="reason" maxlength="1000" required></label>
+    <button type="submit">ปฏิเสธ</button>
+  </form>
+  {% endif %}
+  {% if actions.photos %}
+  <form method="post" action="/hazards/{{ h['id'] }}/photos" enctype="multipart/form-data" class="card" style="max-width:none;margin:0">
+    <h2>แนบรูปเพิ่ม</h2>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>ประเภทรูป <select name="kind"><option value="before">ก่อนแก้ไข</option>{% if actions.after_photos %}<option value="after">หลังแก้ไข</option>{% endif %}</select></label>
+    <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple required>
+    <button type="submit">แนบรูป</button>
+  </form>
+  {% endif %}
+</div>
+</div>
+<div class="card" style="max-width:none;margin:16px 0 0">
+  <h2>CAPA ที่เกี่ยวข้อง</h2>
+  {% for c in capas %}<p style="margin:0"><a href="/capas/{{ c['id'] }}">{{ c['code'] }}</a> · {{ c['title'] }} <span class="muted">({{ {'open': 'เปิด', 'in_progress': 'กำลังดำเนินการ', 'done': 'เสร็จ รอยืนยัน', 'verified': 'ยืนยันแล้ว', 'cancelled': 'ยกเลิก'}[c['status']] }})</span></p>
+  {% else %}<p class="muted" style="margin:0">ยังไม่มี CAPA</p>{% endfor %}
+  {% if can_capa %}<a class="btn" href="/capas/new?source=hazard:{{ h['id'] }}" style="justify-self:start">+ สร้าง CAPA</a>{% endif %}
+</div>
+<div class="card" style="max-width:none;margin:16px 0 0">
+  <h2>ประวัติการดำเนินการ</h2>
+  <ol style="padding-left:20px;display:grid;gap:8px">
+  {% for e in events %}
+    <li><strong>{{ event_th.get(e['kind'], e['kind']) }}</strong>{% if e['to_status'] %} → {{ status_th.get(e['to_status'], e['to_status']) }}{% endif %}
+      · {{ e['actor'] or '-' }} · {{ e['at'] }}{% if e['note'] %}<br><span style="color:var(--muted)">{{ e['note'] }}</span>{% endif %}</li>
+  {% endfor %}
+  </ol>
+</div>
+{% endblock %}

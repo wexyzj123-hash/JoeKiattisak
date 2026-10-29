@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}ระบบทั้งหมด · AIAT Hub{% endblock %}
+{% block toggle %}{% endblock %}
+{% block shell %}
+<header class="hub-top">
+  <a class="brand brand-aisin" href="/" aria-label="AISIN">{{ aisin_wordmark(128, '#ffffff') }}</a>
+  <button type="button" class="icon-btn" data-theme-toggle aria-label="สลับธีมสว่าง/มืด" title="สลับธีมสว่าง/มืด">{{ icon('sun-moon', 20) }}</button>
+  {% if g.user %}
+  <details class="user-menu">
+    <summary aria-label="เมนูผู้ใช้: {{ g.user['name_th'] }}">{{ icon('user', 18) }}<span class="who">{{ g.user['name_th'] }}</span>{{ icon('chevron-down', 16) }}</summary>
+    <div class="menu-pop">
+      <div class="menu-head"><strong>{{ g.user['name_th'] }}</strong><small>{{ g.user['role'] }}</small></div>
+      {% if g.user['role'] == 'admin' %}<a href="/admin/apps">{{ icon('layers', 16) }} ทะเบียนระบบ</a><a href="/admin/users">{{ icon('users', 16) }} ผู้ใช้{% if pending %} ({{ pending }}){% endif %}</a>{% endif %}
+      <form method="post" action="/logout"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button type="submit" class="link-btn">{{ icon('logout', 16) }} ออกจากระบบ</button></form>
+    </div>
+  </details>
+  {% else %}
+  <a class="btn hub-login-btn" href="/login">{{ icon('user', 16) }} เข้าสู่ระบบ</a>
+  {% endif %}
+</header>
+<div class="gate-shell" id="gate-stage">
+  <span class="orb orb-a" aria-hidden="true"></span><span class="orb orb-b" aria-hidden="true"></span><span class="orb orb-c" aria-hidden="true"></span>
+<main class="wrap wrap-wide gate">
+{% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
+{% if pending %}<div class="flash" role="status"><a href="/admin/users#pending"><strong>มีคำขอสร้างบัญชีรออนุมัติ {{ pending }} รายการ</strong> — กดเพื่อตรวจสอบและอนุมัติ</a></div>{% endif %}
+<div class="hero-3d">
+<section class="hero hero-scene" id="gate-hero">
+  <div class="hero-text">
+    <p class="hero-kicker">{% if g.user %}สวัสดี {{ g.user['name_th'] }}{% else %}AIAT Hub{% endif %}</p>
+    <h1>เลือกระบบที่ต้องการใช้งาน</h1>
+    <p>{{ 'มีรายการที่ต้องติดตาม — เปิดระบบที่มีตัวเลขแจ้งเตือนเพื่อดูรายละเอียด' if any_badge else 'ศูนย์รวมระบบของ AIAT — เลือกระบบที่ต้องการ ระบบที่ต้องยืนยันตัวตนจะขอรหัสผ่านเมื่อกดเข้า' }}</p>
+  </div>
+  <div class="hero-art">{{ mascot('alert' if any_badge else 'default', 120, decorative=True) }}</div>
+  {% include "_scene_block.html" %}
+</section>
+</div>
+{% set accents = {'safety': 'amber', 'utcmms': 'cyan', 'echeck': 'green'} %}
+<div class="tiles gate-tiles">
+  {% for a in apps %}
+  <a class="tile" data-accent="{{ accents.get(a['key'], 'blue') }}" style="--i: {{ loop.index0 }}" href="/go/{{ a['key'] }}"{% if a['link'] %} target="_blank" rel="noopener noreferrer"{% endif %}>
+    {% if a['badge'] %}<span class="badge">{{ a['badge'] }}<span class="sr-only"> รายการที่ต้องติดตาม</span></span>{% endif %}
+    <span class="kpi-ic">{{ icon('shield' if a['key'] == 'safety' else 'layers', 26) }}</span>
+    <strong>{{ a['name_th'] }}</strong>
+    <span class="muted">{{ 'เปิดระบบ (แท็บใหม่)' if a['link'] else ('เข้าใช้งาน' if g.user else 'เข้าสู่ระบบเพื่อใช้งาน') }}</span>
+    <span class="tile-go" aria-hidden="true">{{ icon('chevron-down', 18) }}</span>
+  </a>
+  {% else %}<p>ยังไม่มีระบบให้เลือก</p>{% endfor %}
+</div>
+</main>
+</div>
+<script src="/static/hub/gate.js" defer></script>
+{% endblock %}

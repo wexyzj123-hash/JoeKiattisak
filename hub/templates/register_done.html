@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}ส่งคำขอแล้ว · AIAT Hub{% endblock %}
+{% block shell %}
+<div class="auth-split">
+  {% include "_auth_brand.html" %}
+  <main class="auth-form" id="auth-stage">
+    <span class="orb orb-a" aria-hidden="true"></span><span class="orb orb-b" aria-hidden="true"></span><span class="orb orb-c" aria-hidden="true"></span>
+    {% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
+    <div class="login-card-wrap">
+      <div class="card login-card">
+        <span class="seal" aria-hidden="true">{{ icon('shield', 26) }}</span>
+        <h1>ส่งคำขอแล้ว</h1>
+        <p class="login-sub">ผู้ดูแลระบบจะตรวจสอบและอนุมัติบัญชีของคุณ เมื่ออนุมัติแล้วใช้ชื่อผู้ใช้และรหัสผ่านที่ตั้งไว้เข้าสู่ระบบได้ทันที — ถ้าเร่งด่วน แจ้งผู้ดูแลระบบโดยตรง</p>
+        <a class="btn go" href="/login" style="text-align:center"><span>กลับไปหน้าเข้าสู่ระบบ</span></a>
+      </div>
+    </div>
+    <p class="login-foot">AIAT Hub · AISIN Autoparts (Thailand)</p>
+  </main>
+</div>
+<script src="/static/hub/login.js" defer></script>
+{% endblock %}

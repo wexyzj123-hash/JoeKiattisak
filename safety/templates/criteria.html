@@ -1,0 +1,47 @@
+{% extends "layout.html" %}
+{% block title %}เกณฑ์ความเสี่ยง · AIAT Safety{% endblock %}
+{% block body %}
+<h1>เกณฑ์ความเสี่ยง</h1>
+<p style="color:var(--muted)">คะแนนความเสี่ยง = โอกาส × ความรุนแรง · ระดับความเสี่ยงต้องครอบคลุมทุกคะแนนพอดี (ไม่ขาด ไม่ซ้อน) · รายการอันตรายที่ประเมินแล้วจะเก็บระดับ/คะแนน/สี ณ ตอนประเมินไว้ ไม่เปลี่ยนตามการแก้เกณฑ์</p>
+{% for e in errors %}<div class="flash">{{ e }}</div>{% endfor %}
+<form method="post">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:16px">
+  {% for kind, title in (('likelihood', 'โอกาสที่จะเกิด'), ('severity', 'ความรุนแรง')) %}
+  <div class="card" style="max-width:none;margin:0">
+    <h2>{{ title }}</h2>
+    <label>จำนวนระดับ (2-10) <input name="{{ kind }}_size" value="{{ v.get(kind ~ '_size', '') }}" inputmode="numeric"></label>
+    {% for n in scale_rows %}
+    <div style="display:grid;grid-template-columns:2rem minmax(0,1fr) minmax(0,1.5fr);gap:6px;align-items:center">
+      <strong>{{ n }}</strong>
+      <input name="{{ kind }}_label_{{ n }}" value="{{ v.get(kind ~ '_label_' ~ n, '') }}" placeholder="ชื่อระดับ" maxlength="100">
+      <input name="{{ kind }}_desc_{{ n }}" value="{{ v.get(kind ~ '_desc_' ~ n, '') }}" placeholder="คำอธิบาย" maxlength="300">
+    </div>
+    {% endfor %}
+    <small style="color:var(--muted)">แถวที่เกินจำนวนระดับจะไม่ถูกใช้</small>
+  </div>
+  {% endfor %}
+  </div>
+  <div class="card" style="max-width:none;margin:16px 0;overflow-x:auto">
+    <h2>ระดับความเสี่ยง</h2>
+    <input type="hidden" name="level_count" value="{{ level_rows | length }}">
+    <table class="table-stack" style="width:100%">
+      <tr><th>ชื่อ</th><th>คะแนนต่ำสุด</th><th>คะแนนสูงสุด</th><th>สี (#RRGGBB)</th><th>SLA (วัน)</th><th>ต้องอนุมัติ</th><th>ลบ</th></tr>
+      {% for i in level_rows %}
+      <tr>
+        <td><input type="hidden" name="level_id_{{ i }}" value="{{ v.get('level_id_' ~ i, '') }}">
+            <input name="level_name_{{ i }}" value="{{ v.get('level_name_' ~ i, '') }}"></td>
+        <td><input name="level_min_{{ i }}" value="{{ v.get('level_min_' ~ i, '') }}" size="4"></td>
+        <td><input name="level_max_{{ i }}" value="{{ v.get('level_max_' ~ i, '') }}" size="4"></td>
+        <td><input name="level_color_{{ i }}" value="{{ v.get('level_color_' ~ i, '') }}" size="8"></td>
+        <td><input name="level_sla_{{ i }}" value="{{ v.get('level_sla_' ~ i, '') }}" size="4"></td>
+        <td><input type="checkbox" name="level_approval_{{ i }}" value="1" {{ 'checked' if v.get('level_approval_' ~ i) }}></td>
+        <td><input type="checkbox" name="level_delete_{{ i }}" value="1"></td>
+      </tr>
+      {% endfor %}
+    </table>
+    <small style="color:var(--muted)">แถวว่างด้านล่างใช้เพิ่มระดับใหม่ · ระดับที่ "ต้องอนุมัติ": ผู้รับผิดชอบปิดรายการเองไม่ได้</small>
+  </div>
+  <button type="submit">บันทึกเกณฑ์</button>
+</form>
+{% endblock %}

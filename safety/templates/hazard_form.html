@@ -1,0 +1,49 @@
+{% extends "layout.html" %}
+{% block title %}แจ้งอันตราย · AIAT Safety{% endblock %}
+{% block body %}
+<h1>แจ้งอันตราย</h1>
+{% for e in errors %}<div class="flash">{{ e }}</div>{% endfor %}
+<form method="post" enctype="multipart/form-data" class="card" style="max-width:640px;margin:0">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <label>หัวข้ออันตราย <input name="title" value="{{ values.get('title', '') }}" required maxlength="200"></label>
+  <label>พื้นที่เสี่ยง <select name="risk_area_id" required><option value="">— เลือก —</option>
+    {% for a in areas %}<option value="{{ a['id'] }}" {{ 'selected' if values.get('risk_area_id', '') | string == a['id'] | string }}>{{ a['breadcrumb'] }}</option>{% endfor %}</select></label>
+  <label>ประเภทอันตราย <select name="hazard_type_id" id="hazard_type_id" required><option value="">— เลือก —</option>
+    {% for t in types %}<option value="{{ t['id'] }}" {{ 'selected' if values.get('hazard_type_id', '') | string == t['id'] | string }}>{{ t['name_th'] }}</option>{% endfor %}</select></label>
+  <label>แหล่งที่มา <select name="source_id" required><option value="">— เลือก —</option>
+    {% for s in sources %}<option value="{{ s['id'] }}" {{ 'selected' if values.get('source_id', '') | string == s['id'] | string }}>{{ s['name_th'] }}</option>{% endfor %}</select></label>
+  <label>รายละเอียด <textarea name="description" rows="4" maxlength="2000">{{ values.get('description', '') }}</textarea></label>
+  {% for cf in custom_fields %}
+  <div class="cf" data-type="{{ cf['hazard_type_id'] if cf['hazard_type_id'] is not none else '' }}">
+    {% set name = 'cf_' ~ cf['key'] %}
+    {% if cf['type'] == 'checkbox' %}
+    <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="{{ name }}" value="1" {{ 'checked' if values.get(name) }}> {{ cf['label_th'] }}{{ ' *' if cf['required'] }}</label>
+    {% elif cf['type'] == 'select' %}
+    <label>{{ cf['label_th'] }}{{ ' *' if cf['required'] }} <select name="{{ name }}"><option value="">— เลือก —</option>
+      {% for o in cf['options'].split('\n') %}<option value="{{ o }}" {{ 'selected' if values.get(name) == o }}>{{ o }}</option>{% endfor %}</select></label>
+    {% else %}
+    <label>{{ cf['label_th'] }}{{ ' *' if cf['required'] }} <input name="{{ name }}" value="{{ values.get(name, '') }}"
+      {% if cf['type'] == 'date' %}type="date"{% elif cf['type'] == 'number' %}inputmode="decimal"{% endif %}></label>
+    {% endif %}
+  </div>
+  {% endfor %}
+  <label>รูปถ่ายก่อนแก้ไข (ไม่เกิน {{ max_photos }} รูป, JPEG/PNG/WebP, รูปละไม่เกิน 10 MB)
+    <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple></label>
+  <div style="display:flex;gap:8px"><button type="submit">บันทึกการแจ้ง</button><a class="btn" href="/hazards">ยกเลิก</a></div>
+</form>
+<script>
+// แสดงเฉพาะฟิลด์เพิ่มเติมของประเภทที่เลือก (เซิร์ฟเวอร์ตรวจซ้ำเสมอ)
+(function () {
+  var sel = document.getElementById('hazard_type_id');
+  function apply() {
+    document.querySelectorAll('.cf').forEach(function (el) {
+      var t = el.getAttribute('data-type');
+      var show = (t === '' || t === sel.value);
+      el.style.display = show ? '' : 'none';
+      el.querySelectorAll('input, select, textarea').forEach(function (i) { i.disabled = !show; });   // ช่องที่ซ่อนไม่ถูกส่ง
+    });
+  }
+  sel.addEventListener('change', apply); apply();
+})();
+</script>
+{% endblock %}

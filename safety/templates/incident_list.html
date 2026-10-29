@@ -1,0 +1,37 @@
+{% extends "layout.html" %}
+{% block title %}อุบัติเหตุ / Near Miss · Safety 4.0{% endblock %}
+{% macro kind_chip(k) -%}<span class="chip" style="background:{{ '#ff9f1c' if k == 'accident' else '#facc15' }}">{{ kind_th[k] }}</span>{%- endmacro %}
+{% block body %}
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+  <h1>อุบัติเหตุ / Near Miss</h1>
+  {% if can_report %}<a class="btn" href="/incidents/new">+ แจ้งเหตุการณ์</a>{% endif %}
+</div>
+<form method="get" class="card" style="max-width:none;margin:0 0 16px;display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+  <label>ค้นหา (รหัส / หัวข้อ) <input name="q" value="{{ f.q }}" maxlength="100"></label>
+  <label>ประเภท <select name="kind"><option value="">ทั้งหมด</option>
+    {% for k, v in kind_th.items() %}<option value="{{ k }}" {{ 'selected' if f.kind == k }}>{{ v }}</option>{% endfor %}</select></label>
+  <label>สถานะ <select name="status"><option value="">ทั้งหมด</option>
+    {% for k, v in status_th.items() %}<option value="{{ k }}" {{ 'selected' if f.status == k }}>{{ v }}</option>{% endfor %}</select></label>
+  <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="mine" value="1" {{ 'checked' if f.mine == '1' }}> เฉพาะของฉัน</label>
+  <button type="submit">ค้นหา</button>
+</form>
+<div class="card" style="max-width:none;margin:0"><div class="table-wrap">
+<table class="table-stack" style="width:100%">
+  <tr><th>รหัส</th><th>ประเภท</th><th>หัวข้อ</th><th>พื้นที่</th><th>ความรุนแรง</th><th>สถานะ</th><th>เกิดเหตุเมื่อ</th><th>ผู้เกี่ยวข้อง</th></tr>
+  {% for r in rows %}
+  <tr>
+    <td><a href="/incidents/{{ r['id'] }}">{{ r['code'] }}</a></td><td>{{ kind_chip(r['kind']) }}</td><td>{{ r['title'] }}</td><td>{{ r['area_name'] }}</td>
+    <td>{% if r['kind'] == 'near_miss' and r['level_name'] %}<span class="chip" style="background:{{ r['level_color'] }}">{{ r['level_name'] }} ({{ r['score'] }})</span>{% elif r['severity_name'] %}{{ r['severity_name'] }}{% endif %}</td>
+    <td>{{ status_th[r['status']] }}</td><td>{{ r['occurred_at'] }}</td><td>{{ r['people_n'] }} คน</td>
+  </tr>
+  {% else %}<tr><td colspan="8"><div class="empty-state">
+    {% if f.q or f.kind or f.status or f.mine %}{{ mascot('thinking', 96, decorative=True) }}<p>ไม่พบรายการตามเงื่อนไขที่เลือก ลองปรับตัวกรองดูนะ</p>
+    {% else %}{{ mascot('sleeping', 96, decorative=True) }}<p>ยังไม่มีรายงานอุบัติเหตุหรือ Near Miss — ขอให้เป็นอย่างนี้ต่อไป</p>{% endif %}</div></td></tr>{% endfor %}
+</table></div></div>
+<nav style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;align-items:center">
+  {% for p in range(1, pages + 1) %}{% if p == 1 or p == pages or (p - page) | abs <= 2 %}
+  <a class="btn" style="{{ 'opacity:.6' if p != page }}" href="?{{ {'kind': f.kind, 'status': f.status, 'q': f.q, 'mine': f.mine, 'page': p} | urlencode }}">{{ p }}</a>
+  {% endif %}{% endfor %}
+  <span style="color:var(--muted)">ทั้งหมด {{ total }} รายการ</span>
+</nav>
+{% endblock %}

@@ -1,0 +1,18 @@
+<div class="drawer-body" data-kind="{{ d.kind }}" data-id="{{ d.id }}">
+  <header class="drawer-head">
+    <div class="drawer-tags"><span class="pill pill-{{ d.status }}"><i aria-hidden="true"></i>{{ d.status_th }}</span><span class="drawer-kind">{{ d.kind_th }}</span>{% if d.overdue %}<span class="pill pill-late"><i aria-hidden="true"></i>เกินกำหนด</span>{% endif %}</div>
+    <h2 id="drawer-title">{{ d.code }}</h2>
+    <p class="drawer-sub">{{ d.title }}</p>
+  </header>
+  {% if d.steps %}
+  <ol class="stepper" aria-label="ขั้นตอนของรายการนี้">
+    {% for s in d.steps %}<li class="step {{ s.state }}"{% if s.state == 'current' %} aria-current="step"{% endif %}><span class="dot" aria-hidden="true">{% if s.state == 'done' %}{{ icon('check', 14) }}{% elif s.state == 'bad' %}×{% endif %}</span><span class="step-label">{{ s.label }}</span></li>{% endfor %}
+  </ol>
+  {% endif %}
+  {% if d.chips %}<p class="drawer-chips">{% for c in d.chips %}<span class="chip" style="background:{{ c.color }}">{{ c.text }}</span>{% endfor %}</p>{% endif %}
+  <dl class="facts">{% for k, v in d.facts %}<div><dt>{{ k }}</dt><dd>{{ v }}</dd></div>{% endfor %}</dl>
+  {% if d.excerpt %}<p class="drawer-excerpt">{{ d.excerpt }}</p>{% endif %}
+  {% if d.events %}<h3 class="drawer-h">ความเคลื่อนไหวล่าสุด</h3>
+  <ul class="drawer-events">{% for e in d.events %}<li><span>{{ e.label }}</span><time>{{ e.at[:16] }}</time></li>{% endfor %}</ul>{% endif %}
+  <a class="btn drawer-open" href="{{ d.href }}">เปิดหน้ารายละเอียด</a>
+</div>

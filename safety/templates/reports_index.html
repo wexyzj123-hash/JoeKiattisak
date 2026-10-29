@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+{% block title %}รายงานและสถิติ · Safety 4.0{% endblock %}
+{% block body %}
+<h1>รายงานและสถิติ</h1>
+<p class="muted">ตัวเลขทุกรายงานมาจากข้อมูลจริงตามขอบเขตโรงงาน/แผนกของคุณ และส่งออกเป็น Excel หรือ PDF ได้</p>
+<div class="dash-grid">
+  {% for key, name in names.items() %}
+  <a class="card dash-card" href="/reports/{{ key }}" style="text-decoration:none;color:inherit">
+    <h2>{{ name }}</h2>
+    <p class="muted">{{ {'monthly': 'อันตราย อุบัติเหตุ การตรวจ และ CAPA ของเดือนที่เลือก แยกตามแผนกได้',
+                          'annual': 'ภาพรวมทั้งปีรายเดือนและแยกตามแผนก',
+                          'incidents': 'อุบัติเหตุ Near Miss ระดับการบาดเจ็บ พื้นที่ และสาเหตุ',
+                          'capa': 'สถานะ CAPA งานเกินกำหนด และเวลาเฉลี่ยจนยืนยันผล'}[key] }}</p>
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}

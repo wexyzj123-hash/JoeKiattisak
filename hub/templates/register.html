@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}ขอสร้างบัญชี · AIAT Hub{% endblock %}
+{% block shell %}
+<div class="auth-split">
+  {% include "_auth_brand.html" %}
+  <main class="auth-form" id="auth-stage">
+    <span class="orb orb-a" aria-hidden="true"></span><span class="orb orb-b" aria-hidden="true"></span><span class="orb orb-c" aria-hidden="true"></span>
+    {% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
+    <div class="login-card-wrap">
+      <form method="post" action="/register" class="card login-card">
+        <span class="seal" aria-hidden="true">{{ icon('user', 26) }}</span>
+        <h1>ขอสร้างบัญชี</h1>
+        <p class="login-sub">กรอกข้อมูลแล้วรอผู้ดูแลระบบอนุมัติ — จะเข้าสู่ระบบได้เมื่ออนุมัติแล้ว</p>
+        <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+        <label>ชื่อผู้ใช้ (อังกฤษ/ตัวเลข 3-32 ตัว) <span class="field"><span class="ic">{{ icon('user', 18) }}</span><input name="username" value="{{ values.get('username', '') }}" autocomplete="username" pattern="[A-Za-z0-9._-]{3,32}" required autofocus></span></label>
+        <label>ชื่อ-นามสกุล <span class="field"><span class="ic">{{ icon('user', 18) }}</span><input name="name_th" value="{{ values.get('name_th', '') }}" maxlength="100" required></span></label>
+        {% if org %}
+        <script type="application/json" id="org-data">{{ org | tojson }}</script>
+        <label>โรงงาน <span class="field"><select name="factory_id" id="f-factory" required><option value="">— เลือกโรงงาน —</option>{% for f in org.factories %}<option value="{{ f.id }}" {{ 'selected' if values.get('factory_id') == f.id | string }}>{{ f.name }}</option>{% endfor %}</select></span></label>
+        <label>แผนก <span class="field"><select name="department_id" id="f-dept" required data-keep="{{ values.get('department_id', '') }}"><option value="">— เลือกแผนก —</option></select></span></label>
+        <label>ไลน์/กลุ่มงาน (ถ้ามี) <span class="field"><select name="line_id" id="f-line" data-keep="{{ values.get('line_id', '') }}"><option value="">— ไม่ระบุ —</option></select></span></label>
+        {% else %}
+        <label>โรงงาน <span class="field"><input name="req_factory" value="{{ values.get('req_factory', '') }}" maxlength="100" required></span></label>
+        <label>แผนก <span class="field"><input name="req_department" value="{{ values.get('req_department', '') }}" maxlength="100" required></span></label>
+        <label>ไลน์/กลุ่มงาน (ถ้ามี) <span class="field"><input name="req_line" value="{{ values.get('req_line', '') }}" maxlength="100"></span></label>
+        {% endif %}
+        <label>รหัสผ่าน (อย่างน้อย 8 ตัวอักษร) <span class="field"><span class="ic">{{ icon('shield', 18) }}</span><input name="password" type="password" autocomplete="new-password" minlength="8" required></span></label>
+        <label>ยืนยันรหัสผ่าน <span class="field"><span class="ic">{{ icon('shield', 18) }}</span><input name="password2" type="password" autocomplete="new-password" minlength="8" required></span></label>
+        <button type="submit" class="go"><span>ส่งคำขอ</span></button>
+      </form>
+    </div>
+    <p class="login-foot"><a href="/login">← กลับไปเข้าสู่ระบบ</a></p>
+    <p class="login-foot">AIAT Hub · AISIN Autoparts (Thailand)</p>
+  </main>
+</div>
+<script src="/static/hub/login.js" defer></script>
+<script src="/static/hub/register.js" defer></script>
+{% endblock %}

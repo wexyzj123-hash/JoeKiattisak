@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}ปิดรับคำขอสร้างบัญชี · AIAT Hub{% endblock %}
+{% block shell %}
+<div class="auth-split">
+  {% include "_auth_brand.html" %}
+  <main class="auth-form" id="auth-stage">
+    <span class="orb orb-a" aria-hidden="true"></span><span class="orb orb-b" aria-hidden="true"></span><span class="orb orb-c" aria-hidden="true"></span>
+    {% for m in get_flashed_messages() %}<div class="flash">{{ m }}</div>{% endfor %}
+    <div class="login-card-wrap">
+      <div class="card login-card">
+        <span class="seal" aria-hidden="true">{{ icon('shield', 26) }}</span>
+        <h1>ปิดรับคำขอสร้างบัญชี</h1>
+        <p class="login-sub">ขณะนี้ผู้ดูแลระบบปิดการขอสร้างบัญชีด้วยตนเอง — หากต้องการใช้งาน กรุณาติดต่อผู้ดูแลระบบเพื่อให้สร้างบัญชีให้</p>
+        <a class="btn go" href="/login" style="text-align:center"><span>กลับไปหน้าเข้าสู่ระบบ</span></a>
+      </div>
+    </div>
+    <p class="login-foot">AIAT Hub · AISIN Autoparts (Thailand)</p>
+  </main>
+</div>
+<script src="/static/hub/login.js" defer></script>
+{% endblock %}

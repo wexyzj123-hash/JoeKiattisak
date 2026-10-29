@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}ออกจากระบบ · AIAT Hub{% endblock %}
+{% block toggle %}{% endblock %}
+{% block shell %}
+<main class="wrap" style="max-width:520px;margin:18vh auto 0;text-align:center">
+  <div class="card" id="logout-card" data-signout="{{ signout }}">
+    <h1>กำลังออกจากระบบ…</h1>
+    <p>ออกจากระบบทั้งหมดแล้วจะกลับไปหน้า Hub โดยอัตโนมัติ</p>
+    <p><a class="btn" href="/">ไปหน้า Hub</a></p>
+  </div>
+</main>
+<noscript><meta http-equiv="refresh" content="0; url=/"></noscript>
+<script src="/static/hub/logout.js" defer></script>
+{% endblock %}

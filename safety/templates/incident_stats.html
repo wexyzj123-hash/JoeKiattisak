@@ -1,0 +1,33 @@
+{% extends "layout.html" %}
+{% block title %}สถิติอุบัติเหตุ · Safety 4.0{% endblock %}
+{% block body %}
+<h1>สถิติอุบัติเหตุ</h1>
+<div class="kpis">
+  <div class="kpi kpi-ok"><span class="kpi-ic">{{ icon('shield', 22) }}</span><span class="kpi-n">{{ days if days is not none else '-' }}</span>
+    <span class="kpi-l">{% if days is not none %}วันปลอดอุบัติเหตุ (หยุดงาน) · ล่าสุด {{ last }}{% else %}วันปลอดอุบัติเหตุ — ยังไม่มีอุบัติเหตุหยุดงานที่บันทึก{% endif %}</span></div>
+  {% for k in ('accident', 'near_miss') %}
+  <a class="kpi {{ 'kpi-danger' if k == 'accident' }}" href="/incidents?kind={{ k }}"><span class="kpi-ic">{{ icon('alert', 22) }}</span>
+    <span class="kpi-n">{{ counts[k].values() | sum - counts[k]['rejected'] }}</span><span class="kpi-l">{{ kind_th[k] }}ทั้งหมด (ไม่รวมที่ปฏิเสธ {{ counts[k]['rejected'] }})</span></a>
+  {% endfor %}
+</div>
+<div class="dash-grid">
+  <section class="card dash-card" aria-labelledby="h-m">
+    <h2 id="h-m">อุบัติเหตุและ Near Miss 12 เดือน (ตามเดือนที่เกิดเหตุ)</h2>
+    {{ trend_svg }}
+    <p class="legend"><span class="dot" style="background:#ea580c"></span> อุบัติเหตุ <span class="dot" style="background:#ca8a04"></span> Near Miss</p>
+    <table class="sr-only"><caption>ข้อมูลรายเดือน</caption><tr><th>เดือน</th><th>อุบัติเหตุ</th><th>Near Miss</th></tr>
+      {% for m, a, n in monthly %}<tr><td>{{ m }}</td><td>{{ a }}</td><td>{{ n }}</td></tr>{% endfor %}</table>
+  </section>
+  <section class="card dash-card" aria-labelledby="h-s">
+    <h2 id="h-s">อุบัติเหตุแยกตามระดับการบาดเจ็บ</h2>
+    {% if legend %}<div class="donut-row">{{ donut }}<ul class="donut-legend">{% for l in legend %}<li><span class="dot" style="background:{{ l.color }}"></span><span>{{ l.name }}</span><strong>{{ l.n }}</strong><small>{{ l.pct }}%</small></li>{% endfor %}</ul></div>
+    {% else %}<div class="empty-state">{{ mascot('sleeping', 80, decorative=True) }}<p>ยังไม่มีอุบัติเหตุที่บันทึก</p></div>{% endif %}
+  </section>
+</div>
+<section class="card dash-card" aria-labelledby="h-a" style="max-width:none;margin:16px 0 0">
+  <h2 id="h-a">พื้นที่ที่เกิดเหตุมากที่สุด</h2>
+  {% if areas %}<table class="table-stack" style="width:100%"><tr><th>พื้นที่</th><th>จำนวนเหตุการณ์</th></tr>
+    {% for name, n in areas %}<tr><td>{{ name }}</td><td>{{ n }}</td></tr>{% endfor %}</table>
+  {% else %}<p class="muted">ยังไม่มีข้อมูล</p>{% endif %}
+</section>
+{% endblock %}

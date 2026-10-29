@@ -1,0 +1,64 @@
+{% extends "layout.html" %}
+{% block title %}{{ r['code'] }} · Safety 4.0{% endblock %}
+{% block body %}
+<p><a href="/patrols">← กลับรายการตรวจ</a></p>
+<h1>{{ r['code'] }} · {{ info['checklist_name'] }}</h1>
+<p class="muted">{{ info['area_name'] }} · ผู้ตรวจ {{ info['inspector_name'] }} · {{ 'ส่งแล้ว ' ~ r['submitted_at'] if r['status'] == 'submitted' else 'ร่าง — ยังไม่ส่ง (เริ่ม ' ~ r['started_at'] ~ ')' }}</p>
+{% if r['status'] == 'submitted' %}
+<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+  <span class="chip" style="background:#2ecc71">ผ่าน {{ r['passed'] }}</span><span class="chip" style="background:#ff4d4f">ไม่ผ่าน {{ r['failed'] }}</span>
+  <span class="chip" style="background:#cbd5e1">ไม่เกี่ยวข้อง {{ r['na'] }}</span>{% if r['score_pct'] is not none %}<span class="chip" style="background:#facc15">คะแนน {{ r['score_pct'] }}%</span>{% endif %}
+</div>
+{% endif %}
+{% macro photo_grid(items) -%}
+{% for p in items %}<a href="/patrols/{{ r['id'] }}/files/{{ p['id'] }}" target="_blank" rel="noopener"><img src="/patrols/{{ r['id'] }}/files/{{ p['id'] }}" alt="{{ p['orig_name'] }}" title="{{ p['orig_name'] }}" style="height:90px;border-radius:8px;border:1px solid var(--line)"></a>{% endfor %}
+{%- endmacro %}
+{% if editable %}
+<form method="post" action="/patrols/{{ r['id'] }}/save" enctype="multipart/form-data" class="patrol-form">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="version" value="{{ r['version'] }}">
+  {% set ns = namespace(section=none) %}
+  {% for a in answers %}
+  {% if a['section'] != ns.section %}{% set ns.section = a['section'] %}<h2 style="margin-top:16px">{{ a['section'] or 'ทั่วไป' }}</h2>{% endif %}
+  <fieldset class="card answer" style="max-width:none;margin:0 0 12px">
+    <legend>{{ loop.index }}. {{ a['text_th'] }}{% if a['require_photo'] %} <small class="muted">(ถ้าไม่ผ่านต้องแนบรูป)</small>{% endif %}</legend>
+    <div class="answer-set">
+      {% for k, label in (('pass', 'ผ่าน'), ('fail', 'ไม่ผ่าน'), ('na', 'ไม่เกี่ยวข้อง')) %}
+      <label class="answer-choice answer-{{ k }}"><input type="radio" name="result_{{ a['id'] }}" value="{{ k }}" {{ 'checked' if a['result'] == k }}><span>{{ label }}</span></label>
+      {% endfor %}
+    </div>
+    <label>หมายเหตุ <input name="note_{{ a['id'] }}" value="{{ a['note'] }}" maxlength="500"></label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">{{ photo_grid(photos.get(a['id'], [])) }}</div>
+    <label>แนบรูป{{ ' (บังคับถ้าไม่ผ่าน)' if a['require_photo'] }} <input type="file" name="photo_{{ a['id'] }}" accept="image/jpeg,image/png,image/webp" multiple></label>
+  </fieldset>
+  {% endfor %}
+  <div style="display:flex;gap:8px;flex-wrap:wrap;position:sticky;bottom:0;background:var(--bg);padding:10px 0">
+    <button type="submit">บันทึกร่าง</button><button type="submit" name="submit" value="1">ส่งผลการตรวจ</button>
+  </div>
+</form>
+<form method="post" action="/patrols/{{ r['id'] }}/delete" style="margin-top:8px"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button type="submit" class="btn" style="background:var(--danger);color:var(--danger-ink)">ลบร่างนี้</button></form>
+{% else %}
+{% for a in answers %}
+<div class="card" style="max-width:none;margin:0 0 12px">
+  <h3 style="margin:0">{{ loop.index }}. {{ a['text_th'] }} <small class="muted">({{ a['section'] }})</small></h3>
+  <p style="margin:0"><span class="chip" style="background:{{ {'pass': '#2ecc71', 'fail': '#ff4d4f', 'na': '#cbd5e1'}[a['result']] }}">{{ {'pass': 'ผ่าน', 'fail': 'ไม่ผ่าน', 'na': 'ไม่เกี่ยวข้อง'}[a['result']] }}</span>{% if a['note'] %} {{ a['note'] }}{% endif %}</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">{{ photo_grid(photos.get(a['id'], [])) }}</div>
+  {% if a['result'] == 'fail' %}
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">
+    {% if hazards.get(a['id']) %}<a class="btn" href="/hazards/{{ hazards[a['id']]['id'] }}">รายการอันตราย {{ hazards[a['id']]['code'] }}</a>
+    {% elif can_find %}<form method="post" action="/patrols/answers/{{ a['id'] }}/hazard" style="display:flex;gap:6px;flex-wrap:wrap;align-items:end"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <label>ประเภทอันตราย <select name="hazard_type_id" required>{% for t in hazard_types %}<option value="{{ t['id'] }}">{{ t['name_th'] }}</option>{% endfor %}</select></label>
+      <label>แหล่งที่มา <select name="source_id" required>{% for s in hazard_sources %}<option value="{{ s['id'] }}">{{ s['name_th'] }}</option>{% endfor %}</select></label>
+      <button type="submit">สร้างรายการอันตราย</button></form>{% endif %}
+    {% if capas.get(a['id']) %}<a class="btn" href="/capas/{{ capas[a['id']]['id'] }}">CAPA {{ capas[a['id']]['code'] }}</a>
+    {% elif can_find %}<form method="post" action="/patrols/answers/{{ a['id'] }}/capa" style="display:flex;gap:6px;flex-wrap:wrap;align-items:end"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+      <label>หัวข้อ CAPA <input name="title" maxlength="200" placeholder="{{ a['text_th'] }}"></label>
+      <label>เจ้าของงาน <select name="owner_id" required>{% for o in owners %}<option value="{{ o['id'] }}">{{ o['name'] }}</option>{% endfor %}</select></label>
+      <label>ครบกำหนด <input type="date" name="due_date" min="{{ today }}" required></label>
+      <label>ประเภท <select name="action_type"><option value="corrective">แก้ไข</option><option value="preventive">ป้องกัน</option></select></label>
+      <button type="submit">สร้าง CAPA</button></form>{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

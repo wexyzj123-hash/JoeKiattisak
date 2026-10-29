@@ -1,0 +1,141 @@
+{% extends "layout.html" %}
+{% block title %}หน้าหลัก · Safety 4.0{% endblock %}
+{% block body %}
+<link rel="stylesheet" href="/static/safety/premium.css">
+<div class="premium-stage">
+<div class="orbs" aria-hidden="true"><span class="orb orb-a"></span><span class="orb orb-b"></span></div>
+<section class="hero">
+  <div class="hero-text">
+    <p class="hero-kicker">สวัสดี {{ g.user['name'] }}</p>
+    <h1>ความปลอดภัยเริ่มได้จาก… <em>ทุกคน</em></h1>
+    <p>ร่วมกันสังเกต แจ้ง และแก้ไขอันตราย เพื่อให้ทุกคนกลับบ้านอย่างปลอดภัย</p>
+    <div class="hero-chips">
+      {% set hrefs = nav | map(attribute='items') | sum(start=[]) | map(attribute='href') | list %}
+      {% if can_report %}<a class="chip-link" href="/hazards/new">{{ icon('plus', 16) }} แจ้งอันตราย</a>{% endif %}
+      {% if '/hazards' in hrefs %}<a class="chip-link" href="/hazards">{{ icon('clipboard', 16) }} ทะเบียนอันตราย</a>{% endif %}
+      {% if '/overview' in hrefs %}<a class="chip-link" href="/overview">{{ icon('overview', 16) }} ภาพรวมความเสี่ยง</a>{% endif %}
+      <a class="chip-link" href="/notifications">{{ icon('bell', 16) }} การแจ้งเตือนของฉัน</a>
+    </div>
+  </div>
+  <div class="hero-art">{{ mascot('alert', 170, decorative=True) }}</div>
+</section>
+
+<div class="kpis">
+  {% macro spark_svg(key, values) -%}{% if values|length > 1 %}<svg class="kpi-spark" viewBox="0 0 120 36" preserveAspectRatio="none" aria-hidden="true"><polyline class="spark-line" points="{{ spark(values) }}"/></svg>{% endif %}{%- endmacro %}
+  {% macro delta_chip(k) -%}{% if k.delta_pct is not none %}<span class="delta {{ 'up' if k.delta_pct > 0 else ('down' if k.delta_pct < 0 else '') }}">{{ '▲' if k.delta_pct > 0 else ('▼' if k.delta_pct < 0 else '＝') }} {{ '%.0f'|format(k.delta_pct|abs) }}% จากเดือนก่อน</span>{% endif %}{%- endmacro %}
+  {% macro kpi_card(cls, href, ic, key, n, text, extra='') -%}
+  {% if can_list %}<a class="kpi {{ cls }}" href="{{ href }}">{% else %}<div class="kpi {{ cls }}">{% endif %}<span class="kpi-ic">{{ icon(ic, 22) }}</span><span class="kpi-n" data-kpi="{{ key }}">{{ n }}</span><span class="kpi-l">{{ text }}</span>{{ extra }}{% if can_list %}</a>{% else %}</div>{% endif %}
+  {%- endmacro %}
+  {{ kpi_card('', '/hazards?month=' ~ this_month, 'plus', 'reported-month', dd.kpi.reported.value, 'แจ้งใหม่เดือนนี้', spark_svg('r', dd.kpi.reported.series) ~ delta_chip(dd.kpi.reported)) }}
+  {{ kpi_card('', '/hazards?open=1', 'clipboard', 'open', open_total, 'รายการเปิดอยู่') }}
+  {{ kpi_card('kpi-danger', '/hazards?overdue=1', 'clock', 'overdue', overdue, 'เกินกำหนด') }}
+  {{ kpi_card('kpi-ok', '/hazards?closed_month=1', 'check', 'closed-month', closed_month, 'ปิดแล้วเดือนนี้', spark_svg('c', dd.kpi.closed.series) ~ delta_chip(dd.kpi.closed)) }}
+  {{ kpi_card('kpi-warn', '/hazards?high=1', 'alert', 'high-risk', high_risk, 'ความเสี่ยงสูงที่เปิดอยู่') }}
+  {% if can_capa %}<a class="kpi kpi-danger" href="/capas?overdue=1"><span class="kpi-ic">{{ icon('clock', 22) }}</span><span class="kpi-n" data-kpi="capa-overdue">{{ capa_overdue }}</span><span class="kpi-l">CAPA เกินกำหนด</span></a>
+  {% else %}<div class="kpi kpi-danger"><span class="kpi-ic">{{ icon('clock', 22) }}</span><span class="kpi-n" data-kpi="capa-overdue">{{ capa_overdue }}</span><span class="kpi-l">CAPA เกินกำหนด</span></div>{% endif %}
+  <a class="kpi kpi-ok" href="/incidents/stats"><span class="kpi-ic">{{ icon('shield', 22) }}</span><span class="kpi-n" data-kpi="days-no-lti"{% if lti_date %} data-last="{{ lti_date }}"{% endif %}>{{ lti_days if lti_days is not none else '-' }}</span>
+    <span class="kpi-l">{% if lti_days is not none %}วันปลอดอุบัติเหตุ (หยุดงาน) · ล่าสุด {{ lti_date }}{% else %}วันปลอดอุบัติเหตุ — ยังไม่มีอุบัติเหตุหยุดงานที่บันทึก{% endif %}</span></a>
+</div>
+
+<div class="dash-grid dash-main">
+  <section class="card dash-card dash-wide" aria-labelledby="h-trend">
+    <div class="card-head"><h2 id="h-trend">แนวโน้มแจ้ง / ปิด</h2>
+      <div class="seg" role="group" aria-label="ช่วงเวลา"><button type="button" data-range="3">3 เดือน</button><button type="button" data-range="6">6 เดือน</button><button type="button" data-range="12" aria-pressed="true">12 เดือน</button></div></div>
+    <div id="trend-chart" class="chart" data-empty="ยังไม่มีข้อมูล"><div class="chart-fallback">{{ trend_svg }}</div></div>
+    <script type="application/json" id="trend-data">{{ dd.months | tojson }}</script>
+    <p class="legend"><span class="dot" style="background:#2a74e8"></span> แจ้งใหม่ <span class="dot" style="background:#1fa57a"></span> ปิดแล้ว <span class="legend-hint">คลิกเดือนเพื่อดูรายการที่แจ้งในเดือนนั้น</span></p>
+    <table class="sr-only"><caption>ข้อมูลแนวโน้มรายเดือน</caption><tr><th>เดือน</th><th>แจ้ง</th><th>ปิด</th></tr>
+      {% for m, r, c in trend_rows %}<tr><td>{{ m }}</td><td>{{ r }}</td><td>{{ c }}</td></tr>{% endfor %}</table>
+  </section>
+  <section class="card dash-card" aria-labelledby="h-pipe">
+    <h2 id="h-pipe">สถานะรายการอันตราย</h2>
+    {% set tag = 'a' if can_list else 'span' %}{% set pl = dd.pipeline %}{% set pt = pl.reported + pl.assessed + pl.assigned %}
+    {% if pt %}<div class="pipe-bar" role="img" aria-label="รายการเปิดอยู่ {{ pt }} รายการ แยกตามสถานะ">
+      {% for k in ('reported', 'assessed', 'assigned') %}{% if pl[k] %}<{{ tag }} class="seg-{{ k }}" style="flex: {{ pl[k] }}"{% if can_list %} href="/hazards?status={{ k }}"{% endif %} title="{{ status_th[k] }} {{ pl[k] }}"></{{ tag }}>{% endif %}{% endfor %}</div>
+    {% else %}<div class="empty-state">{{ mascot('sleeping', 72, decorative=True) }}<p>ยังไม่มีรายการเปิดอยู่</p></div>{% endif %}
+    <ul class="pipe-list">
+      {% for k in ('reported', 'assessed', 'assigned') %}<li><{{ tag }}{% if can_list %} href="/hazards?status={{ k }}"{% endif %}><span class="pill pill-{{ k }}"><i aria-hidden="true"></i>{{ status_th[k] }}</span><strong>{{ pl[k] }}</strong></{{ tag }}></li>{% endfor %}
+      <li><{{ tag }}{% if can_list %} href="/hazards?closed_month=1"{% endif %}><span class="pill pill-closed"><i aria-hidden="true"></i>ปิดแล้วเดือนนี้</span><strong>{{ pl.closed_month }}</strong></{{ tag }}></li>
+    </ul>
+  </section>
+</div>
+
+<div class="dash-grid" style="margin-top:20px">
+  <section class="card dash-card" aria-labelledby="h-type">
+    <h2 id="h-type">รายการเปิดอยู่ตามประเภทอันตราย</h2>
+    {% if legend %}
+    <div class="donut-row">{{ donut }}
+      <ul class="donut-legend">{% for l in legend %}<li><span class="dot" style="background:{{ l.color }}"></span><span>{{ l.name }}</span><strong>{{ l.n }}</strong><small>{{ l.pct }}%</small></li>{% endfor %}</ul>
+    </div>
+    {% if dd.top_types %}<ul class="bars">{% for t in dd.top_types %}<li><{{ 'a' if can_list else 'span' }}{% if can_list %} href="/hazards?type={{ t.id }}&open=1"{% endif %}><span class="bar-name">{{ t.name }}</span><span class="bar-track"><i style="width: {{ (t.n * 100 / dd.top_types[0].n) | round(1) }}%"></i></span><strong>{{ t.n }}</strong></{{ 'a' if can_list else 'span' }}></li>{% endfor %}</ul>{% endif %}
+    {% else %}<div class="empty-state">{{ mascot('sleeping', 80, decorative=True) }}<p>ยังไม่มีรายการเปิดอยู่</p></div>{% endif %}
+  </section>
+  <section class="card dash-card" aria-labelledby="h-area">
+    <h2 id="h-area">พื้นที่ที่มีรายการเปิดอยู่มากสุด</h2>
+    {% if dd.top_areas %}<ul class="bars">{% for t in dd.top_areas %}<li><{{ 'a' if can_list else 'span' }}{% if can_list %} href="/hazards?area={{ t.id }}&open=1"{% endif %}><span class="bar-name">{{ t.name }}</span><span class="bar-track"><i style="width: {{ (t.n * 100 / dd.top_areas[0].n) | round(1) }}%"></i></span><strong>{{ t.n }}</strong></{{ 'a' if can_list else 'span' }}></li>{% endfor %}</ul>
+    {% else %}<div class="empty-state">{{ mascot('sleeping', 72, decorative=True) }}<p>ยังไม่มีรายการเปิดอยู่</p></div>{% endif %}
+  </section>
+</div>
+
+<section class="card dash-card" aria-labelledby="h-act" style="max-width:none;margin:20px 0 0">
+  <h2 id="h-act">ความเคลื่อนไหวล่าสุด</h2>
+  {% if dd.activity %}
+  <ol class="timeline">
+    {% for a in dd.activity %}<li><a href="{{ a.href }}" data-drawer="{{ a.kind }}:{{ a.id }}"><span class="tl-dot tl-{{ a.kind }}" aria-hidden="true"></span><span class="tl-main"><strong>{{ a.label }}</strong> · {{ a.code }}<small>{{ a.title }}</small></span><time>{{ a.at[:16] }}</time></a></li>{% endfor %}
+  </ol>
+  {% else %}<div class="empty-state">{{ mascot('sleeping', 72, decorative=True) }}<p>ยังไม่มีความเคลื่อนไหว</p></div>{% endif %}
+</section>
+
+<section class="card dash-card" aria-labelledby="h-latest" style="max-width:none;margin:16px 0 0">
+  <h2 id="h-latest">รายการอันตรายล่าสุด</h2>
+  {% if latest %}
+  <div class="table-wrap"><table class="table-stack" style="width:100%">
+    <thead><tr><th>รหัส</th><th>หัวข้อ</th><th>พื้นที่</th><th>ความเสี่ยง</th><th>สถานะ</th><th>ครบกำหนด</th></tr></thead>
+    {% for r in latest %}<tr class="row-open" data-drawer-row="hazard:{{ r['id'] }}">
+      <td data-label="รหัส"><a href="/hazards/{{ r['id'] }}" data-drawer="hazard:{{ r['id'] }}">{{ r['code'] }}</a></td><td data-label="หัวข้อ">{{ r['title'] }}</td><td data-label="พื้นที่">{{ r['area_name'] }}</td>
+      <td data-label="ความเสี่ยง">{% if r['level_name'] %}<span class="chip" style="background:{{ r['level_color'] }}">{{ r['level_name'] }}</span>{% else %}<span class="muted">ยังไม่ประเมิน</span>{% endif %}</td>
+      <td data-label="สถานะ"><span class="pill pill-{{ r['status'] }}"><i aria-hidden="true"></i>{{ status_th[r['status']] }}</span></td>
+      <td data-label="ครบกำหนด">{{ r['due_date'] or '' }}{% if r['overdue'] %} <span class="chip" style="background:var(--danger)">เกินกำหนด</span>{% endif %}</td>
+    </tr>{% endfor %}
+  </table></div>
+  {% else %}<div class="empty-state">{{ mascot('sleeping', 80, decorative=True) }}<p>ยังไม่มีรายการอันตราย — ถ้าพบสิ่งผิดปกติ แจ้งได้เลย</p></div>{% endif %}
+</section>
+
+<section class="card dash-card" aria-labelledby="h-patrol" style="max-width:none;margin:16px 0 0">
+  <h2 id="h-patrol">การตรวจความปลอดภัยล่าสุด</h2>
+  {% if latest_patrols %}
+  <div class="table-wrap"><table class="table-stack" style="width:100%">
+    <tr><th>รหัส</th><th>แบบตรวจ</th><th>พื้นที่</th><th>ผู้ตรวจ</th><th>ผลการตรวจ</th><th>วันที่</th></tr>
+    {% for r in latest_patrols %}<tr>
+      <td>{% if can_patrol %}<a href="/patrols/{{ r['id'] }}" data-drawer="patrol:{{ r['id'] }}">{{ r['code'] }}</a>{% else %}{{ r['code'] }}{% endif %}</td><td>{{ r['checklist_name'] }}</td><td>{{ r['area_name'] }}</td><td>{{ r['inspector_name'] }}</td>
+      <td>{% if r['failed'] %}<span class="chip" style="background:#ff4d4f">ไม่ผ่าน {{ r['failed'] }}</span>{% else %}<span class="chip" style="background:#2ecc71">ผ่าน</span>{% endif %}{% if r['score_pct'] is not none %} {{ r['score_pct'] }}%{% endif %}</td>
+      <td>{{ r['submitted_at'] }}</td></tr>{% endfor %}
+  </table></div>
+  {% else %}<div class="empty-state">{{ mascot('sleeping', 80, decorative=True) }}<p>ยังไม่มีการตรวจความปลอดภัยที่ส่งแล้ว</p></div>{% endif %}
+</section>
+
+<div class="dash-grid" style="margin-top:16px">
+  <section class="card dash-card" aria-labelledby="h-quick">
+    <h2 id="h-quick">เมนูลัด</h2>
+    <div class="quick">
+      {% for grp in nav %}{% for it in grp.items if it.href != '/' %}<a href="{{ it.href }}">{{ icon(it.icon, 22) }}<span>{{ it.label }}</span></a>{% endfor %}{% endfor %}
+    </div>
+  </section>
+  <section class="card dash-card" aria-labelledby="h-notes">
+    <h2 id="h-notes">การแจ้งเตือนล่าสุดของฉัน</h2>
+    {% for n in notes %}<a class="note-row{{ ' unread' if not n['read_at'] }}" href="/notifications/go/{{ n['id'] }}"><span>{{ n['title'] }}</span><small>{{ n['created_at'] }}</small></a>
+    {% else %}<div class="empty-state">{{ mascot('sleeping', 80, decorative=True) }}<p>ยังไม่มีการแจ้งเตือน</p></div>{% endfor %}
+    {% if notes %}<a href="/notifications">ดูทั้งหมด →</a>{% endif %}
+  </section>
+</div>
+
+<div id="drawer-root" hidden>
+  <div class="drawer-scrim" data-drawer-close></div>
+  <aside class="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" tabindex="-1">
+    <button type="button" class="drawer-close" data-drawer-close aria-label="ปิดรายละเอียด">{{ icon('plus', 18) }}</button>
+    <div class="drawer-content" aria-live="polite"></div>
+  </aside>
+</div>
+</div>
+{% endblock %}
+{% block scripts %}{{ super() }}<script src="/static/safety/premium.js" defer></script>{% endblock %}
