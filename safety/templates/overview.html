@@ -25,17 +25,17 @@
     {% else %}<p style="color:var(--muted)">ยังไม่มีรายการเปิดอยู่</p>{% endfor %}
   </div>
   <div class="card" style="max-width:none;margin:0;overflow-x:auto">
-    <h2>แผนที่ความเสี่ยง (โอกาส × ความรุนแรง)</h2>
+    <h2>แผนที่ความเสี่ยง (ความถี่ × ความรุนแรง)</h2>
     <table class="heatmap">
       {% for row in grid %}
-      <tr><th style="font-size:.75rem;color:var(--muted)">{{ row[0].s }}</th>
-        {% for c in row %}<td data-cell="{{ c.l }}-{{ c.s }}" data-count="{{ c.count }}" title="คะแนน {{ c.score }}"
+      <tr><th style="font-size:.75rem;color:var(--muted)">{{ row[0].sname }}</th>
+        {% for c in row %}<td data-cell="{{ c.l }}-{{ c.s }}" data-count="{{ c.count }}" title="{{ c.sname }} / {{ c.lname }}"
           style="width:44px;height:36px;text-align:center;border-radius:6px;background:{{ c.color }};color:#111;font-weight:700;opacity:{{ 1 if c.count else 0.35 }}">{% if c.count %}<a href="/hazards?l={{ c.l }}&s={{ c.s }}" style="color:#111;display:block;text-decoration:none" aria-label="ดู {{ c.count }} รายการ โอกาส {{ c.l }} ความรุนแรง {{ c.s }}">{{ c.count }}</a>{% endif %}</td>{% endfor %}
       </tr>
       {% endfor %}
       <tr><th></th>{% for l in likelihoods %}<th style="font-size:.75rem;color:var(--muted)">{{ l }}</th>{% endfor %}</tr>
     </table>
-    <small style="color:var(--muted)">แถว = ความรุนแรง · คอลัมน์ = โอกาส · สี = ระดับความเสี่ยงตามเกณฑ์ปัจจุบัน · นับเฉพาะรายการเปิดอยู่ที่ประเมินแล้ว</small>
+    <small style="color:var(--muted)">แถว = ความรุนแรง · คอลัมน์ = ความถี่ · สี = ระดับความเสี่ยงตามเกณฑ์ปัจจุบัน · นับเฉพาะรายการเปิดอยู่ที่ประเมินแล้ว</small>
   </div>
 </div>
 <div class="card" style="max-width:none;margin:16px 0 0;overflow-x:auto">

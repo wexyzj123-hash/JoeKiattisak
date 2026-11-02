@@ -58,3 +58,17 @@ def add_incident(con, area_id, reporter_id, code=None, **kw) -> int:
 
 def severity_id(con, code: str) -> int:
     return con.execute("SELECT id FROM injury_severities WHERE code=?", (code,)).fetchone()[0]
+
+
+# ---- ตัวช่วยสำหรับเทสต์เดิมที่ประเมินด้วย "ระดับ 1-5": แปลงเป็นเกณฑ์ใหม่ (ระดับ 1 = รุนแรง/ถี่/มาตรการอ่อนที่สุด) ----
+_LEGACY = {1: 3, 2: 3, 3: 2, 4: 1, 5: 1}
+
+
+def legacy_level(n):
+    return _LEGACY.get(n, 1) if isinstance(n, int) and not isinstance(n, bool) else n
+
+
+def assess_legacy(db, user, hazard_id, likelihood, severity, note="", **kw):
+    """(5,5) → A1 คะแนน 25 (สูงสุด ต้องอนุมัติ), (1,1) → C คะแนน 6 (ต่ำสุด), (3,3) → B2 คะแนน 14"""
+    from safety import workflow
+    return workflow.assess(db, user, hazard_id, legacy_level(likelihood), legacy_level(severity), note, legacy_level(severity))

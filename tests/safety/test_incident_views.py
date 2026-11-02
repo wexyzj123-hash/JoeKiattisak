@@ -124,7 +124,7 @@ def test_new_form_validation_errors_are_shown_and_nothing_saved(v):
 def test_new_accident_and_near_miss_via_form_redirect_to_detail(v):
     r = v.post(v.rep, "/incidents/new", **v.form(people_name_0="สมชาย"))
     assert r.status_code == 302 and re.fullmatch(r"/incidents/\d+", r.headers["Location"])
-    r = v.post(v.rep, "/incidents/new", **v.form(kind="near_miss", likelihood="3", severity="4", title="เฉียดชน"))
+    r = v.post(v.rep, "/incidents/new", **v.form(kind="near_miss", likelihood="2", severity="2", measure="2", title="เฉียดชน"))
     assert r.status_code == 302
     assert v.con.execute("SELECT level_name FROM incidents WHERE title='เฉียดชน'").fetchone()[0]
     page = v.rep.get(r.headers["Location"]).get_data(as_text=True)
@@ -237,7 +237,7 @@ def test_xss_in_all_user_fields_escaped(v):
 
 def test_filters_pagination_and_search(v):
     for i in range(23):
-        v.make(title=f"เหตุซ้ำ {i}", kind="near_miss" if i % 2 else "accident", likelihood="2", severity="2")
+        v.make(title=f"เหตุซ้ำ {i}", kind="near_miss" if i % 2 else "accident", likelihood="2", severity="2", measure="2")
     html = v.admin.get("/incidents?kind=near_miss").get_data(as_text=True)
     assert html.count("Near Miss</span>") >= 11 and "อุบัติเหตุ</span>" not in html.split("<table")[1]
     page2 = v.admin.get("/incidents?page=2&kind=near_miss&q=เหตุซ้ำ").get_data(as_text=True)

@@ -162,12 +162,12 @@ def report(db, user, form: Mapping) -> tuple[int | None, list[str]]:
             errors.append("กรุณาเลือกระดับความรุนแรงของการบาดเจ็บ")
             sev_id = None
     elif kind == "near_miss":
-        lik, sev = _int(form.get("likelihood")), _int(form.get("severity"))
-        if lik is None or sev is None:
-            errors.append("Near Miss ต้องประเมินโอกาสและความรุนแรงที่อาจเกิดขึ้น")
+        lik, sev, mea = _int(form.get("likelihood")), _int(form.get("severity")), _int(form.get("measure"))
+        if lik is None or sev is None or mea is None:
+            errors.append("Near Miss ต้องประเมินความรุนแรง ความถี่ และระดับมาตรการที่อาจเกิดขึ้น")
         else:
             try:
-                score = calc_score(db, lik, sev)
+                score = calc_score(db, lik, sev, mea)
             except ValueError as exc:
                 errors.append(str(exc))
             else:
@@ -175,7 +175,7 @@ def report(db, user, form: Mapping) -> tuple[int | None, list[str]]:
                 if level is None:
                     errors.append("คะแนนนี้ไม่มีระดับความเสี่ยงรองรับ กรุณาแจ้งผู้ดูแลระบบตรวจเกณฑ์ความเสี่ยง")
                 else:
-                    snapshot = {"likelihood": lik, "severity": sev, "score": score, "risk_level_id": level["id"],
+                    snapshot = {"likelihood": lik, "severity": sev, "measure": mea, "score": score, "risk_level_id": level["id"],
                                 "level_name": level["name_th"], "level_color": level["color"],
                                 "level_requires_approval": level["requires_approval"]}
     related = None

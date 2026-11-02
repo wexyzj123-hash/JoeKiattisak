@@ -38,28 +38,25 @@ def _post(env, **kw):
 def test_lists_are_seeded_and_manageable_from_master_pages(env):
     app, db, *_ = env
     assert db.execute("SELECT COUNT(*) FROM hiyari_types").fetchone()[0] >= 3
-    assert db.execute("SELECT COUNT(*) FROM safety_measures").fetchone()[0] >= 3
     c = login(app, "admin")
-    for slug in ("hiyari-types", "safety-measures"):
-        assert c.get(f"/master/{slug}").status_code == 200
-    r = c.post("/master/safety-measures/new", data={"_csrf": csrf(c), "code": "ZZ", "name_th": "มาตรการใหม่ของโรงงาน"})
+    assert c.get("/master/hiyari-types").status_code == 200
+    r = c.post("/master/hiyari-types/new", data={"_csrf": csrf(c), "code": "ZZ", "name_th": "ประเภทใหม่ของโรงงาน"})
     assert r.status_code in (302, 200)
-    assert db.execute("SELECT 1 FROM safety_measures WHERE code='ZZ'").fetchone()
+    assert db.execute("SELECT 1 FROM hiyari_types WHERE code='ZZ'").fetchone()
     page = login(app, "reporter").get("/hazards/new").get_data(as_text=True)
-    assert "มาตรการใหม่ของโรงงาน" in page and "เลขที่เอกสาร" in page and 'name="rpt_severity"' in page
+    assert "ประเภทใหม่ของโรงงาน" in page and "เลขที่เอกสาร" in page and 'name="rpt_severity"' in page and 'name="rpt_measure"' in page
 
 
 def test_full_report_stores_every_field_and_score(env):
     app, db, *_ = env
     h = db.execute("SELECT id FROM hiyari_types ORDER BY id LIMIT 1").fetchone()[0]
-    m = db.execute("SELECT id FROM safety_measures ORDER BY id LIMIT 1").fetchone()[0]
     c, r = _post(env, occurred_on="2026-03-09", observer="สมชาย", location_text="หน้าเครื่อง", machine_no="MC-12",
-                 hiyari_type_id=str(h), measure_id=str(m), temp_action="กั้นเขต", perm_action="ติดการ์ด",
-                 plan_due_date="2026-04-01", rpt_severity="2", rpt_likelihood="3")
+                 hiyari_type_id=str(h), temp_action="กั้นเขต", perm_action="ติดการ์ด",
+                 plan_due_date="2026-04-01", rpt_severity="2", rpt_likelihood="3", rpt_measure="1")
     assert r.status_code == 302
     row = db.execute("SELECT * FROM hazards ORDER BY id DESC LIMIT 1").fetchone()
     assert (row["occurred_on"], row["observer"], row["machine_no"], row["plan_due_date"]) == ("2026-03-09", "สมชาย", "MC-12", "2026-04-01")
-    assert (row["rpt_severity"], row["rpt_likelihood"], row["rpt_score"]) == (2, 3, 6)
+    assert (row["rpt_severity"], row["rpt_likelihood"], row["rpt_measure"], row["rpt_score"]) == (2, 3, 1, 6 + 3 + 8)   # B(6) + Low(3) + High(8)
     assert row["status"] == "reported" and row["score"] is None            # คะแนนทางการยังรอผู้ประเมิน
     page = c.get(r.headers["Location"]).get_data(as_text=True)
     assert "MC-12" in page and "ติดการ์ด" in page and "2026-04-01" in page
@@ -69,9 +66,25 @@ def test_extra_fields_are_optional_and_validated(env):
     app, db, *_ = env
     assert _post(env)[1].status_code == 302
     for bad in ({"occurred_on": "2026-03-11"}, {"occurred_on": "x"}, {"plan_due_date": "31/12"}, {"hiyari_type_id": "9999"},
-                {"rpt_severity": "2"}, {"rpt_severity": "99", "rpt_likelihood": "1"}, {"machine_no": "x" * 201}):
+                {"rpt_severity": "2"}, {"rpt_severity": "2", "rpt_likelihood": "1"}, {"rpt_severity": "99", "rpt_likelihood": "1", "rpt_measure": "1"}, {"machine_no": "x" * 201}):
         r = _post(env, **bad)[1]
         assert r.status_code == 200, bad
-    db.execute("UPDATE safety_measures SET active=0")
+    db.execute("UPDATE hiyari_types SET active=0")
     db.commit()
-    assert _post(env, measure_id="1")[1].status_code == 200            # รายการที่ปิดใช้งานเลือกไม่ได้
+    assert _post(env, hiyari_type_id="1")[1].status_code == 200        # รายการที่ปิดใช้งานเลือกไม่ได้
+
+
+def test_org_filters_list_departments_and_lines_even_without_risk_areas(env):
+    """แผนก/ไลน์ที่ยังไม่มีพื้นที่เสี่ยงต้องเลือกได้ในฟอร์ม (บั๊กเดิม: ตัวกรองสร้างจากพื้นที่เสี่ยงอย่างเดียวจึงว่างเปล่า)"""
+    from safety.hazards import org_options
+    from tests.safety.factories import user_row
+    app, db, chain, *_ = env
+    db.execute("INSERT INTO departments(code,name_th,factory_id) VALUES('DX','แผนกว่าง',?)", (chain["f"],))
+    db.execute("INSERT INTO lines(code,name_th,department_id) VALUES('LX','ไลน์ว่าง',last_insert_rowid())")
+    db.commit()
+    c = login(app, "admin")
+    uid = db.execute("SELECT id FROM safety_users LIMIT 1").fetchone()[0]
+    org = org_options(db, user_row(db, uid))
+    assert "แผนกว่าง" in [d["name"] for d in org["departments"]] and "ไลน์ว่าง" in [l["name"] for l in org["lines"]]
+    html = c.get("/hazards/new").get_data(as_text=True)
+    assert '"departments"' in html and 'id="f_hint"' in html

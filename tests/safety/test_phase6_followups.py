@@ -65,7 +65,7 @@ def test_morning_in_thailand_is_not_rejected_as_future_on_a_utc_host(restore_tz,
     ch = add_chain(con, "T")
     rep = user_row(con, add_user(con, "reporter"))
     now = timeutil.now()
-    form = {"kind": "near_miss", "occurred_at": now.strftime("%Y-%m-%dT%H:%M"), "risk_area_id": str(ch["a"]), "title": "ตอนนี้", "likelihood": "1", "severity": "1"}
+    form = {"kind": "near_miss", "occurred_at": now.strftime("%Y-%m-%dT%H:%M"), "risk_area_id": str(ch["a"]), "title": "ตอนนี้", "likelihood": "1", "severity": "1", "measure": "1"}
     assert incidents.report(con, rep, form)[1] == []
 
 
@@ -79,7 +79,7 @@ class W:
 
     def new(self, sev="first_aid", kind="accident"):
         iid, errors = incidents.report(self.db, self.rep, {"kind": kind, "occurred_at": "2026-03-09T08:00", "risk_area_id": str(self.ch["a"]),
-                                                           "title": "เหตุ", "injury_severity_id": str(severity_id(self.db, sev)), "likelihood": "2", "severity": "2"})
+                                                           "title": "เหตุ", "injury_severity_id": str(severity_id(self.db, sev)), "likelihood": "2", "severity": "2", "measure": "2"})
         assert errors == []
         return iid
 

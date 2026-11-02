@@ -39,7 +39,7 @@ MASTER_DDL = (_master("factories") + _master("departments", "factory_id", "facto
               + _master("lines", "department_id", "departments") + _master("risk_areas", "line_id", "lines")
               + _master("hazard_types") + _master("hazard_sources") + _master("incident_causes")
               + _master("user_levels") + _master("positions")
-              + _master("hiyari_types") + _master("safety_measures"))
+              + _master("hiyari_types"))
 
 ROLES_DDL = """
 CREATE TABLE IF NOT EXISTS safety_roles (
@@ -99,16 +99,12 @@ DEFAULT_POSITIONS = (("OPERATOR", "Operator"), ("LL", "LL"), ("STAFF", "Staff"),
 
 DEFAULT_HIYARI = (("NEAR_MISS", "เกือบเกิดอุบัติเหตุ (Near Miss)"), ("UNSAFE_ACT", "การกระทำที่ไม่ปลอดภัย"),
                   ("UNSAFE_COND", "สภาพที่ไม่ปลอดภัย"), ("NONE", "ไม่เกี่ยวข้อง"))
-DEFAULT_MEASURES = (("PPE", "อุปกรณ์ป้องกันส่วนบุคคล (PPE)"), ("GUARD", "การ์ด/อุปกรณ์ป้องกันเครื่องจักร"),
-                    ("LOTO", "การล็อกเอาท์-แท็กเอาท์ (LOTO)"), ("SIGN", "ป้ายเตือน/เครื่องหมายความปลอดภัย"),
-                    ("TRAINING", "การอบรม/ขั้นตอนการทำงาน"), ("HOUSEKEEP", "ความสะอาด/การจัดเก็บ (5ส)"))
 
 
 def seed_hazard_form_lists(con) -> None:
     """ตัวเลือกตั้งต้นของฟอร์มแจ้งอันตราย — ใส่ครั้งเดียว แอดมินแก้/เพิ่ม/ปิดใช้งานเองได้ที่ ข้อมูลหลัก"""
     if con.execute("SELECT 1 FROM app_settings WHERE key='hazard_form_lists_seeded'").fetchone() is None:
         con.executemany("INSERT OR IGNORE INTO hiyari_types(code, name_th) VALUES(?,?)", DEFAULT_HIYARI)
-        con.executemany("INSERT OR IGNORE INTO safety_measures(code, name_th) VALUES(?,?)", DEFAULT_MEASURES)
         con.execute("INSERT INTO app_settings(key, value) VALUES('hazard_form_lists_seeded', '1')")
     con.commit()
 
@@ -132,10 +128,11 @@ def seed_roles(con) -> None:
 
 RISK_DDL = """
 CREATE TABLE IF NOT EXISTS risk_scales (
-    kind        TEXT NOT NULL CHECK (kind IN ('likelihood','severity')),
+    kind        TEXT NOT NULL CHECK (kind IN ('likelihood','severity','measure')),
     level       INTEGER NOT NULL CHECK (level >= 1),
     label_th    TEXT NOT NULL,
     description TEXT NOT NULL DEFAULT '',
+    points      INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (kind, level)
 );
 CREATE TABLE IF NOT EXISTS risk_levels (
@@ -300,7 +297,7 @@ DEFAULT_SETTINGS = (("quiet_start", "22:00"), ("quiet_end", "06:00"), ("daily_ti
 _ALL = "inapp,email"
 DEFAULT_RULES = (
     ("hazard_reported", "role:assessor", "inapp,email", 0, None),
-    ("hazard_assessed", "role:dept_head,role:admin", "inapp,email", 0, 17),
+    ("hazard_assessed", "role:dept_head,role:admin", "inapp,email", 0, 19),   # 19 = ระดับ A ขึ้นไป
     ("hazard_assigned", "owner", _ALL, 0, None),
     ("hazard_closed", "reporter", "inapp", 0, None),
     ("hazard_rejected", "reporter", "inapp", 0, None),
@@ -654,21 +651,46 @@ PATROL_RULES = (
     ("patrol_overdue", "owner_else:assessor,role:dept_head", "inapp,email", 5, None),
 )
 
-DEFAULT_LIKELIHOOD = ("แทบไม่เกิด", "เกิดได้ยาก", "เกิดได้บางครั้ง", "เกิดบ่อย", "เกิดบ่อยมาก")
-DEFAULT_SEVERITY = ("เล็กน้อย", "ปานกลาง", "ร้ายแรง", "รุนแรง", "รุนแรงมาก")
-DEFAULT_LEVELS = (("ต่ำ", 1, 4, "#2ecc71", 30, 0), ("ปานกลาง", 5, 9, "#f1c40f", 14, 0),
-                  ("สูง", 10, 16, "#ff9f1c", 7, 0), ("สูงมาก", 17, 25, "#ff4d4f", 3, 1))
+# เกณฑ์ตั้งต้นตามเอกสารเกณฑ์การประเมินความเสี่ยง: คะแนน = ความรุนแรง + ความถี่ + มาตรการป้องกัน (แก้ได้ที่หน้าเกณฑ์ความเสี่ยง)
+DEFAULT_SCALES = {
+    "severity": (("A เสียชีวิต", "ความรุนแรงของการบาดเจ็บ: เสียชีวิต", 12), ("B อุบัติเหตุหยุดงาน", "อุบัติเหตุหยุดงาน", 6),
+                 ("C อุบัติเหตุไม่หยุดงาน", "อุบัติเหตุไม่หยุดงาน", 2)),
+    "likelihood": (("High (H)", "ความถี่มาก (มากกว่า 1 ครั้ง/สัปดาห์)", 5), ("Moderate (M)", "ความถี่ปานกลาง (ประมาณ 1 ครั้ง/เดือน)", 4),
+                   ("Low (L)", "ความถี่ต่ำ (ประมาณ 1 ครั้ง/ปี)", 3)),
+    "measure": (("High (H)", "ไม่มีมาตรการป้องกัน — ขึ้นกับพฤติกรรมการกระทำเท่านั้น", 8),
+                ("Moderate (M)", "มีมาตรการป้องกันพอใช้ — ขึ้นกับพฤติกรรม การกระทำบางส่วน", 4),
+                ("Low (L)", "มีมาตรการป้องกันอย่างดี — ไม่ขึ้นกับพฤติกรรมการกระทำพนักงาน", 1)),
+}
+# (ชื่อ, ต่ำสุด, สูงสุด, สี, SLA วัน, ต้องมีผู้อนุมัติ)
+DEFAULT_LEVELS = (("C บาดเจ็บไม่หยุดงาน", 6, 9, "#00b050", 60, 0), ("B3 บาดเจ็บไม่หยุดงาน", 10, 12, "#ffff00", 30, 0),
+                  ("B2 หยุดงาน", 13, 15, "#ffff00", 14, 0), ("B1 ทำให้เสียชีวิต", 16, 18, "#ffff00", 14, 0),
+                  ("A2 หยุดงาน", 19, 21, "#ff0000", 7, 1), ("A1 ทำให้เสียชีวิต", 22, 25, "#ff0000", 3, 1))   # เรียงตามคะแนนต่ำ→สูง
+
+
+def _write_default_risk(con) -> None:
+    for kind, rows in DEFAULT_SCALES.items():
+        con.executemany("INSERT INTO risk_scales(kind, level, label_th, description, points) VALUES(?,?,?,?,?)",
+                        [(kind, i, label, desc, pts) for i, (label, desc, pts) in enumerate(rows, 1)])
+    con.executemany("INSERT INTO risk_levels(name_th,min_score,max_score,color,sla_days,requires_approval,sort) "
+                    "VALUES(?,?,?,?,?,?,?)", [(*lv, i) for i, lv in enumerate(DEFAULT_LEVELS)])
 
 
 def seed_risk(con) -> None:
-    """เกณฑ์ตั้งต้น 5x5 + 4 ระดับ ใส่เฉพาะตารางที่ยังว่าง (ไม่ทับที่แอดมินแก้แล้ว)"""
-    if con.execute("SELECT COUNT(*) FROM risk_scales").fetchone()[0] == 0:
-        for kind, labels in (("likelihood", DEFAULT_LIKELIHOOD), ("severity", DEFAULT_SEVERITY)):
-            con.executemany("INSERT INTO risk_scales(kind, level, label_th) VALUES(?,?,?)",
-                            [(kind, i, label) for i, label in enumerate(labels, 1)])
-    if con.execute("SELECT COUNT(*) FROM risk_levels").fetchone()[0] == 0:
-        con.executemany("INSERT INTO risk_levels(name_th,min_score,max_score,color,sla_days,requires_approval,sort) "
-                        "VALUES(?,?,?,?,?,?,?)", [(*lv, i) for i, lv in enumerate(DEFAULT_LEVELS)])
+    """เกณฑ์ตั้งต้น (คะแนนแบบบวก 3 ปัจจัย) — เครื่องใหม่ใส่ทันที; เครื่องเดิมที่ใช้สูตรคูณ 5x5 ถูกแทนที่ครั้งเดียว (รายการเดิมเก็บคะแนน/ระดับตอนประเมินไว้แล้ว)"""
+    sql = (con.execute("SELECT sql FROM sqlite_master WHERE name='risk_scales'").fetchone() or [""])[0] or ""
+    if "'measure'" not in sql:                                          # ตารางเดิมไม่รองรับปัจจัยมาตรการ/คะแนนต่อระดับ → สร้างใหม่
+        con.executescript("ALTER TABLE risk_scales RENAME TO risk_scales_old;" + RISK_DDL.split("CREATE TABLE IF NOT EXISTS risk_levels")[0])
+        con.execute("DROP TABLE risk_scales_old")
+    if con.execute("SELECT 1 FROM app_settings WHERE key='risk_criteria_v2'").fetchone() is None:
+        existing = con.execute("SELECT COUNT(*) FROM risk_levels").fetchone()[0]
+        if existing:
+            con.execute("UPDATE hazards SET risk_level_id=NULL WHERE risk_level_id IS NOT NULL")
+            con.execute("UPDATE incidents SET risk_level_id=NULL WHERE risk_level_id IS NOT NULL")
+            con.execute("DELETE FROM risk_levels")
+        con.execute("DELETE FROM risk_scales")
+        _write_default_risk(con)
+        con.execute("UPDATE notify_rules SET min_score=19 WHERE event='hazard_assessed' AND min_score=17")   # กฎตั้งต้นเดิม (≥17 ของสูตรคูณ) → ระดับ A ขึ้นไป
+        con.execute("INSERT INTO app_settings(key, value) VALUES('risk_criteria_v2', '1')")
     con.commit()
 
 
@@ -704,10 +726,13 @@ def ensure_schema(con) -> None:
     seed_org_people(con)
     seed_risk(con)
     for col, ddl in (("occurred_on", "TEXT"), ("observer", "TEXT NOT NULL DEFAULT ''"), ("location_text", "TEXT NOT NULL DEFAULT ''"),
-                     ("machine_no", "TEXT NOT NULL DEFAULT ''"), ("hiyari_type_id", "INTEGER"), ("measure_id", "INTEGER"),
+                     ("machine_no", "TEXT NOT NULL DEFAULT ''"), ("hiyari_type_id", "INTEGER"),
                      ("temp_action", "TEXT NOT NULL DEFAULT ''"), ("perm_action", "TEXT NOT NULL DEFAULT ''"),
                      ("plan_due_date", "TEXT"), ("rpt_likelihood", "INTEGER"), ("rpt_severity", "INTEGER"), ("rpt_score", "INTEGER")):
         _add_column(con, "hazards", col, ddl)
+    _add_column(con, "hazards", "measure", "INTEGER")                      # ระดับมาตรการป้องกัน (ปัจจัยที่ 3 ของคะแนน)
+    _add_column(con, "hazards", "rpt_measure", "INTEGER")
+    _add_column(con, "incidents", "measure", "INTEGER")
     seed_hazard_form_lists(con)
     _add_column(con, "hazards", "level_requires_approval", "INTEGER NOT NULL DEFAULT 0")
     _add_column(con, "hazards", "version", "INTEGER NOT NULL DEFAULT 0")

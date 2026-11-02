@@ -6,6 +6,9 @@
     <img src="/hazards/{{ h['id'] }}/files/{{ a['id'] }}" alt="{{ a['orig_name'] }}" title="{{ a['orig_name'] }}" style="height:110px;border-radius:8px;border:1px solid var(--line)"></a>{% endfor %}
 </div>{% else %}<span style="color:var(--muted)">ไม่มีรูป</span>{% endif %}
 {%- endmacro %}
+{% macro factor_text(sev, lik, mea) -%}
+ความรุนแรง {{ scale_names['severity'].get(sev, sev) }} + ความถี่ {{ scale_names['likelihood'].get(lik, lik) }}{% if mea %} + มาตรการ {{ scale_names['measure'].get(mea, mea) }}{% endif %}
+{%- endmacro %}
 {% block body %}
 <p><a href="/hazards">← กลับรายการ</a></p>
 <h1>{{ h['code'] }} · {{ h['title'] }}</h1>
@@ -22,14 +25,14 @@
   <p><strong>ผู้แจ้ง:</strong> {{ refs['reporter'] }} · {{ h['reported_at'] }}</p>
   {% if h['occurred_on'] or h['observer'] %}<p>{% if h['occurred_on'] %}<strong>วันที่เกิดเหตุ:</strong> {{ h['occurred_on'] }}{% endif %}{% if h['observer'] %} · <strong>ผู้พบเห็น:</strong> {{ h['observer'] }}{% endif %}</p>{% endif %}
   {% if h['location_text'] or h['machine_no'] %}<p>{% if h['location_text'] %}<strong>สถานที่:</strong> {{ h['location_text'] }}{% endif %}{% if h['machine_no'] %} · <strong>เครื่องจักร:</strong> {{ h['machine_no'] }}{% endif %}</p>{% endif %}
-  {% if refs['hiyari_name'] or refs['measure_name'] %}<p>{% if refs['hiyari_name'] %}<strong>Hiyari Hatto:</strong> {{ refs['hiyari_name'] }}{% endif %}{% if refs['measure_name'] %} · <strong>มาตรการความปลอดภัย:</strong> {{ refs['measure_name'] }}{% endif %}</p>{% endif %}
-  {% if h['rpt_score'] %}<p><strong>ผู้แจ้งประเมินเบื้องต้น:</strong> ระดับอันตราย {{ h['rpt_severity'] }} × ความถี่ {{ h['rpt_likelihood'] }} = {{ h['rpt_score'] }}</p>{% endif %}
+  {% if refs['hiyari_name'] %}<p><strong>Hiyari Hatto:</strong> {{ refs['hiyari_name'] }}</p>{% endif %}
+  {% if h['rpt_score'] %}<p><strong>ผู้แจ้งประเมินเบื้องต้น:</strong> {{ factor_text(h['rpt_severity'], h['rpt_likelihood'], h['rpt_measure']) }} = คะแนน {{ h['rpt_score'] }}</p>{% endif %}
   <p style="white-space:pre-wrap">{{ h['description'] }}</p>
   {% if h['temp_action'] %}<p><strong>การแก้ไขชั่วคราว:</strong> <span style="white-space:pre-wrap">{{ h['temp_action'] }}</span></p>{% endif %}
   {% if h['perm_action'] %}<p><strong>การแก้ไขถาวร:</strong> <span style="white-space:pre-wrap">{{ h['perm_action'] }}</span></p>{% endif %}
   {% if h['plan_due_date'] %}<p><strong>แผนแก้ไขเสร็จสิ้น:</strong> {{ h['plan_due_date'] }}</p>{% endif %}
   {% for label, value in custom %}<p><strong>{{ label }}:</strong> {{ value }}</p>{% endfor %}
-  {% if h['level_name'] %}<p><strong>การประเมิน:</strong> โอกาส {{ h['likelihood'] }} × ความรุนแรง {{ h['severity'] }} = {{ h['score'] }}</p>{% endif %}
+  {% if h['level_name'] %}<p><strong>การประเมิน:</strong> {% if h['measure'] %}{{ factor_text(h['severity'], h['likelihood'], h['measure']) }} = คะแนน {{ h['score'] }}{% else %}โอกาส {{ h['likelihood'] }} × ความรุนแรง {{ h['severity'] }} = {{ h['score'] }} (เกณฑ์เดิม){% endif %}</p>{% endif %}
   {% if h['owner_id'] %}<p><strong>ผู้รับผิดชอบ:</strong> {{ refs['owner'] }} · <strong>ครบกำหนด:</strong> {{ h['due_date'] }}</p>{% endif %}
   {% if h['closing_note'] %}<p><strong>ผลการแก้ไข:</strong> {{ h['closing_note'] }}</p>{% endif %}
   {% if h['reject_reason'] %}<p><strong>เหตุผลที่ปฏิเสธ:</strong> {{ h['reject_reason'] }}</p>{% endif %}
@@ -41,8 +44,9 @@
   <form method="post" action="/hazards/{{ h['id'] }}/assess" class="card" style="max-width:none;margin:0">
     <h2>{{ 'ประเมินใหม่' if h['status'] == 'assessed' else 'ประเมินความเสี่ยง' }}</h2>
     <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-    <label>โอกาสที่จะเกิด <select name="likelihood">{% for s in scales['likelihood'] %}<option value="{{ s['level'] }}" {{ 'selected' if (h['likelihood'] or h['rpt_likelihood']) == s['level'] }}>{{ s['level'] }} — {{ s['label_th'] }}</option>{% endfor %}</select></label>
-    <label>ความรุนแรง <select name="severity">{% for s in scales['severity'] %}<option value="{{ s['level'] }}" {{ 'selected' if (h['severity'] or h['rpt_severity']) == s['level'] }}>{{ s['level'] }} — {{ s['label_th'] }}</option>{% endfor %}</select></label>
+    <label>ความรุนแรง <select name="severity">{% for s in scales['severity'] %}<option value="{{ s['level'] }}" {{ 'selected' if (h['severity'] or h['rpt_severity']) == s['level'] }}>{{ s['label_th'] }} ({{ s['points'] }})</option>{% endfor %}</select></label>
+    <label>ความถี่ <select name="likelihood">{% for s in scales['likelihood'] %}<option value="{{ s['level'] }}" {{ 'selected' if (h['likelihood'] or h['rpt_likelihood']) == s['level'] }}>{{ s['label_th'] }} ({{ s['points'] }})</option>{% endfor %}</select></label>
+    <label>ระดับมาตรการด้านความปลอดภัย <select name="measure">{% for s in scales['measure'] %}<option value="{{ s['level'] }}" {{ 'selected' if (h['measure'] or h['rpt_measure']) == s['level'] }}>{{ s['label_th'] }} ({{ s['points'] }})</option>{% endfor %}</select></label>
     <label>หมายเหตุ <input name="note" maxlength="1000"></label>
     <button type="submit">บันทึกการประเมิน</button>
   </form>

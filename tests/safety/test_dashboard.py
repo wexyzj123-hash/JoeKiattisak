@@ -25,7 +25,7 @@ def seed(app):
     a, b = add_chain(con, "A"), add_chain(con, "B")
     rep = add_user(con, "reporter", "ผู้แจ้ง")
     lv = con.execute("SELECT * FROM risk_levels ORDER BY max_score DESC LIMIT 1").fetchone()
-    snap = dict(likelihood=5, severity=5, score=25, risk_level_id=lv["id"], level_name=lv["name_th"], level_color=lv["color"],
+    snap = dict(likelihood=1, severity=1, score=25, risk_level_id=lv["id"], level_name=lv["name_th"], level_color=lv["color"],
                 level_requires_approval=1)
     h1 = add_hazard(con, a["a"], rep, code="HZ-D-1", status="assigned", due_date="2026-03-01", reported_at="2026-03-02 09:00:00", **snap)
     add_hazard(con, a["a"], rep, code="HZ-D-2", status="reported", reported_at="2026-03-05 09:00:00")
@@ -223,9 +223,9 @@ def test_overview_drilldown_links_open_matching_lists(safety_app):
     seed(safety_app)
     c = login(safety_app, "admin")
     html = c.get("/overview").get_data(as_text=True)
-    for href in ("/hazards?open=1", "/hazards?overdue=1", "/hazards?status=assigned", "/hazards?l=5&s=5"):
+    for href in ("/hazards?open=1", "/hazards?overdue=1", "/hazards?status=assigned", "/hazards?l=1&s=1"):
         assert f'href="{href}' in html, href
-    assert codes(c.get("/hazards?l=5&s=5").get_data(as_text=True)) == ["HZ-D-1"]
+    assert codes(c.get("/hazards?l=1&s=1").get_data(as_text=True)) == ["HZ-D-1"]
 
 
 def test_home_ships_drawer_and_trend_hooks(safety_app):

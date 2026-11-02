@@ -15,7 +15,7 @@ from ..incidents import (INCIDENT_EVENT_TH, INCIDENT_KIND_TH, INCIDENT_STATUS_TH
                          people_for, scope_sql, visible_incident)
 from ..master import breadcrumb, REGISTRY
 from ..perms import permission_any, permission_required, user_permissions
-from ..risk import scale_size
+from ..risk import scale_rows
 from .hazards import STORED_RE, _int, _like, _precheck, _uploads
 
 bp = Blueprint("incidents", __name__, url_prefix="/incidents")
@@ -107,7 +107,7 @@ def _form_context(values, errors):
     return render_template(
         "incident_form.html", values=values, errors=errors, areas=risk_area_options(db, g.user), max_photos=MAX_PER_KIND,
         severities=db.execute("SELECT * FROM injury_severities WHERE active=1 ORDER BY rank, id").fetchall(),
-        scales={k: db.execute("SELECT level, label_th FROM risk_scales WHERE kind=? ORDER BY level", (k,)).fetchall() for k in ("likelihood", "severity")},
+        scales=scale_rows(db),
         people_roles=PEOPLE_ROLES, kind_th=INCIDENT_KIND_TH, slots=MAX_PEOPLE_SLOTS, visible_slots=5)
 
 

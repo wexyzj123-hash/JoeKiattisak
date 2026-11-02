@@ -180,7 +180,7 @@ def test_gate_on_blocks_hazard_close_until_all_capas_verified_and_ignores_cancel
 def test_gate_on_blocks_incident_close_message_names_remaining_count(w):
     turn_gate(w)
     iid, errs = incidents.report(w.db, w.insp, {"kind": "near_miss", "occurred_at": "2026-03-09T08:00", "risk_area_id": str(w.a["a"]), "title": "เฉียดชน",
-                                                 "likelihood": "2", "severity": "2"})
+                                                 "likelihood": "2", "severity": "2", "measure": "2"})
     assert errs == []
     incident_flow.assign_investigator(w.db, w.admin, iid, w.insp["id"], "")
     cause = w.db.execute("SELECT id FROM incident_causes LIMIT 1").fetchone()[0]

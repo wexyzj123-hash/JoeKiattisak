@@ -12,11 +12,11 @@ from flask import Blueprint, abort, current_app, flash, g, redirect, render_temp
 from .. import capa, timeutil, workflow
 from ..customfields import fields_for_type
 from ..db import get_db
-from ..hazards import EVENT_TH, STATUS_TH, can_view_all, hazard_scope_sql, next_code, risk_area_options, user_in_scope, visible_hazard
+from ..hazards import EVENT_TH, STATUS_TH, can_view_all, hazard_scope_sql, next_code, org_options, risk_area_options, user_in_scope, visible_hazard
 from ..images import KINDS, MAX_PER_KIND, ImageError, process_image, save_attachment
 from ..master import REGISTRY, active_options
 from ..perms import permission_any, permission_required, user_permissions
-from ..risk import calc_score, list_levels, scale_size
+from ..risk import calc_score, list_levels, scale_rows
 
 bp = Blueprint("hazards", __name__, url_prefix="/hazards")
 ANY_HAZARD_PERM = ("hazard.report", "hazard.assess", "hazard.assign", "hazard.close", "master.view")
@@ -155,9 +155,9 @@ def _form_context(values, errors):
         "hazard_form.html", values=values, errors=errors, areas=risk_area_options(db, g.user),
         types=active_options(db, REGISTRY["hazard-types"]), sources=active_options(db, REGISTRY["hazard-sources"]),
         custom_fields=db.execute("SELECT * FROM custom_fields WHERE active=1 ORDER BY sort, id").fetchall(), max_photos=MAX_PER_KIND,
-        hiyari=active_options(db, REGISTRY["hiyari-types"]), measures=active_options(db, REGISTRY["safety-measures"]),
-        factories=active_options(db, REGISTRY["factories"]), next_code=next_code(db), today=timeutil.today().isoformat(),
-        scales={k: db.execute("SELECT level, label_th FROM risk_scales WHERE kind=? ORDER BY level", (k,)).fetchall() for k in ("likelihood", "severity")},
+        hiyari=active_options(db, REGISTRY["hiyari-types"]),
+        org=org_options(db, g.user), next_code=next_code(db), today=timeutil.today().isoformat(),
+        scales=scale_rows(db),
         score_levels=[dict(level_name=lv["name_th"], color=lv["color"], min=lv["min_score"], max=lv["max_score"]) for lv in list_levels(db)])
 
 
@@ -203,9 +203,9 @@ def detail(hazard_id):
     from ..master import breadcrumb
     refs = db.execute("SELECT (SELECT name_th FROM hazard_types WHERE id=?) AS type_name, "
                       "(SELECT name_th FROM hazard_sources WHERE id=?) AS source_name, "
-                      "(SELECT name_th FROM hiyari_types WHERE id=?) AS hiyari_name, (SELECT name_th FROM safety_measures WHERE id=?) AS measure_name, "
+                      "(SELECT name_th FROM hiyari_types WHERE id=?) AS hiyari_name, "
                       "(SELECT name FROM safety_users WHERE id=?) AS reporter, (SELECT name FROM safety_users WHERE id=?) AS owner",
-                      (h["hazard_type_id"], h["source_id"], h["hiyari_type_id"], h["measure_id"], h["reported_by"], h["owner_id"])).fetchone()
+                      (h["hazard_type_id"], h["source_id"], h["hiyari_type_id"], h["reported_by"], h["owner_id"])).fetchone()
     status, is_open = h["status"], h["status"] in OPEN
     mine = g.user["id"] in (h["reported_by"], h["owner_id"])
     can_assess, can_assign, can_close = ("hazard.assess" in perms, "hazard.assign" in perms, "hazard.close" in perms)
@@ -225,8 +225,7 @@ def detail(hazard_id):
         custom=_custom_rows(db, h), actions=actions, events=events, status_th=STATUS_TH, event_th=EVENT_TH,
         photos={k: db.execute("SELECT * FROM hazard_attachments WHERE hazard_id=? AND kind=? ORDER BY id", (hazard_id, k)).fetchall() for k in KINDS},
         overdue=bool(h["due_date"] and h["due_date"] < today and is_open),
-        likelihood_max=scale_size(db, "likelihood"), severity_max=scale_size(db, "severity"),
-        scales={k: db.execute("SELECT level, label_th FROM risk_scales WHERE kind=? ORDER BY level", (k,)).fetchall() for k in ("likelihood", "severity")},
+        scales=scale_rows(db), scale_names={k: {r["level"]: r["label_th"] for r in rows} for k, rows in scale_rows(db).items()},
         owners=[o for o in db.execute("SELECT u.id, u.name, u.factory_id, u.department_id, COALESCE(r.name_th, u.role) AS role "
                                       "FROM safety_users u LEFT JOIN safety_roles r ON r.key = u.role WHERE u.active=1 ORDER BY u.name")
                 if user_in_scope(db, o, h["risk_area_id"])])
@@ -244,10 +243,10 @@ def _done(errors: list[str], hazard_id: int):
 @permission_required("hazard.assess")
 def assess(hazard_id):
     _load(hazard_id)
-    likelihood, severity = _int(request.form.get("likelihood")), _int(request.form.get("severity"))
-    if likelihood is None or severity is None:
-        return _done(["โอกาสและความรุนแรงต้องเป็นจำนวนเต็มตามเกณฑ์"], hazard_id)
-    return _done(workflow.assess(get_db(), g.user, hazard_id, likelihood, severity, request.form.get("note", "")), hazard_id)
+    likelihood, severity, measure = (_int(request.form.get(k)) for k in ("likelihood", "severity", "measure"))
+    if likelihood is None or severity is None or measure is None:
+        return _done(["ระดับความรุนแรง ความถี่ และมาตรการต้องเลือกตามเกณฑ์"], hazard_id)
+    return _done(workflow.assess(get_db(), g.user, hazard_id, likelihood, severity, request.form.get("note", ""), measure), hazard_id)
 
 
 @bp.route("/<int:hazard_id>/assign", methods=["POST"])

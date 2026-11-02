@@ -21,7 +21,7 @@ def form(con, **changes):
 
 
 def snapshot(con):
-    return (con.execute("SELECT kind, level, label_th, description FROM risk_scales ORDER BY kind, level").fetchall(),
+    return (con.execute("SELECT kind, level, label_th, description, points FROM risk_scales ORDER BY kind, level").fetchall(),
             [tuple(l) for l in list_levels(con)])
 
 
@@ -34,7 +34,7 @@ def test_page_requires_criteria_manage(safety_app):
     assert login(safety_app, "assessor").get("/admin/criteria").status_code == 403
     assert safety_app.test_client().get("/admin/criteria").status_code == 302
     html = login(safety_app).get("/admin/criteria").get_data(as_text=True)
-    assert "แทบไม่เกิด" in html and "สูงมาก" in html and "#ff4d4f" in html
+    assert "A เสียชีวิต" in html and "ความถี่" in html and "A1 ทำให้เสียชีวิต" in html and "#ff0000" in html and "measure_points_1" in html
 
 
 def test_form_values_roundtrip_is_a_noop(con):
@@ -44,7 +44,7 @@ def test_form_values_roundtrip_is_a_noop(con):
 
 
 def test_save_labels_and_levels_ok(safety_app, con):
-    f = form(con, likelihood_label_1="แทบเป็นไปไม่ได้", severity_desc_2="บาดเจ็บเล็กน้อย",
+    f = form(con, likelihood_label_1="แทบเป็นไปไม่ได้", severity_desc_2="บาดเจ็บเล็กน้อย", measure_points_1=9, level_max_5=26,
              level_name_0="เบา", level_color_0="#00FF00", level_sla_0=45, level_approval_0="1")
     assert post(login(safety_app), f).status_code == 302
     lv = list_levels(connect(safety_app.config["DATABASE"]))[0]
@@ -55,46 +55,45 @@ def test_save_labels_and_levels_ok(safety_app, con):
 
 def test_grow_scale_requires_levels_to_cover_new_max(con):
     before = snapshot(con)
-    errors = apply_criteria(con, form(con, likelihood_size=6, likelihood_label_6="เกิดแน่นอน"))
-    assert errors and any("26-30" in e for e in errors)
-    assert snapshot(con) == before and scale_size(con, "likelihood") == 5
+    errors = apply_criteria(con, form(con, likelihood_size=4, likelihood_label_4="เกิดแน่นอน", likelihood_points_4=9))
+    assert errors
+    assert snapshot(con) == before and scale_size(con, "likelihood") == 3
 
 
 def test_grow_scale_with_extended_levels_ok(con):
     last = len(list_levels(con)) - 1
-    assert apply_criteria(con, form(con, likelihood_size=6, likelihood_label_6="เกิดแน่นอน", **{f"level_max_{last}": 30})) == []
-    assert scale_size(con, "likelihood") == 6 and max_score(con) == 30
+    assert apply_criteria(con, form(con, likelihood_size=4, likelihood_label_4="เกิดแน่นอน", likelihood_points_4=9, **{f"level_max_{last}": 29})) == []
+    assert scale_size(con, "likelihood") == 4 and max_score(con) == 29
 
 
 def test_grow_scale_needs_a_label_for_the_new_level(con):
     last = len(list_levels(con)) - 1
-    errors = apply_criteria(con, form(con, likelihood_size=6, **{f"level_max_{last}": 30}))
-    assert errors and scale_size(con, "likelihood") == 5
+    errors = apply_criteria(con, form(con, likelihood_size=4, likelihood_points_4=9, **{f"level_max_{last}": 29}))
+    assert errors and scale_size(con, "likelihood") == 3
 
 
 def test_gap_and_overlap_rejected_atomically(con):
     before = snapshot(con)
-    assert apply_criteria(con, form(con, level_min_1=6, likelihood_label_1="เปลี่ยน"))        # ช่องว่าง 5
+    assert apply_criteria(con, form(con, level_min_1=11, likelihood_label_1="เปลี่ยน"))       # ช่องว่าง 10
     assert snapshot(con) == before
-    assert apply_criteria(con, form(con, level_min_1=4, level_name_0="เปลี่ยนชื่อ"))            # ซ้อน 4
+    assert apply_criteria(con, form(con, level_min_1=8, level_name_0="เปลี่ยนชื่อ"))           # ซ้อน 8-9
     assert snapshot(con) == before
 
 
 def test_shrink_below_used_value_rejected_and_allowed_when_unused(con):
     ch, u = add_chain(con), add_user(con)
-    hid = add_hazard(con, ch["a"], u, likelihood=5, severity=2, score=10, status="assessed")
-    last = len(list_levels(con)) - 1
-    shrink = form(con, likelihood_size=4, **{f"level_max_{last}": 20})
+    hid = add_hazard(con, ch["a"], u, likelihood=3, severity=2, score=10, status="assessed")
+    shrink = form(con, likelihood_size=2, level_min_0=7)
     errors = apply_criteria(con, shrink)
-    assert errors and any("รายการอันตราย" in e and "ค่า 5" in e for e in errors) and scale_size(con, "likelihood") == 5
-    con.execute("UPDATE hazards SET likelihood=4 WHERE id=?", (hid,))
+    assert errors and any("รายการอันตราย" in e and "ค่า 3" in e for e in errors) and scale_size(con, "likelihood") == 3
+    con.execute("UPDATE hazards SET likelihood=2 WHERE id=?", (hid,))
     con.commit()
-    assert apply_criteria(con, shrink) == [] and scale_size(con, "likelihood") == 4
-    assert con.execute("SELECT COUNT(*) FROM risk_scales WHERE kind='likelihood'").fetchone()[0] == 4
+    assert apply_criteria(con, shrink) == [] and scale_size(con, "likelihood") == 2
+    assert con.execute("SELECT COUNT(*) FROM risk_scales WHERE kind='likelihood'").fetchone()[0] == 2
 
 
 @pytest.mark.parametrize("changes", [
-    {"likelihood_size": 1}, {"severity_size": 11}, {"likelihood_size": "abc"}, {"severity_size": ""},
+    {"likelihood_size": 1}, {"measure_size": 11}, {"measure_points_1": "x"}, {"severity_points_1": -1}, {"severity_size": 11}, {"likelihood_size": "abc"}, {"severity_size": ""},
     {"level_color_0": "red"}, {"level_sla_0": -1}, {"level_sla_0": "x"}, {"level_name_0": "  "},
     {"likelihood_label_1": "  "}, {"severity_label_3": "x" * 101}, {"level_min_0": "abc"}, {"level_count": "abc"},
 ])
@@ -126,18 +125,19 @@ def test_deleting_a_referenced_level_unlinks_but_keeps_snapshot(con):
     ch, u = add_chain(con), add_user(con)
     lid = list_levels(con)[0]["id"]
     hid = add_hazard(con, ch["a"], u, score=3, risk_level_id=lid, level_name="ต่ำ", level_color="#2ecc71", status="assessed")
-    assert apply_criteria(con, form(con, level_delete_0=1, level_min_1=1)) == []
+    assert apply_criteria(con, form(con, level_delete_0=1, level_min_1=6)) == []
     h = con.execute("SELECT * FROM hazards WHERE id=?", (hid,)).fetchone()
-    assert h["risk_level_id"] is None and h["level_name"] == "ต่ำ" and len(list_levels(con)) == 3
+    assert h["risk_level_id"] is None and h["level_name"] == "ต่ำ" and len(list_levels(con)) == 5
 
 
 def test_swapping_level_names_works(con):
-    assert apply_criteria(con, form(con, level_name_0="ปานกลาง", level_name_1="ต่ำ")) == []
-    assert [l["name_th"] for l in list_levels(con)][:2] == ["ปานกลาง", "ต่ำ"]
+    a, b = [l["name_th"] for l in list_levels(con)][:2]
+    assert apply_criteria(con, form(con, level_name_0=b, level_name_1=a)) == []
+    assert [l["name_th"] for l in list_levels(con)][:2] == [b, a]
 
 
 def test_duplicate_level_names_rejected(con):
-    assert apply_criteria(con, form(con, level_name_1="ต่ำ"))
+    assert apply_criteria(con, form(con, level_name_1=list_levels(con)[0]["name_th"]))
 
 
 def test_script_in_label_escaped(safety_app, con):

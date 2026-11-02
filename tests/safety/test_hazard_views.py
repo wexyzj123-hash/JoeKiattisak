@@ -112,7 +112,7 @@ def test_scoped_user_cannot_open_other_factory_hazard_page_photo_or_post(env):
     scoped = login(env.app, "assessor", factory_id=env.b["f"])
     assert scoped.get(f"/hazards/{hid}").status_code == 404
     assert scoped.get(f"/hazards/{hid}/files/{aid}").status_code == 404
-    for action, data in (("assess", {"likelihood": "3", "severity": "3"}), ("assign", {"owner_id": "1"}),
+    for action, data in (("assess", {"likelihood": "2", "severity": "2", "measure": "2"}), ("assign", {"owner_id": "1"}),
                          ("close", {"note": "x"}), ("reject", {"reason": "x"}), ("photos", {"kind": "before"})):
         assert env.act(scoped, hid, action, **data).status_code == 404, action
     assert env.row(hid)["status"] == "reported"
@@ -140,7 +140,7 @@ def test_detail_shows_only_allowed_actions_per_status(env):
     hid = env.report(rep)
     assert action_forms(rep.get(f"/hazards/{hid}").get_data(as_text=True)) == {"photos"}
     assert action_forms(asr.get(f"/hazards/{hid}").get_data(as_text=True)) == {"assess", "reject", "photos"}
-    env.act(asr, hid, "assess", likelihood="3", severity="3")
+    env.act(asr, hid, "assess", likelihood="2", severity="2", measure="2")
     assert action_forms(asr.get(f"/hazards/{hid}").get_data(as_text=True)) == {"assess", "assign", "reject", "photos"}
     env.act(asr, hid, "assign", owner_id=str(owner), due_date="")
     assert action_forms(asr.get(f"/hazards/{hid}").get_data(as_text=True)) == {"assign", "close", "reject", "photos"}
@@ -152,15 +152,15 @@ def test_detail_shows_only_allowed_actions_per_status(env):
 def test_full_flow_via_http(env):
     rep, asr, closer = login(env.app, "reporter"), login(env.app, "assessor"), login(env.app, "dept_head")
     hid = env.report(rep, title="สายไฟชำรุด")
-    assert env.act(asr, hid, "assess", likelihood="5", severity="5", note="อันตรายมาก").status_code == 302
+    assert env.act(asr, hid, "assess", likelihood="1", severity="1", measure="1", note="อันตรายมาก").status_code == 302
     assert env.act(asr, hid, "assign", owner_id=str(closer.uid), due_date="").status_code == 302
     h = env.row(hid)
-    assert (h["status"], h["level_name"], h["due_date"]) == ("assigned", "สูงมาก", str(TODAY + timedelta(days=3)))
+    assert (h["status"], h["level_name"], h["due_date"]) == ("assigned", "A1 ทำให้เสียชีวิต", str(TODAY + timedelta(days=3)))
     assert env.act(closer, hid, "close", note="ถึงเจ้าของงาน").status_code == 302          # เจ้าของงานปิดเองระดับสูงมากไม่ได้
     assert env.row(hid)["status"] == "assigned"
     assert env.act(asr, hid, "close", note="เปลี่ยนสายแล้ว ตรวจผ่าน").status_code == 302
     html = asr.get(f"/hazards/{hid}").get_data(as_text=True)
-    assert env.row(hid)["status"] == "closed" and "เปลี่ยนสายแล้ว ตรวจผ่าน" in html and "สูงมาก" in html
+    assert env.row(hid)["status"] == "closed" and "เปลี่ยนสายแล้ว ตรวจผ่าน" in html and "A1 ทำให้เสียชีวิต" in html
     timeline = html[html.index("ประวัติการดำเนินการ"):]                                    # เฉพาะส่วนประวัติ (ด้านบนมีข้อความแสดงผลการปิดรายการด้วย)
     order = [timeline.index(k) for k in ("แจ้งอันตราย", "ประเมินความเสี่ยง", "มอบหมาย", "ปิดรายการ")]
     assert order == sorted(order)
@@ -169,7 +169,7 @@ def test_full_flow_via_http(env):
 def test_bad_action_input_flashes_and_changes_nothing(env):
     rep, asr = login(env.app, "reporter"), login(env.app, "assessor")
     hid = env.report(rep)
-    for data in ({"likelihood": "abc", "severity": "3"}, {"likelihood": "9", "severity": "3"}, {"likelihood": "", "severity": ""}):
+    for data in ({"likelihood": "abc", "severity": "3", "measure": "1"}, {"likelihood": "9", "severity": "3", "measure": "1"}, {"likelihood": "", "severity": "", "measure": ""}):
         r = env.act(asr, hid, "assess", **data)
         assert r.status_code == 302 and env.row(hid)["status"] == "reported"
     html = asr.get(f"/hazards/{hid}").get_data(as_text=True)
@@ -189,8 +189,8 @@ def test_reject_via_http(env):
 def test_list_filters_search_sort_whitelist_and_page_clamp(env):
     rep, asr = login(env.app, "reporter"), login(env.app, "assessor")
     ids = [env.report(rep, title=f"หัวข้อ{i:02d}") for i in range(25)]
-    env.act(asr, ids[0], "assess", likelihood="5", severity="5")
-    env.act(asr, ids[1], "assess", likelihood="1", severity="1")
+    env.act(asr, ids[0], "assess", likelihood="1", severity="1", measure="1")
+    env.act(asr, ids[1], "assess", likelihood="3", severity="3", measure="3")
     env.act(asr, ids[2], "reject", reason="x")
     g = lambda qs: asr.get("/hazards?" + qs)
     assert all(g(qs).status_code == 200 for qs in ("page=0", "page=-5", "page=9999", "page=abc", "sort=title;DROP TABLE hazards",
@@ -198,7 +198,7 @@ def test_list_filters_search_sort_whitelist_and_page_clamp(env):
     assert env.db.execute("SELECT COUNT(*) FROM hazards").fetchone()[0] == 25
     only = g("status=assessed").get_data(as_text=True)
     assert "หัวข้อ00" in only and "หัวข้อ01" in only and "หัวข้อ03" not in only
-    assert "หัวข้อ00" in g("level=สูงมาก").get_data(as_text=True) and "หัวข้อ01" not in g("level=สูงมาก").get_data(as_text=True)
+    assert "หัวข้อ00" in g("level=A1 ทำให้เสียชีวิต").get_data(as_text=True) and "หัวข้อ01" not in g("level=A1 ทำให้เสียชีวิต").get_data(as_text=True)
     unassessed = g("level=none").get_data(as_text=True)
     assert "หัวข้อ05" in unassessed and "หัวข้อ00" not in unassessed
     assert "หัวข้อ07" in g("q=ข้อ07").get_data(as_text=True) and "หัวข้อ08" not in g("q=ข้อ07").get_data(as_text=True)
@@ -272,7 +272,7 @@ def test_after_photo_only_with_close_permission_and_assigned_status(env):
     up(asr, "after")
     up(rep, "after")
     assert env.db.execute("SELECT COUNT(*) FROM hazard_attachments WHERE kind='after'").fetchone()[0] == 0     # ยังไม่ assigned
-    env.act(asr, hid, "assess", likelihood="2", severity="2")
+    env.act(asr, hid, "assess", likelihood="2", severity="2", measure="2")
     env.act(asr, hid, "assign", owner_id=str(asr.uid), due_date="")
     up(rep, "after")                                                                                          # ผู้แจ้งไม่มีสิทธิ์ปิด
     assert env.db.execute("SELECT COUNT(*) FROM hazard_attachments WHERE kind='after'").fetchone()[0] == 0
@@ -283,7 +283,7 @@ def test_after_photo_only_with_close_permission_and_assigned_status(env):
 def test_close_can_attach_after_photo(env):
     rep, asr = login(env.app, "reporter"), login(env.app, "assessor")
     hid = env.report(rep)
-    env.act(asr, hid, "assess", likelihood="2", severity="2"); env.act(asr, hid, "assign", owner_id=str(asr.uid), due_date="")
+    env.act(asr, hid, "assess", likelihood="2", severity="2", measure="2"); env.act(asr, hid, "assign", owner_id=str(asr.uid), due_date="")
     r = asr.post(f"/hazards/{hid}/close", data={"_csrf": csrf(asr), "note": "แก้แล้ว", "photos": (io.BytesIO(png()), "after.png")},
                  content_type="multipart/form-data")
     assert r.status_code == 302 and env.row(hid)["status"] == "closed"
@@ -318,7 +318,7 @@ def test_deactivated_custom_field_still_shown_on_old_hazard(env):
 def test_post_without_permission_is_403_never_200(env):
     rep = login(env.app, "reporter")
     hid = env.report(rep)
-    for action, data in (("assess", {"likelihood": "3", "severity": "3"}), ("assign", {"owner_id": str(rep.uid)}),
+    for action, data in (("assess", {"likelihood": "2", "severity": "2", "measure": "2"}), ("assign", {"owner_id": str(rep.uid)}),
                          ("close", {"note": "x"}), ("reject", {"reason": "x"})):
         assert env.act(rep, hid, action, **data).status_code == 403, action
     assert env.row(hid)["status"] == "reported"

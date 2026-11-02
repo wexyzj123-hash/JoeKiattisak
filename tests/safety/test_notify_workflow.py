@@ -4,7 +4,7 @@ import pytest
 
 from safety import notify, workflow
 from safety.db import connect
-from tests.safety.factories import add_user, user_row
+from tests.safety.factories import add_user, assess_legacy, user_row
 from tests.safety.test_workflow import TODAY, W, fixed_today, w  # noqa: F401  (fixture w / fixed_today)
 
 
@@ -23,7 +23,7 @@ def who(w, event):
 def test_each_transition_creates_expected_notifications(w):
     hid = w.hazard("rep")
     assert who(w, "hazard_reported") == ["ผู้ประเมิน", "ผู้ประเมิน 2"]                      # assessor ที่ขอบเขตครอบคลุม; ผู้ประเมินโรงงาน B ไม่ได้
-    workflow.assess(w.db, w.u("asr"), hid, 5, 5)
+    assess_legacy(w.db, w.u("asr"), hid, 5, 5)
     assert who(w, "hazard_assessed") == ["แอดมิน"]                                          # คะแนน 25 ≥ 17 → dept_head/admin
     workflow.assign(w.db, w.u("asr"), hid, w.ids["asr2"], "")
     assert who(w, "hazard_assigned") == ["ผู้ประเมิน 2"]
@@ -39,7 +39,7 @@ def test_each_transition_creates_expected_notifications(w):
 
 def test_low_score_assessment_does_not_notify_leaders(w):
     hid = w.hazard()
-    workflow.assess(w.db, w.u("asr"), hid, 1, 1)
+    assess_legacy(w.db, w.u("asr"), hid, 1, 1)
     assert notes(w, "hazard_assessed") == []
 
 
@@ -54,14 +54,14 @@ def test_lost_race_emits_nothing(w, monkeypatch):
         return row
 
     monkeypatch.setattr(workflow, "visible_hazard", racing)
-    assert workflow.assess(w.db, w.u("asr"), hid, 5, 5)
+    assert assess_legacy(w.db, w.u("asr"), hid, 5, 5)
     assert len(notes(w)) == before and notes(w, "hazard_assessed") == []
 
 
 def test_failed_validation_emits_nothing(w):
     hid = w.hazard()
     before = len(notes(w))
-    workflow.assess(w.db, w.u("asr"), hid, 9, 9); workflow.assign(w.db, w.u("asr"), hid, w.ids["asr2"], "")
+    workflow.assess(w.db, w.u("asr"), hid, 9, 9, "", 9); workflow.assign(w.db, w.u("asr"), hid, w.ids["asr2"], "")
     workflow.close(w.db, w.u("asr"), hid, "x"); workflow.reject(w.db, w.u("asr"), hid, "")
     assert workflow.report(w.db, w.u("rep"), w.form(title=""))[0] is None
     assert len(notes(w)) == before
@@ -69,7 +69,7 @@ def test_failed_validation_emits_nothing(w):
 
 def test_notifications_commit_together_with_the_transition(w, tmp_path):
     hid = w.hazard()
-    workflow.assess(w.db, w.u("asr"), hid, 5, 5)
+    assess_legacy(w.db, w.u("asr"), hid, 5, 5)
     other = connect(w.db.execute("PRAGMA database_list").fetchone()[2])                   # อีกการเชื่อมต่อเห็นทั้งสถานะและแจ้งเตือนพร้อมกัน
     assert other.execute("SELECT status FROM hazards WHERE id=?", (hid,)).fetchone()[0] == "assessed"
     assert other.execute("SELECT COUNT(*) FROM notifications WHERE event='hazard_assessed'").fetchone()[0] == 1
@@ -92,12 +92,12 @@ def test_emit_failure_does_not_block_transition(w, monkeypatch):
     w.db.execute("UPDATE safety_users SET email='a@example.com', notify_channels='inapp,email' WHERE role='assessor'"); w.db.commit()
     hid, errors = workflow.report(w.db, w.u("rep"), w.form())
     assert errors == [] and w.row(hid)["status"] == "reported" and notes(w) == []
-    assert workflow.assess(w.db, w.u("asr"), hid, 5, 5) == [] and w.row(hid)["status"] == "assessed"
+    assert assess_legacy(w.db, w.u("asr"), hid, 5, 5) == [] and w.row(hid)["status"] == "assessed"
 
 
 def test_actor_not_notified_for_own_action(w):
     hid = w.hazard("rep")
-    workflow.assess(w.db, w.u("admin"), hid, 5, 5)                                         # แอดมินเป็นผู้ประเมินเอง
+    assess_legacy(w.db, w.u("admin"), hid, 5, 5)                                         # แอดมินเป็นผู้ประเมินเอง
     assert notes(w, "hazard_assessed") == []
     h2 = w.hazard("rep")
     workflow.reject(w.db, w.u("rep"), h2, "x")                                              # ผู้แจ้งไม่มีสิทธิ์ปฏิเสธ — ไม่เกิดอะไร

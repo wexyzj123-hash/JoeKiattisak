@@ -101,7 +101,7 @@ def world(tmp_path_factory):
         "title": long_title, "description": "รายละเอียด " * 30, "immediate_action": "ปฐมพยาบาล", "injury_severity_id": str(severity_id(con, "lost_time")),
         "people_name_0": "สมชาย ใจดี", "people_no_0": "E1001", "people_name_1": "สมหญิง รักดี", "people_role_1": "witness"})
     inc["closed"], _ = incidents.report(con, rep, {"kind": "near_miss", "occurred_at": "2026-03-02T09:00", "risk_area_id": str(ch["a"]),
-        "title": "เกือบชนเสา", "likelihood": "4", "severity": "4"})
+        "title": "เกือบชนเสา", "likelihood": "2", "severity": "2", "measure": "2"})
     other_admin = user_row(con, add_user(con, "admin", "แอดมินอีกคน"))
     cause = con.execute("SELECT id FROM incident_causes LIMIT 1").fetchone()[0]
     incident_flow.assign_investigator(con, adm, inc["closed"], adm["id"], "")

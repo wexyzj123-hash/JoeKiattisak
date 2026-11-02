@@ -65,15 +65,15 @@ def test_report_accident_creates_row_event_and_notification(w):
 
 
 def test_report_near_miss_snapshots_level_like_hazards(w):
-    iid, errors = w.report(kind="near_miss", likelihood="5", severity="5", injury_severity_id=str(severity_id(w.db, "fatality")))
+    iid, errors = w.report(kind="near_miss", likelihood="1", severity="1", measure="1", injury_severity_id=str(severity_id(w.db, "fatality")))
     assert errors == []
     row = w.db.execute("SELECT * FROM incidents WHERE id=?", (iid,)).fetchone()
-    assert (row["score"], row["level_name"], row["level_requires_approval"]) == (25, "สูงมาก", 1) and row["level_color"]
+    assert (row["score"], row["level_name"], row["level_requires_approval"]) == (25, "A1 ทำให้เสียชีวิต", 1) and row["level_color"]
     assert row["injury_severity_id"] is None                                                       # Near Miss ไม่มีระดับการบาดเจ็บ
 
 
 def test_near_miss_needs_valid_potential_scores(w):
-    for kw in ({}, {"likelihood": "6", "severity": "1"}, {"likelihood": "x", "severity": "1"}, {"likelihood": "1"}):
+    for kw in ({}, {"likelihood": "6", "severity": "1", "measure": "1"}, {"likelihood": "x", "severity": "1", "measure": "1"}, {"likelihood": "1"}, {"likelihood": "1", "severity": "1"}):
         iid, errors = w.report(kind="near_miss", **kw)
         assert iid is None and errors, kw
     assert w.db.execute("SELECT COUNT(*) FROM incidents").fetchone()[0] == 0
@@ -183,11 +183,11 @@ def test_event_and_notification_text_never_contain_names(w):
 
 
 def test_scale_size_change_later_does_not_break_old_near_miss_rows(w):
-    iid, _ = w.report(kind="near_miss", likelihood="5", severity="5")
-    w.db.execute("DELETE FROM risk_scales WHERE kind='likelihood' AND level=5"); w.db.commit()
+    iid, _ = w.report(kind="near_miss", likelihood="3", severity="3", measure="3")
+    w.db.execute("DELETE FROM risk_scales WHERE kind='likelihood' AND level=3"); w.db.commit()
     row = incidents.visible_incident(w.db, w.inv, iid)
-    assert row["score"] == 25 and row["level_name"] == "สูงมาก"
-    assert w.report(kind="near_miss", likelihood="5", severity="5")[0] is None                          # แจ้งใหม่ใช้เกณฑ์ปัจจุบัน
+    assert row["score"] == 6 and row["level_name"].startswith("C")
+    assert w.report(kind="near_miss", likelihood="3", severity="3", measure="3")[0] is None                          # แจ้งใหม่ใช้เกณฑ์ปัจจุบัน
 
 
 def test_five_year_limit_when_today_is_29_feb(w, monkeypatch):

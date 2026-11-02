@@ -7,7 +7,7 @@ from safety import timeutil, workflow
 from safety.db import connect
 from safety.risk import apply_criteria, criteria_form_values
 from safety.schema import ensure_schema
-from tests.safety.factories import add_chain, add_refs, add_user, user_row
+from tests.safety.factories import add_chain, add_refs, add_user, assess_legacy, user_row
 
 TODAY = date(2026, 3, 10)
 
@@ -52,7 +52,7 @@ class W:
 
     def assessed(self, likelihood=3, severity=3, who="asr"):
         hid = self.hazard()
-        assert workflow.assess(self.db, self.u(who), hid, likelihood, severity) == []
+        assert assess_legacy(self.db, self.u(who), hid, likelihood, severity) == []
         return hid
 
     def assigned(self, likelihood=3, severity=3, owner="asr2", due=""):
@@ -116,50 +116,53 @@ def test_assess_snapshots_score_and_level(w):
     hid = w.assessed(4, 4)
     h = w.row(hid)
     assert (h["status"], h["likelihood"], h["severity"], h["score"], h["level_name"], h["level_color"], h["level_requires_approval"]) == \
-        ("assessed", 4, 4, 16, "สูง", "#ff9f1c", 0)
+        ("assessed", 1, 1, 25, "A1 ทำให้เสียชีวิต", "#ff0000", 1)
     assert h["risk_level_id"] is not None
     assert w.events(hid)[-1] == ("assessed", "reported", "assessed", w.ids["asr"])
 
 
-@pytest.mark.parametrize("l, s, name, score", [(1, 4, "ต่ำ", 4), (1, 5, "ปานกลาง", 5), (5, 5, "สูงมาก", 25), (3, 3, "ปานกลาง", 9), (2, 5, "สูง", 10)])
-def test_assess_boundaries(w, l, s, name, score):
-    h = w.row(w.assessed(l, s))
-    assert (h["score"], h["level_name"]) == (score, name)
-    assert h["level_requires_approval"] == (1 if name == "สูงมาก" else 0)
+@pytest.mark.parametrize("lik, sev, mea, name, score", [(3, 3, 3, "C", 6), (1, 3, 3, "C", 8), (3, 2, 3, "B3", 10), (2, 2, 2, "B2", 14),
+                                                         (1, 2, 1, "A2", 19), (1, 1, 1, "A1", 25), (1, 1, 3, "B1", 18)])
+def test_assess_boundaries(w, lik, sev, mea, name, score):
+    hid = w.hazard()
+    assert workflow.assess(w.db, w.u("asr"), hid, lik, sev, "", mea) == []
+    h = w.row(hid)
+    assert (h["score"], h["level_name"].split()[0]) == (score, name)
+    assert h["level_requires_approval"] == (1 if name.startswith("A") else 0)
 
 
-@pytest.mark.parametrize("l, s", [(0, 3), (6, 3), (3, 0), (3, 6), (-1, 2), ("3", 3), (True, 3), (None, 3)])
+@pytest.mark.parametrize("l, s", [(0, 3), (4, 3), (3, 0), (3, 4), (-1, 2), ("3", 3), (True, 3), (None, 3)])
 def test_assess_rejects_out_of_range_and_non_int(w, l, s):
     hid = w.hazard()
-    assert workflow.assess(w.db, w.u("asr"), hid, l, s)
+    assert workflow.assess(w.db, w.u("asr"), hid, l, s, "", 1)
     assert w.row(hid)["status"] == "reported" and len(w.events(hid)) == 1
 
 
 def test_reassess_before_assign_logs_old_and_new(w):
     hid = w.assessed(2, 2)
-    assert workflow.assess(w.db, w.u("asr2"), hid, 5, 5, note="ประเมินใหม่") == []
+    assert assess_legacy(w.db, w.u("asr2"), hid, 5, 5, note="ประเมินใหม่") == []
     h = w.row(hid)
-    assert (h["score"], h["level_name"], h["status"]) == (25, "สูงมาก", "assessed")
+    assert (h["score"], h["level_name"].split()[0], h["status"]) == (25, "A1", "assessed")
     ev = w.db.execute("SELECT * FROM hazard_events WHERE hazard_id=? ORDER BY id DESC LIMIT 1", (hid,)).fetchone()
     data = json.loads(ev["data"])
-    assert ev["note"] == "ประเมินใหม่" and data["old"]["score"] == 4 and data["new"]["score"] == 25
+    assert ev["note"] == "ประเมินใหม่" and data["old"]["score"] == 6 and data["new"]["score"] == 25
 
 
 def test_cannot_assess_after_assign_or_close_or_reject(w):
     hid = w.assigned()
-    assert workflow.assess(w.db, w.u("asr"), hid, 1, 1) and w.row(hid)["score"] == 9
+    assert assess_legacy(w.db, w.u("asr"), hid, 1, 1) and w.row(hid)["score"] == 14
     workflow.close(w.db, w.u("asr"), hid, "แก้แล้ว")
-    assert workflow.assess(w.db, w.u("asr"), hid, 1, 1)
+    assert assess_legacy(w.db, w.u("asr"), hid, 1, 1)
     h2 = w.hazard(); workflow.reject(w.db, w.u("asr"), h2, "ไม่ใช่อันตราย")
-    assert workflow.assess(w.db, w.u("asr"), h2, 1, 1)
+    assert assess_legacy(w.db, w.u("asr"), h2, 1, 1)
 
 
 # ---------- assign ----------
 def test_assign_default_due_from_sla(w):
     hid = w.assigned(5, 5)                                   # สูงมาก SLA 3 วัน
     assert w.row(hid)["due_date"] == str(TODAY + timedelta(days=3))
-    low = w.assigned(1, 1)                                   # ต่ำ SLA 30 วัน
-    assert w.row(low)["due_date"] == str(TODAY + timedelta(days=30))
+    low = w.assigned(1, 1)                                   # C SLA 60 วัน
+    assert w.row(low)["due_date"] == str(TODAY + timedelta(days=60))
     h = w.row(low)
     assert (h["status"], h["owner_id"]) == ("assigned", w.ids["asr2"])
 
@@ -243,7 +246,7 @@ def test_reject_needs_reason_and_terminal_states_locked(w):
     hid = w.hazard()
     assert workflow.reject(w.db, w.u("asr"), hid, " ") and workflow.reject(w.db, w.u("asr"), hid, "x" * 1001)
     workflow.reject(w.db, w.u("asr"), hid, "ไม่ใช่อันตราย")
-    for fn in (lambda: workflow.reject(w.db, w.u("asr"), hid, "อีกที"), lambda: workflow.assess(w.db, w.u("asr"), hid, 1, 1),
+    for fn in (lambda: workflow.reject(w.db, w.u("asr"), hid, "อีกที"), lambda: assess_legacy(w.db, w.u("asr"), hid, 1, 1),
                lambda: workflow.assign(w.db, w.u("asr"), hid, w.ids["asr2"], ""), lambda: workflow.close(w.db, w.u("asr"), hid, "x")):
         assert fn()
     closed = w.assigned(); workflow.close(w.db, w.u("asr"), closed, "ok")
@@ -254,27 +257,27 @@ def test_reject_needs_reason_and_terminal_states_locked(w):
 def test_permissions_enforced_per_action(w):
     hid = w.hazard()
     nobody = w.u("rep")                                                                  # reporter: hazard.report เท่านั้น
-    assert workflow.assess(w.db, nobody, hid, 1, 1) and workflow.reject(w.db, nobody, hid, "x")
+    assert assess_legacy(w.db, nobody, hid, 1, 1) and workflow.reject(w.db, nobody, hid, "x")
     ok = w.assessed()
     assert workflow.assign(w.db, nobody, ok, w.ids["asr"], "") and workflow.close(w.db, nobody, ok, "x")
-    assert workflow.assess(w.db, w.u("viewer"), hid, 1, 1)
+    assert assess_legacy(w.db, w.u("viewer"), hid, 1, 1)
     assert w.row(hid)["status"] == "reported" and w.row(ok)["status"] == "assessed"
 
 
 def test_out_of_scope_hazard_is_not_found_for_every_action(w):
     hid = w.assigned()                                                                    # พื้นที่โรงงาน A
     scoped = w.u("scoped")                                                                # ผู้ประเมินขอบเขตโรงงาน B
-    results = [workflow.assess(w.db, scoped, hid, 1, 1), workflow.assign(w.db, scoped, hid, w.ids["asr"], ""),
+    results = [assess_legacy(w.db, scoped, hid, 1, 1), workflow.assign(w.db, scoped, hid, w.ids["asr"], ""),
                workflow.close(w.db, scoped, hid, "x"), workflow.reject(w.db, scoped, hid, "x")]
     assert all(r == ["ไม่พบรายการ"] for r in results)
     assert w.row(hid)["status"] == "assigned"
-    assert workflow.assess(w.db, w.u("asr"), 999999, 1, 1) == ["ไม่พบรายการ"]
+    assert assess_legacy(w.db, w.u("asr"), 999999, 1, 1) == ["ไม่พบรายการ"]
 
 
 def test_reporter_cannot_act_on_others_hazard_even_with_role_perms(w):
     hid = w.hazard("rep")
     other_reporter_with_assess = add_user(w.db, "assessor", "x")                          # assessor เห็นทั้งหมดอยู่แล้ว
-    assert workflow.assess(w.db, user_row(w.db, other_reporter_with_assess), hid, 1, 1) == []
+    assert assess_legacy(w.db, user_row(w.db, other_reporter_with_assess), hid, 1, 1) == []
 
 
 @pytest.mark.parametrize("action", ["assess", "assign", "close", "reject"])
@@ -290,7 +293,7 @@ def test_lost_race_second_transition_fails_without_event(w, monkeypatch, action)
         return row
 
     monkeypatch.setattr(workflow, "visible_hazard", racing)
-    call = {"assess": lambda: workflow.assess(w.db, w.u("asr"), hid, 2, 2),
+    call = {"assess": lambda: assess_legacy(w.db, w.u("asr"), hid, 2, 2),
             "assign": lambda: workflow.assign(w.db, w.u("asr"), hid, w.ids["asr2"], ""),
             "close": lambda: workflow.close(w.db, w.u("asr"), hid, "ปิดแล้ว"),
             "reject": lambda: workflow.reject(w.db, w.u("asr"), hid, "ไม่ใช่")}[action]
@@ -307,11 +310,11 @@ def test_two_assessors_first_assessment_exactly_one_wins(w, monkeypatch):
         row = real(db, user, hazard_id)
         if state["first"]:                                                                # ผู้ประเมินคนที่ 2 ตัดหน้าหลังคนแรกอ่านสถานะแล้ว
             state["first"] = False
-            assert workflow.assess(db, w.u("asr2"), hazard_id, 5, 5) == []
+            assert assess_legacy(db, w.u("asr2"), hazard_id, 5, 5) == []
         return row
 
     monkeypatch.setattr(workflow, "visible_hazard", racing)
-    assert workflow.assess(w.db, w.u("asr"), hid, 1, 1)                                   # คนแรกแพ้ (สถานะไม่ใช่ reported แล้ว)
+    assert assess_legacy(w.db, w.u("asr"), hid, 1, 1)                                   # คนแรกแพ้ (สถานะไม่ใช่ reported แล้ว)
     assert w.row(hid)["score"] == 25
     assert [e for e in w.events(hid) if e[0] == "assessed"] == [("assessed", "reported", "assessed", w.ids["asr2"])]
 
@@ -325,7 +328,7 @@ def test_each_success_writes_exactly_one_event_with_actor(w):
 
 def test_failed_actions_write_no_events(w):
     hid = w.hazard()
-    workflow.assess(w.db, w.u("asr"), hid, 9, 9); workflow.assign(w.db, w.u("asr"), hid, w.ids["asr"], "")
+    workflow.assess(w.db, w.u("asr"), hid, 9, 9, "", 9); workflow.assign(w.db, w.u("asr"), hid, w.ids["asr"], "")
     workflow.close(w.db, w.u("asr"), hid, "x"); workflow.reject(w.db, w.u("asr"), hid, "")
     assert len(w.events(hid)) == 1
 
@@ -333,7 +336,7 @@ def test_failed_actions_write_no_events(w):
 def test_criteria_edit_after_assessment_leaves_snapshot(w):
     hid = w.assessed(5, 5)
     f = criteria_form_values(w.db)
-    f["level_name_3"], f["level_color_3"] = "วิกฤต", "#000000"
+    f["level_name_5"], f["level_color_5"] = "วิกฤต", "#000000"
     assert apply_criteria(w.db, f) == []
     h = w.row(hid)
-    assert (h["level_name"], h["level_color"], h["score"]) == ("สูงมาก", "#ff4d4f", 25)
+    assert (h["level_name"], h["level_color"], h["score"]) == ("A1 ทำให้เสียชีวิต", "#ff0000", 25)

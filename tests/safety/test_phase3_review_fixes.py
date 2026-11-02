@@ -14,7 +14,7 @@ from safety.images import ImageError, process_image
 from safety.risk import apply_criteria, criteria_form_values, list_levels
 from safety.schema import ensure_schema
 from tests.conftest import SECRET, csrf
-from tests.safety.factories import add_chain, add_hazard, add_refs, add_user, user_row
+from tests.safety.factories import add_chain, add_hazard, add_refs, add_user, assess_legacy, user_row
 from tests.safety.helpers import login
 from tests.safety.test_workflow import W, TODAY  # noqa: F401  (ใช้ fixture w ผ่าน import ด้านล่าง)
 from tests.safety.test_workflow import w, fixed_today  # noqa: F401
@@ -77,12 +77,12 @@ def _race(monkeypatch, w, hid, do_other):
 
 def test_stale_reassess_loses_and_audit_stays_truthful(w, monkeypatch):
     hid = w.assessed(1, 1)
-    _race(monkeypatch, w, hid, lambda: workflow.assess(w.db, w.u("asr2"), hid, 5, 5))
-    assert workflow.assess(w.db, w.u("asr"), hid, 2, 2)                                   # ต้องแพ้
+    _race(monkeypatch, w, hid, lambda: assess_legacy(w.db, w.u("asr2"), hid, 5, 5))
+    assert assess_legacy(w.db, w.u("asr"), hid, 2, 2)                                   # ต้องแพ้
     h = w.row(hid)
     assert h["score"] == 25
     assessed = [json.loads(e["data"]) for e in w.db.execute("SELECT data FROM hazard_events WHERE kind='assessed' ORDER BY id")]
-    assert [a["new"]["score"] for a in assessed] == [1, 25] and assessed[1]["old"]["score"] == 1
+    assert [a["new"]["score"] for a in assessed] == [6, 25] and assessed[1]["old"]["score"] == 6
 
 
 def test_four_eyes_race_via_reassign_to_closer_fails(w, monkeypatch):
@@ -96,8 +96,8 @@ def test_four_eyes_race_via_reassign_to_closer_fails(w, monkeypatch):
 def test_version_increments_on_every_transition(w):
     hid = w.hazard()
     v0 = w.row(hid)["version"]
-    workflow.assess(w.db, w.u("asr"), hid, 2, 2)
-    workflow.assess(w.db, w.u("asr"), hid, 3, 3)
+    assess_legacy(w.db, w.u("asr"), hid, 2, 2)
+    assess_legacy(w.db, w.u("asr"), hid, 3, 3)
     assert w.row(hid)["version"] == v0 + 2
 
 

@@ -86,6 +86,24 @@ def risk_area_options(db, user) -> list:
             for r in rows]
 
 
+def org_options(db, user) -> dict:
+    """โรงงาน/แผนก/ไลน์ที่ใช้งานอยู่ภายในขอบเขตผู้ใช้ — ใช้เป็นตัวกรองในฟอร์ม (ไม่ต้องรอให้มีพื้นที่เสี่ยงก่อนจึงจะเห็น)"""
+    conds, args = ["f.active=1", "d.active=1", "l.active=1"], []
+    if user["factory_id"] is not None:
+        conds.append("f.id = ?"); args.append(user["factory_id"])
+    if user["department_id"] is not None:
+        conds.append("d.id = ?"); args.append(user["department_id"])
+    rows = db.execute("SELECT f.id AS fid, f.name_th AS fname, d.id AS did, d.name_th AS dname, l.id AS lid, l.name_th AS lname "
+                      "FROM lines l JOIN departments d ON d.id = l.department_id JOIN factories f ON f.id = d.factory_id "
+                      f"WHERE {' AND '.join(conds)} ORDER BY f.code, d.code, l.code", args).fetchall()
+    fac, dep, lin = {}, {}, []
+    for r in rows:
+        fac[r["fid"]] = {"id": r["fid"], "name": r["fname"]}
+        dep[r["did"]] = {"id": r["did"], "factory_id": r["fid"], "name": r["dname"]}
+        lin.append({"id": r["lid"], "department_id": r["did"], "name": r["lname"]})
+    return {"factories": list(fac.values()), "departments": list(dep.values()), "lines": lin}
+
+
 def add_event(db, hazard_id: int, actor_id: int | None, kind: str, from_status: str | None, to_status: str | None,
               note: str = "", data: dict | None = None) -> None:
     """เพิ่มบันทึกเหตุการณ์ (ไม่ commit — ผู้เรียกรวมกับการเปลี่ยนสถานะใน transaction เดียว)"""

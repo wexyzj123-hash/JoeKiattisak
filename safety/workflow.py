@@ -55,8 +55,8 @@ def _transition(db, hazard, sets: dict, kind: str, user, to_status: str, note: s
     return []
 
 
-EXTRA_COLS = ("occurred_on", "observer", "location_text", "machine_no", "hiyari_type_id", "measure_id", "temp_action",
-              "perm_action", "plan_due_date", "rpt_likelihood", "rpt_severity", "rpt_score")
+EXTRA_COLS = ("occurred_on", "observer", "location_text", "machine_no", "hiyari_type_id", "temp_action",
+              "perm_action", "plan_due_date", "rpt_likelihood", "rpt_severity", "rpt_measure", "rpt_score")
 SHORT_MAX = 200
 
 
@@ -85,22 +85,21 @@ def _report_extra(db, form: Mapping) -> tuple[dict, list[str]]:
         if len(text) > limit:
             errors.append(f"{label}ยาวเกิน {limit} ตัวอักษร")
         out[key] = text
-    for key, table, label in (("hiyari_type_id", "hiyari_types", "ประเภทของ Hiyari Hatto"),
-                              ("measure_id", "safety_measures", "ระบบมาตรการความปลอดภัย")):
+    for key, table, label in (("hiyari_type_id", "hiyari_types", "ประเภทของ Hiyari Hatto"),):
         raw = (form.get(key) or "").strip()
         out[key] = _int(raw) if raw else None
         if raw and (out[key] is None or not db.execute(f"SELECT 1 FROM {table} WHERE id=? AND active=1", (out[key],)).fetchone()):
             errors.append(f"{label}ที่เลือกไม่ถูกต้อง")
             out[key] = None
-    lik_raw, sev_raw = (form.get("rpt_likelihood") or "").strip(), (form.get("rpt_severity") or "").strip()
-    out["rpt_likelihood"] = out["rpt_severity"] = out["rpt_score"] = None
-    if lik_raw or sev_raw:
-        lik, sev = _int(lik_raw), _int(sev_raw)
-        if lik is None or sev is None:
-            errors.append("กรุณาเลือกทั้งระดับอันตรายและความถี่ (หรือเว้นว่างทั้งคู่)")
+    raws = [(form.get(k) or "").strip() for k in ("rpt_likelihood", "rpt_severity", "rpt_measure")]
+    out["rpt_likelihood"] = out["rpt_severity"] = out["rpt_measure"] = out["rpt_score"] = None
+    if any(raws):
+        lik, sev, mea = (_int(x) for x in raws)
+        if lik is None or sev is None or mea is None:
+            errors.append("กรุณาเลือกทั้งระดับอันตราย ความถี่ และระบบมาตรการความปลอดภัย (หรือเว้นว่างทั้งสามช่อง)")
         else:
             try:
-                out["rpt_likelihood"], out["rpt_severity"], out["rpt_score"] = lik, sev, calc_score(db, lik, sev)
+                out["rpt_likelihood"], out["rpt_severity"], out["rpt_measure"], out["rpt_score"] = lik, sev, mea, calc_score(db, lik, sev, mea)
             except ValueError as exc:
                 errors.append(str(exc))
     return out, errors
@@ -139,7 +138,7 @@ def report(db, user, form: Mapping, *, patrol_answer_id: int | None = None, requ
         try:
             cur = db.execute("INSERT INTO hazards(code,title,description,risk_area_id,hazard_type_id,source_id,reported_by,"
                              "status,custom,patrol_answer_id,occurred_on,observer,location_text,machine_no,hiyari_type_id,"
-                             "measure_id,temp_action,perm_action,plan_due_date,rpt_likelihood,rpt_severity,rpt_score) "
+                             "temp_action,perm_action,plan_due_date,rpt_likelihood,rpt_severity,rpt_measure,rpt_score) "
                              "VALUES(?,?,?,?,?,?,?,'reported',?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                              (next_code(db), title, desc, area, type_id, source_id, user["id"],
                               json.dumps(custom, ensure_ascii=False), patrol_answer_id,
@@ -168,22 +167,22 @@ def _open_for(db, user, perm: str, what: str, hazard_id, allowed: tuple[str, ...
     return hazard, []
 
 
-def assess(db, user, hazard_id: int, likelihood: int, severity: int, note: str = "") -> list[str]:
+def assess(db, user, hazard_id: int, likelihood: int, severity: int, note: str = "", measure: int | None = None) -> list[str]:
     hazard, errors = _open_for(db, user, "hazard.assess", "ประเมินความเสี่ยง", hazard_id, ("reported", "assessed"))
     if errors:
         return errors
     try:
-        score = calc_score(db, likelihood, severity)
+        score = calc_score(db, likelihood, severity, measure)
     except ValueError as exc:
         return [str(exc)]
     level = level_for_score(db, score)
     if level is None:
         return ["คะแนนนี้ไม่มีระดับความเสี่ยงรองรับ กรุณาแจ้งผู้ดูแลระบบตรวจเกณฑ์ความเสี่ยง"]
-    old = {"likelihood": hazard["likelihood"], "severity": hazard["severity"], "score": hazard["score"],
+    old = {"likelihood": hazard["likelihood"], "severity": hazard["severity"], "measure": hazard["measure"], "score": hazard["score"],
            "level": hazard["level_name"]}
-    new = {"likelihood": likelihood, "severity": severity, "score": score, "level": level["name_th"]}
+    new = {"likelihood": likelihood, "severity": severity, "measure": measure, "score": score, "level": level["name_th"]}
     return _transition(db, hazard, {
-        "likelihood": likelihood, "severity": severity, "score": score, "risk_level_id": level["id"],
+        "likelihood": likelihood, "severity": severity, "measure": measure, "score": score, "risk_level_id": level["id"],
         "level_name": level["name_th"], "level_color": level["color"],
         "level_requires_approval": level["requires_approval"]}, "assessed", user, "assessed",
         (note or "").strip()[:NOTE_MAX], {"old": old, "new": new}, "hazard_assessed")

@@ -115,11 +115,11 @@ def main(out: str) -> None:
     h3 = hz("สายไฟต่อพ่วงชำรุด", "สายไฟต่อพ่วงที่ใช้กับสว่านมือ ฉนวนปริแตกเห็นทองแดง", a1, "ELEC", "EMP")
     h4 = hz("การ์ดนิรภัยเครื่องตัดหลุดหาย", "ฝาครอบสายพานด้านข้างเครื่องตัดไม่อยู่ที่", a1, "MACH", "AUDIT")
     h5 = hz("ถังดับเพลิงหมดอายุตรวจสอบ", "ป้ายตรวจสอบเกินกำหนดตั้งแต่เดือนที่แล้ว บริเวณทางออกฉุกเฉิน", a1, "FIRE", "PATROL")
-    sc = lambda *a: workflow.assess(con, U(wipa), *a)
-    assert sc(h1, 4, 4, "พื้นลื่นในทางเดินหลัก มีผู้ผ่านทุกกะ") == []
-    assert sc(h2, 3, 4, "สารกัดกร่อน ต้องปิดภาชนะและติดป้าย") == []
-    assert sc(h3, 3, 3) == []
-    assert sc(h4, 5, 5, "เครื่องตัดทำงานอยู่ ผู้ปฏิบัติงานเสี่ยงถูกสายพานดึง") == []
+    sc = lambda h, lik, sev, mea, note="": workflow.assess(con, U(wipa), h, lik, sev, note, mea)
+    assert sc(h1, 2, 2, 2, "พื้นลื่นในทางเดินหลัก มีผู้ผ่านทุกกะ") == []
+    assert sc(h2, 2, 1, 2, "สารกัดกร่อน ต้องปิดภาชนะและติดป้าย") == []
+    assert sc(h3, 2, 3, 2) == []
+    assert sc(h4, 1, 1, 1, "เครื่องตัดทำงานอยู่ ผู้ปฏิบัติงานเสี่ยงถูกสายพานดึง") == []
     tomorrow = (timeutil.today() + timedelta(days=5)).isoformat()
     assert workflow.assign(con, U(wipa), h1, prasit, tomorrow, "ให้ทำความสะอาดและซ่อมซีลไฮดรอลิก") == []
     assert workflow.assign(con, U(wipa), h4, prasit, "", "") == []
@@ -127,12 +127,12 @@ def main(out: str) -> None:
     con.execute("UPDATE hazards SET due_date=date('now','-2 day') WHERE id=?", (h4,)); con.commit()
     # รายการที่ปิดแล้ว (ให้มีสถิติ)
     h6 = hz("บันไดขึ้นคลังชำรุด", "ขั้นบันไดที่ 3 หัก", a1, "FALL", "EMP", shots=0)
-    sc(h6, 2, 2); workflow.assign(con, U(wipa), h6, prasit, "", ""); assert workflow.close(con, U(nattaya), h6, "เปลี่ยนบันไดชุดใหม่ ตรวจรับเรียบร้อย") == []
+    sc(h6, 3, 3, 3); workflow.assign(con, U(wipa), h6, prasit, "", ""); assert workflow.close(con, U(nattaya), h6, "เปลี่ยนบันไดชุดใหม่ ตรวจรับเรียบร้อย") == []
 
     # อุบัติเหตุ + Near Miss
     inc1, errs = incidents.report(con, U(somchai), {"kind": "near_miss", "occurred_at": f"{(timeutil.today()-timedelta(days=1)).isoformat()}T09:30", "risk_area_id": str(a2),
         "title": "ชิ้นงานหล่นเกือบถูกเท้าพนักงาน", "description": "ชิ้นงานหล่นจากพาเลทขณะยก ห่างจากเท้า 20 ซม.", "immediate_action": "หยุดงานและจัดเรียงพาเลทใหม่",
-        "likelihood": "3", "severity": "4"})
+        "likelihood": "2", "severity": "2", "measure": "2"})
     assert not errs, errs
     sev = lambda c: con.execute("SELECT id FROM injury_severities WHERE code=?", (c,)).fetchone()[0]
     inc2, errs = incidents.report(con, U(somchai), {"kind": "accident", "occurred_at": f"{(timeutil.today()-timedelta(days=3)).isoformat()}T14:10", "risk_area_id": str(a1),

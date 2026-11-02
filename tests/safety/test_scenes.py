@@ -48,7 +48,7 @@ def test_closing_a_hazard_celebrates_once(safety_app):
     rep, asr = login(safety_app, "reporter"), login(safety_app, "assessor")
     r = rep.post("/hazards/new", data={"_csrf": csrf(rep), "title": "x", "risk_area_id": ch["a"], "hazard_type_id": t, "source_id": s})
     hid = int(r.headers["Location"].split("/")[-1])
-    asr.post(f"/hazards/{hid}/assess", data={"_csrf": csrf(asr), "likelihood": 1, "severity": 1})
+    asr.post(f"/hazards/{hid}/assess", data={"_csrf": csrf(asr), "likelihood": 3, "severity": 3, "measure": 3})
     asr.post(f"/hazards/{hid}/assign", data={"_csrf": csrf(asr), "owner_id": asr.uid, "due_date": ""})
     assert "mascot-celebrate" not in asr.get(f"/hazards/{hid}").get_data(as_text=True)
     asr.post(f"/hazards/{hid}/close", data={"_csrf": csrf(asr), "note": "แก้แล้ว"})

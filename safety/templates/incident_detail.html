@@ -29,7 +29,7 @@
   <p><strong>พื้นที่:</strong> {{ crumb }}</p>
   <p><strong>เกิดเหตุเมื่อ:</strong> {{ i['occurred_at'] }} · <strong>ผู้แจ้ง:</strong> {{ refs['reporter'] }} ({{ i['reported_at'] }})</p>
   {% if i['kind'] == 'accident' and refs['severity_name'] %}<p><strong>ความรุนแรงของการบาดเจ็บ:</strong> {{ refs['severity_name'] }}{% if i['lost_days'] is not none %} · หยุดงาน {{ i['lost_days'] }} วัน{% endif %}</p>{% endif %}
-  {% if i['kind'] == 'near_miss' and i['score'] %}<p><strong>การประเมินที่อาจเกิด:</strong> โอกาส {{ i['likelihood'] }} × ความรุนแรง {{ i['severity'] }} = {{ i['score'] }}</p>{% endif %}
+  {% if i['kind'] == 'near_miss' and i['score'] %}<p><strong>การประเมินที่อาจเกิด:</strong> คะแนน {{ i['score'] }}</p>{% endif %}
   <p style="white-space:pre-wrap">{{ i['description'] }}</p>
   {% if i['immediate_action'] %}<p><strong>การแก้ไขเบื้องต้น:</strong> {{ i['immediate_action'] }}</p>{% endif %}
   {% if refs['hazard_code'] %}<p><strong>อันตรายที่เกี่ยวข้อง:</strong> <a href="/hazards/{{ i['related_hazard_id'] }}">{{ refs['hazard_code'] }}</a></p>{% endif %}

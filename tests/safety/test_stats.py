@@ -40,7 +40,7 @@ class World:
     def hz(self, chain="a", status="reported", l=None, s=None, due=None, reporter=None, reported_at="2026-03-01 09:00:00", **kw):
         lv = None
         if l and s:
-            score = l * s
+            score = max(6, min(25, l * s))
             lv = next(x for x in self.levels.values() if x["min_score"] <= score <= x["max_score"])
             kw.update(likelihood=l, severity=s, score=score, risk_level_id=lv["id"], level_name=lv["name_th"],
                       level_color=lv["color"], level_requires_approval=lv["requires_approval"])
@@ -67,7 +67,7 @@ def test_open_excludes_closed_and_rejected_and_groups_by_level(w):
     w.hz(status="assessed", l=1, s=1); w.hz(status="assigned", l=1, s=2); w.hz(status="assigned", l=5, s=5)
     w.hz(status="closed", l=5, s=5); w.hz(status="rejected", l=3, s=3); w.hz()                          # ยังไม่ประเมิน 1
     got = stats.open_by_level(w.db, w.admin)
-    assert got == [("ต่ำ", "#2ecc71", 2), ("สูงมาก", "#ff4d4f", 1), ("ยังไม่ประเมิน", "#8fa3bd", 1)]
+    assert got == [("C บาดเจ็บไม่หยุดงาน", "#00b050", 2), ("A1 ทำให้เสียชีวิต", "#ff0000", 1), ("ยังไม่ประเมิน", "#8fa3bd", 1)]
 
 
 def test_overdue_boundary_today_not_overdue_yesterday_overdue_and_closed_never(w):
@@ -95,7 +95,7 @@ def test_scope_and_reporter_visibility_limit_all_stats(w):
     w.hz("a", status="assigned", l=5, s=5, due=D(-1)); w.hz("b", status="assigned", l=2, s=2, due=D(-1), reporter=w.rep2)
     scoped = user_row(w.db, add_user(w.db, "assessor", factory_id=w.b["f"]))
     assert stats.counts_by_status(w.db, scoped)["assigned"] == 1 and stats.overdue_count(w.db, scoped) == 1
-    assert stats.open_by_level(w.db, scoped) == [("ต่ำ", "#2ecc71", 1)] and stats.heatmap(w.db, scoped) == {(2, 2): 1}
+    assert stats.open_by_level(w.db, scoped) == [("C บาดเจ็บไม่หยุดงาน", "#00b050", 1)] and stats.heatmap(w.db, scoped) == {(2, 2): 1}
     assert stats.counts_by_status(w.db, w.admin)["assigned"] == 2
     rep2 = user_row(w.db, w.rep2)                                                                          # ผู้แจ้งเห็นเฉพาะของตัวเอง
     assert stats.counts_by_status(w.db, rep2)["assigned"] == 1 and stats.heatmap(w.db, rep2) == {(2, 2): 1}
