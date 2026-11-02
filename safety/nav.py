@@ -28,6 +28,8 @@ MENU = (
         ("ลงทะเบียนบันทึกอันตราย", "/hazards", "clipboard", "hazard.report"),
         ("แหล่งที่มา", "/master/hazard-sources", "source", "master.view"),
         ("ประเภทอันตราย", "/master/hazard-types", "tag", "master.view"),
+        ("ประเภท Hiyari Hatto", "/master/hiyari-types", "tag", "master.view"),
+        ("ระบบมาตรการความปลอดภัย", "/master/safety-measures", "tag", "master.view"),
     )),
     ("อุบัติเหตุ", (
         ("รายงานอุบัติเหตุ / Near Miss", "/incidents", "alert", "incident.report"),

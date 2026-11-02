@@ -12,7 +12,7 @@ from flask import Blueprint, abort, current_app, flash, g, redirect, render_temp
 from .. import capa, timeutil, workflow
 from ..customfields import fields_for_type
 from ..db import get_db
-from ..hazards import EVENT_TH, STATUS_TH, can_view_all, hazard_scope_sql, risk_area_options, user_in_scope, visible_hazard
+from ..hazards import EVENT_TH, STATUS_TH, can_view_all, hazard_scope_sql, next_code, risk_area_options, user_in_scope, visible_hazard
 from ..images import KINDS, MAX_PER_KIND, ImageError, process_image, save_attachment
 from ..master import REGISTRY, active_options
 from ..perms import permission_any, permission_required, user_permissions
@@ -154,7 +154,11 @@ def _form_context(values, errors):
     return render_template(
         "hazard_form.html", values=values, errors=errors, areas=risk_area_options(db, g.user),
         types=active_options(db, REGISTRY["hazard-types"]), sources=active_options(db, REGISTRY["hazard-sources"]),
-        custom_fields=db.execute("SELECT * FROM custom_fields WHERE active=1 ORDER BY sort, id").fetchall(), max_photos=MAX_PER_KIND)
+        custom_fields=db.execute("SELECT * FROM custom_fields WHERE active=1 ORDER BY sort, id").fetchall(), max_photos=MAX_PER_KIND,
+        hiyari=active_options(db, REGISTRY["hiyari-types"]), measures=active_options(db, REGISTRY["safety-measures"]),
+        factories=active_options(db, REGISTRY["factories"]), next_code=next_code(db), today=timeutil.today().isoformat(),
+        scales={k: db.execute("SELECT level, label_th FROM risk_scales WHERE kind=? ORDER BY level", (k,)).fetchall() for k in ("likelihood", "severity")},
+        score_levels=[dict(level_name=lv["name_th"], color=lv["color"], min=lv["min_score"], max=lv["max_score"]) for lv in list_levels(db)])
 
 
 @bp.route("/new", methods=["GET", "POST"])
@@ -199,8 +203,9 @@ def detail(hazard_id):
     from ..master import breadcrumb
     refs = db.execute("SELECT (SELECT name_th FROM hazard_types WHERE id=?) AS type_name, "
                       "(SELECT name_th FROM hazard_sources WHERE id=?) AS source_name, "
+                      "(SELECT name_th FROM hiyari_types WHERE id=?) AS hiyari_name, (SELECT name_th FROM safety_measures WHERE id=?) AS measure_name, "
                       "(SELECT name FROM safety_users WHERE id=?) AS reporter, (SELECT name FROM safety_users WHERE id=?) AS owner",
-                      (h["hazard_type_id"], h["source_id"], h["reported_by"], h["owner_id"])).fetchone()
+                      (h["hazard_type_id"], h["source_id"], h["hiyari_type_id"], h["measure_id"], h["reported_by"], h["owner_id"])).fetchone()
     status, is_open = h["status"], h["status"] in OPEN
     mine = g.user["id"] in (h["reported_by"], h["owner_id"])
     can_assess, can_assign, can_close = ("hazard.assess" in perms, "hazard.assign" in perms, "hazard.close" in perms)

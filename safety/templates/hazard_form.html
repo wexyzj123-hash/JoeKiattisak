@@ -3,36 +3,79 @@
 {% block body %}
 <h1>แจ้งอันตราย</h1>
 {% for e in errors %}<div class="flash">{{ e }}</div>{% endfor %}
-<form method="post" enctype="multipart/form-data" class="card" style="max-width:640px;margin:0">
+<style>
+.hz-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px 18px}
+.hz-grid>label,.hz-grid>.cf{margin:0}
+.hz-span2{grid-column:span 2}.hz-span3{grid-column:1/-1}
+.hz-grid input[readonly]{background:var(--panel);color:var(--muted)}
+.hz-risk{display:flex;gap:8px}.hz-risk output{flex:1;display:block;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--panel);min-height:2.2em;text-align:center;font-weight:600}
+.hz-sec{grid-column:1/-1;margin:6px 0 -4px;font-size:1rem;color:var(--muted);border-bottom:1px solid var(--line);padding-bottom:4px}
+.hz-thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}.hz-thumbs img{height:84px;border-radius:8px;border:1px solid var(--line)}
+@media(max-width:900px){.hz-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.hz-span3{grid-column:1/-1}}
+@media(max-width:560px){.hz-grid{grid-template-columns:1fr}.hz-span2,.hz-span3{grid-column:auto}}
+</style>
+<form method="post" enctype="multipart/form-data" class="card" style="max-width:1100px;margin:0">
   <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
-  <label>หัวข้ออันตราย <input name="title" value="{{ values.get('title', '') }}" required maxlength="200"></label>
-  <label>พื้นที่เสี่ยง <select name="risk_area_id" required><option value="">— เลือก —</option>
-    {% for a in areas %}<option value="{{ a['id'] }}" {{ 'selected' if values.get('risk_area_id', '') | string == a['id'] | string }}>{{ a['breadcrumb'] }}</option>{% endfor %}</select></label>
-  <label>ประเภทอันตราย <select name="hazard_type_id" id="hazard_type_id" required><option value="">— เลือก —</option>
-    {% for t in types %}<option value="{{ t['id'] }}" {{ 'selected' if values.get('hazard_type_id', '') | string == t['id'] | string }}>{{ t['name_th'] }}</option>{% endfor %}</select></label>
-  <label>แหล่งที่มา <select name="source_id" required><option value="">— เลือก —</option>
-    {% for s in sources %}<option value="{{ s['id'] }}" {{ 'selected' if values.get('source_id', '') | string == s['id'] | string }}>{{ s['name_th'] }}</option>{% endfor %}</select></label>
-  <label>รายละเอียด <textarea name="description" rows="4" maxlength="2000">{{ values.get('description', '') }}</textarea></label>
-  {% for cf in custom_fields %}
-  <div class="cf" data-type="{{ cf['hazard_type_id'] if cf['hazard_type_id'] is not none else '' }}">
-    {% set name = 'cf_' ~ cf['key'] %}
-    {% if cf['type'] == 'checkbox' %}
-    <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="{{ name }}" value="1" {{ 'checked' if values.get(name) }}> {{ cf['label_th'] }}{{ ' *' if cf['required'] }}</label>
-    {% elif cf['type'] == 'select' %}
-    <label>{{ cf['label_th'] }}{{ ' *' if cf['required'] }} <select name="{{ name }}"><option value="">— เลือก —</option>
-      {% for o in cf['options'].split('\n') %}<option value="{{ o }}" {{ 'selected' if values.get(name) == o }}>{{ o }}</option>{% endfor %}</select></label>
-    {% else %}
-    <label>{{ cf['label_th'] }}{{ ' *' if cf['required'] }} <input name="{{ name }}" value="{{ values.get(name, '') }}"
-      {% if cf['type'] == 'date' %}type="date"{% elif cf['type'] == 'number' %}inputmode="decimal"{% endif %}></label>
-    {% endif %}
+  <div class="hz-grid">
+    <label>เลขที่เอกสาร <input value="{{ next_code }}" readonly tabindex="-1" aria-readonly="true" title="ระบบออกเลขให้อัตโนมัติเมื่อบันทึก"></label>
+    <label>วันที่เกิดเหตุ <input type="date" name="occurred_on" value="{{ values.get('occurred_on', today) }}" max="{{ today }}"></label>
+    <label>ผู้พบเห็น <input name="observer" maxlength="200" value="{{ values.get('observer', g.user['name']) }}"></label>
+
+    <label>โรงงาน <select id="f_factory"><option value="">— เลือก —</option>{% for f in factories %}<option value="{{ f['id'] }}">{{ f['name_th'] }}</option>{% endfor %}</select></label>
+    <label>แผนก <select id="f_dept" disabled><option value="">— เลือก —</option></select></label>
+    <label>ไลน์/กลุ่มงาน <select id="f_line" disabled><option value="">— เลือก —</option></select></label>
+
+    <label>พื้นที่เสี่ยง * <select name="risk_area_id" id="f_area" required><option value="">— เลือก —</option>
+      {% for a in areas %}<option value="{{ a['id'] }}" {{ 'selected' if values.get('risk_area_id', '') | string == a['id'] | string }}>{{ a['breadcrumb'] }}</option>{% endfor %}</select></label>
+    <label>สถานที่ <input name="location_text" maxlength="200" value="{{ values.get('location_text', '') }}" placeholder="เช่น หน้าเครื่อง / ทางเดินหลัก"></label>
+    <label>หมายเลขเครื่องจักร <input name="machine_no" maxlength="200" value="{{ values.get('machine_no', '') }}"></label>
+
+    <label>แหล่งที่มา * <select name="source_id" required><option value="">— เลือก —</option>
+      {% for s in sources %}<option value="{{ s['id'] }}" {{ 'selected' if values.get('source_id', '') | string == s['id'] | string }}>{{ s['name_th'] }}</option>{% endfor %}</select></label>
+    <label>ประเภทอันตราย * <select name="hazard_type_id" id="hazard_type_id" required><option value="">— เลือก —</option>
+      {% for t in types %}<option value="{{ t['id'] }}" {{ 'selected' if values.get('hazard_type_id', '') | string == t['id'] | string }}>{{ t['name_th'] }}</option>{% endfor %}</select></label>
+    <label>ประเภทของ Hiyari Hatto <select name="hiyari_type_id"><option value="">— ไม่ระบุ —</option>
+      {% for t in hiyari %}<option value="{{ t['id'] }}" {{ 'selected' if values.get('hiyari_type_id', '') | string == t['id'] | string }}>{{ t['name_th'] }}</option>{% endfor %}</select></label>
+
+    <label>ระดับอันตราย <select name="rpt_severity" id="r_sev"><option value="">— ไม่ระบุ —</option>
+      {% for x in scales['severity'] %}<option value="{{ x['level'] }}" {{ 'selected' if values.get('rpt_severity', '') | string == x['level'] | string }}>{{ x['level'] }} — {{ x['label_th'] }}</option>{% endfor %}</select></label>
+    <label>ความถี่ <select name="rpt_likelihood" id="r_lik"><option value="">— ไม่ระบุ —</option>
+      {% for x in scales['likelihood'] %}<option value="{{ x['level'] }}" {{ 'selected' if values.get('rpt_likelihood', '') | string == x['level'] | string }}>{{ x['level'] }} — {{ x['label_th'] }}</option>{% endfor %}</select></label>
+    <label>ระบบมาตรการความปลอดภัย <select name="measure_id"><option value="">— ไม่ระบุ —</option>
+      {% for t in measures %}<option value="{{ t['id'] }}" {{ 'selected' if values.get('measure_id', '') | string == t['id'] | string }}>{{ t['name_th'] }}</option>{% endfor %}</select></label>
+
+    <div class="hz-span3"><span style="display:block;margin-bottom:4px">คะแนนความเสี่ยง (คำนวณอัตโนมัติ)</span>
+      <div class="hz-risk"><output id="r_score" aria-live="polite">—</output><output id="r_level">—</output></div></div>
+
+    <label class="hz-span3">หัวข้ออันตราย * <input name="title" value="{{ values.get('title', '') }}" required maxlength="200"></label>
+    <label class="hz-span3">รายละเอียด / ปัญหา <textarea name="description" rows="4" maxlength="2000">{{ values.get('description', '') }}</textarea></label>
+    <label class="hz-span3">การแก้ไขชั่วคราว <textarea name="temp_action" rows="2" maxlength="2000">{{ values.get('temp_action', '') }}</textarea></label>
+    <label class="hz-span2">การแก้ไขถาวร <textarea name="perm_action" rows="2" maxlength="2000">{{ values.get('perm_action', '') }}</textarea></label>
+    <label>แผนแก้ไขเสร็จสิ้น <input type="date" name="plan_due_date" value="{{ values.get('plan_due_date', '') }}"></label>
+    {% for cf in custom_fields %}
+    <div class="cf" data-type="{{ cf['hazard_type_id'] if cf['hazard_type_id'] is not none else '' }}">
+      {% set name = 'cf_' ~ cf['key'] %}
+      {% if cf['type'] == 'checkbox' %}
+      <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="{{ name }}" value="1" {{ 'checked' if values.get(name) }}> {{ cf['label_th'] }}{{ ' *' if cf['required'] }}</label>
+      {% elif cf['type'] == 'select' %}
+      <label>{{ cf['label_th'] }}{{ ' *' if cf['required'] }} <select name="{{ name }}"><option value="">— เลือก —</option>
+        {% for o in cf['options'].split('\n') %}<option value="{{ o }}" {{ 'selected' if values.get(name) == o }}>{{ o }}</option>{% endfor %}</select></label>
+      {% else %}
+      <label>{{ cf['label_th'] }}{{ ' *' if cf['required'] }} <input name="{{ name }}" value="{{ values.get(name, '') }}"
+        {% if cf['type'] == 'date' %}type="date"{% elif cf['type'] == 'number' %}inputmode="decimal"{% endif %}></label>
+      {% endif %}
+    </div>
+    {% endfor %}
+    <label class="hz-span3">รูปภาพประกอบ — ก่อนแก้ไข (ไม่เกิน {{ max_photos }} รูป, JPEG/PNG/WebP, รูปละไม่เกิน 10 MB)
+      <input type="file" name="photos" id="f_photos" accept="image/jpeg,image/png,image/webp" multiple>
+      <span class="hz-thumbs" id="f_thumbs"></span></label>
+    <p class="hz-span3" style="color:var(--muted);margin:0">สถานะเริ่มต้นคือ "แจ้งแล้ว" — การประเมิน มอบหมาย และปิดรายการ (พร้อมรูปหลังแก้ไข) ทำต่อในหน้ารายละเอียดโดยผู้ที่มีสิทธิ์</p>
   </div>
-  {% endfor %}
-  <label>รูปถ่ายก่อนแก้ไข (ไม่เกิน {{ max_photos }} รูป, JPEG/PNG/WebP, รูปละไม่เกิน 10 MB)
-    <input type="file" name="photos" accept="image/jpeg,image/png,image/webp" multiple></label>
-  <div style="display:flex;gap:8px"><button type="submit">บันทึกการแจ้ง</button><a class="btn" href="/hazards">ยกเลิก</a></div>
+  <div style="display:flex;gap:8px;margin-top:14px"><button type="submit">บันทึกการแจ้ง</button><a class="btn" href="/hazards">ยกเลิก</a></div>
 </form>
+<script type="application/json" id="hz-data">{{ {'areas': areas, 'levels': score_levels, 'sel': values.get('risk_area_id', '')|string, 'factories': factories|map(attribute='id')|list} | tojson }}</script>
 <script>
-// แสดงเฉพาะฟิลด์เพิ่มเติมของประเภทที่เลือก (เซิร์ฟเวอร์ตรวจซ้ำเสมอ)
+// ประเภทอันตราย → แสดงเฉพาะฟิลด์เพิ่มเติมของประเภทนั้น (เซิร์ฟเวอร์ตรวจซ้ำเสมอ)
 (function () {
   var sel = document.getElementById('hazard_type_id');
   function apply() {
@@ -40,10 +83,65 @@
       var t = el.getAttribute('data-type');
       var show = (t === '' || t === sel.value);
       el.style.display = show ? '' : 'none';
-      el.querySelectorAll('input, select, textarea').forEach(function (i) { i.disabled = !show; });   // ช่องที่ซ่อนไม่ถูกส่ง
+      el.querySelectorAll('input, select, textarea').forEach(function (i) { i.disabled = !show; });
     });
   }
   sel.addEventListener('change', apply); apply();
+})();
+// โรงงาน → แผนก → ไลน์ → พื้นที่เสี่ยง (ตัวกรองช่วยเลือก; ค่าที่ส่งคือพื้นที่เสี่ยง และเซิร์ฟเวอร์ตรวจขอบเขตซ้ำ)
+(function () {
+  var data = JSON.parse(document.getElementById('hz-data').textContent), areas = data.areas;
+  var F = document.getElementById('f_factory'), D = document.getElementById('f_dept'), L = document.getElementById('f_line'), A = document.getElementById('f_area');
+  var names = {};
+  areas.forEach(function (a) { names[a.department_id] = a.department_name; names[-a.line_id] = a.line_name; });
+  function fill(select, ids, label, nameOf) {
+    var cur = select.value; select.innerHTML = '<option value="">— เลือก —</option>';
+    ids.forEach(function (id) { var o = document.createElement('option'); o.value = id; o.textContent = nameOf(id); select.appendChild(o); });
+    select.value = ids.indexOf(Number(cur)) >= 0 || ids.indexOf(cur) >= 0 ? cur : ''; select.disabled = ids.length === 0;
+  }
+  function uniq(list, key) { var seen = {}, out = []; list.forEach(function (a) { if (!seen[a[key]]) { seen[a[key]] = 1; out.push(a[key]); } }); return out; }
+  function refresh(from) {
+    var inF = areas.filter(function (a) { return !F.value || String(a.factory_id) === F.value; });
+    if (from === 'F') fill(D, uniq(inF, 'department_id'), '', function (id) { return names[id] || ('#' + id); });
+    var inD = inF.filter(function (a) { return !D.value || String(a.department_id) === D.value; });
+    if (from === 'F' || from === 'D') fill(L, uniq(inD, 'line_id'), '', function (id) { return names[-id] || ('#' + id); });
+    var inL = inD.filter(function (a) { return !L.value || String(a.line_id) === L.value; });
+    var keep = A.value; A.innerHTML = '<option value="">— เลือก —</option>';
+    inL.forEach(function (a) { var o = document.createElement('option'); o.value = a.id; o.textContent = a.breadcrumb; if (String(a.id) === keep) o.selected = true; A.appendChild(o); });
+  }
+  F.addEventListener('change', function () { D.value = ''; L.value = ''; refresh('F'); });
+  D.addEventListener('change', function () { L.value = ''; refresh('D'); });
+  L.addEventListener('change', function () { refresh('L'); });
+  A.addEventListener('change', function () {
+    var a = areas.filter(function (x) { return String(x.id) === A.value; })[0]; if (!a) return;
+    F.value = String(a.factory_id); refresh('F'); D.value = String(a.department_id); refresh('D'); L.value = String(a.line_id); refresh('L'); A.value = String(a.id);
+  });
+  var pre = areas.filter(function (x) { return String(x.id) === data.sel; })[0];
+  if (pre) { F.value = String(pre.factory_id); refresh('F'); D.value = String(pre.department_id); refresh('D'); L.value = String(pre.line_id); refresh('L'); A.value = String(pre.id); }
+  else if (data.factories.length === 1) { F.value = String(data.factories[0]); refresh('F'); }
+})();
+// คะแนนความเสี่ยง = ความถี่ × ระดับอันตราย (ค่าที่เก็บจริงคำนวณที่เซิร์ฟเวอร์)
+(function () {
+  var data = JSON.parse(document.getElementById('hz-data').textContent);
+  var sev = document.getElementById('r_sev'), lik = document.getElementById('r_lik'), sc = document.getElementById('r_score'), lv = document.getElementById('r_level');
+  function calc() {
+    if (!sev.value || !lik.value) { sc.textContent = '—'; lv.textContent = '—'; lv.style.background = ''; lv.style.color = ''; return; }
+    var score = Number(sev.value) * Number(lik.value); sc.textContent = score;
+    var m = data.levels.filter(function (x) { return score >= x.min && score <= x.max; })[0];
+    lv.textContent = m ? m.level_name : 'ไม่มีระดับรองรับ'; lv.style.background = m ? m.color : ''; lv.style.color = m ? '#fff' : '';
+  }
+  sev.addEventListener('change', calc); lik.addEventListener('change', calc); calc();
+})();
+// ตัวอย่างรูปที่เลือก
+(function () {
+  var inp = document.getElementById('f_photos'), box = document.getElementById('f_thumbs');
+  inp.addEventListener('change', function () {
+    box.innerHTML = '';
+    Array.prototype.slice.call(inp.files, 0, 12).forEach(function (f) {
+      if (!/^image\//.test(f.type)) return;
+      var img = document.createElement('img'); img.alt = f.name; img.src = URL.createObjectURL(f); box.appendChild(img);
+    });
+  });
 })();
 </script>
 {% endblock %}

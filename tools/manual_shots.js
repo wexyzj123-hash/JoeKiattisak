@@ -25,7 +25,9 @@ process.stdin.on('end', async () => {
   add('hazard-form', { who: 'reporter', url: '/hazards/new', full: true });
   add('hazard-form-filled', { who: 'reporter', url: '/hazards/new', full: true, fill: {
     title: 'ถังสารเคมีวางโล่ง ไม่มีฝาปิด', description: 'ถังโซเดียมไฮดรอกไซด์ 20 ลิตร วางข้างทางเดินในคลัง ไม่มีฝาปิดและไม่มีป้ายบอกชนิดสารเคมี',
-    risk_area_id: { label: /คลังสารเคมี/ }, hazard_type_id: { label: /สารเคมี/ }, source_id: { label: /พนักงานแจ้ง/ } } });
+    risk_area_id: { label: /คลังสารเคมี/ }, hazard_type_id: { label: /สารเคมี/ }, source_id: { label: /พนักงานแจ้ง/ },
+    machine_no: 'CH-02', location_text: 'ข้างทางเดินในคลัง', hiyari_type_id: { label: /สภาพที่ไม่ปลอดภัย/ }, measure_id: { label: /PPE/ },
+    rpt_severity: { label: /^3/ }, rpt_likelihood: { label: /^2/ }, temp_action: 'ปิดฝาและกั้นเขตชั่วคราว' } });
   add('hazard-detail-mine', { who: 'reporter', url: `/hazards/${ids.h1}`, full: true });
   add('hazard-rejected', { who: 'reporter', url: `/hazards/${ids.h5}`, full: true });
   add('incident-form', { who: 'reporter', url: '/incidents/new', full: true });

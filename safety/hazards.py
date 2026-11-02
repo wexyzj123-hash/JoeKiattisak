@@ -77,11 +77,12 @@ def risk_area_options(db, user) -> list:
     if user["department_id"] is not None:
         conds.append("d.id = ?")
         args.append(user["department_id"])
-    rows = db.execute("SELECT ra.id, ra.code, ra.name_th FROM risk_areas ra JOIN lines l ON l.id = ra.line_id "
+    rows = db.execute("SELECT ra.id, ra.code, ra.name_th, f.id AS factory_id, d.id AS department_id, l.id AS line_id, d.name_th AS department_name, l.name_th AS line_name FROM risk_areas ra JOIN lines l ON l.id = ra.line_id "
                       "JOIN departments d ON d.id = l.department_id JOIN factories f ON f.id = d.factory_id "
                       f"WHERE {' AND '.join(conds)} ORDER BY f.code, d.code, l.code, ra.code", args).fetchall()
     td = REGISTRY["risk-areas"]
-    return [{"id": r["id"], "code": r["code"], "name_th": r["name_th"], "breadcrumb": breadcrumb(db, td, r["id"])}
+    return [{"id": r["id"], "code": r["code"], "name_th": r["name_th"], "factory_id": r["factory_id"], "department_id": r["department_id"],
+             "line_id": r["line_id"], "department_name": r["department_name"], "line_name": r["line_name"], "breadcrumb": breadcrumb(db, td, r["id"])}
             for r in rows]
 
 

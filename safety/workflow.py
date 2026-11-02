@@ -55,6 +55,57 @@ def _transition(db, hazard, sets: dict, kind: str, user, to_status: str, note: s
     return []
 
 
+EXTRA_COLS = ("occurred_on", "observer", "location_text", "machine_no", "hiyari_type_id", "measure_id", "temp_action",
+              "perm_action", "plan_due_date", "rpt_likelihood", "rpt_severity", "rpt_score")
+SHORT_MAX = 200
+
+
+def _date_or_none(value, label: str, errors: list[str]) -> str | None:
+    value = (value or "").strip()
+    if not value:
+        return None
+    try:
+        return date.fromisoformat(value).isoformat()
+    except ValueError:
+        errors.append(f"{label}ต้องเป็นวันที่ที่ถูกต้อง")
+        return None
+
+
+def _report_extra(db, form: Mapping) -> tuple[dict, list[str]]:
+    """ช่องเสริมของฟอร์มแจ้งอันตราย (ไม่บังคับทั้งหมด): วันที่เกิดเหตุ ผู้พบเห็น สถานที่ ฯลฯ และคะแนนเบื้องต้นจากผู้แจ้ง"""
+    errors: list[str] = []
+    out: dict = {"occurred_on": _date_or_none(form.get("occurred_on"), "วันที่เกิดเหตุ", errors),
+                 "plan_due_date": _date_or_none(form.get("plan_due_date"), "แผนแก้ไขเสร็จสิ้น", errors)}
+    if out["occurred_on"] and out["occurred_on"] > timeutil.today().isoformat():
+        errors.append("วันที่เกิดเหตุต้องไม่เป็นวันในอนาคต")
+    for key, label, limit in (("observer", "ผู้พบเห็น", SHORT_MAX), ("location_text", "สถานที่", SHORT_MAX),
+                              ("machine_no", "หมายเลขเครื่องจักร", SHORT_MAX), ("temp_action", "การแก้ไขชั่วคราว", DESC_MAX),
+                              ("perm_action", "การแก้ไขถาวร", DESC_MAX)):
+        text = (form.get(key) or "").strip()
+        if len(text) > limit:
+            errors.append(f"{label}ยาวเกิน {limit} ตัวอักษร")
+        out[key] = text
+    for key, table, label in (("hiyari_type_id", "hiyari_types", "ประเภทของ Hiyari Hatto"),
+                              ("measure_id", "safety_measures", "ระบบมาตรการความปลอดภัย")):
+        raw = (form.get(key) or "").strip()
+        out[key] = _int(raw) if raw else None
+        if raw and (out[key] is None or not db.execute(f"SELECT 1 FROM {table} WHERE id=? AND active=1", (out[key],)).fetchone()):
+            errors.append(f"{label}ที่เลือกไม่ถูกต้อง")
+            out[key] = None
+    lik_raw, sev_raw = (form.get("rpt_likelihood") or "").strip(), (form.get("rpt_severity") or "").strip()
+    out["rpt_likelihood"] = out["rpt_severity"] = out["rpt_score"] = None
+    if lik_raw or sev_raw:
+        lik, sev = _int(lik_raw), _int(sev_raw)
+        if lik is None or sev is None:
+            errors.append("กรุณาเลือกทั้งระดับอันตรายและความถี่ (หรือเว้นว่างทั้งคู่)")
+        else:
+            try:
+                out["rpt_likelihood"], out["rpt_severity"], out["rpt_score"] = lik, sev, calc_score(db, lik, sev)
+            except ValueError as exc:
+                errors.append(str(exc))
+    return out, errors
+
+
 def report(db, user, form: Mapping, *, patrol_answer_id: int | None = None, require_permission: bool = True) -> tuple[int | None, list[str]]:
     """แจ้งอันตราย; require_permission=False ใช้เฉพาะเส้นทางที่ตรวจสิทธิ์เองแล้ว (ข้อไม่ผ่านจากการตรวจของผู้ตรวจ)"""
     errors = _need(db, user, "hazard.report", "แจ้งอันตราย") if require_permission else []
@@ -80,14 +131,19 @@ def report(db, user, form: Mapping, *, patrol_answer_id: int | None = None, requ
     if type_id is not None:
         custom, cerrors = validate_custom(fields_for_type(db, type_id), form)
         errors += cerrors
+    extra, xerrors = _report_extra(db, form)
+    errors += xerrors
     if errors:
         return None, errors
     for attempt in (1, 2):
         try:
             cur = db.execute("INSERT INTO hazards(code,title,description,risk_area_id,hazard_type_id,source_id,reported_by,"
-                             "status,custom,patrol_answer_id) VALUES(?,?,?,?,?,?,?,'reported',?,?)",
+                             "status,custom,patrol_answer_id,occurred_on,observer,location_text,machine_no,hiyari_type_id,"
+                             "measure_id,temp_action,perm_action,plan_due_date,rpt_likelihood,rpt_severity,rpt_score) "
+                             "VALUES(?,?,?,?,?,?,?,'reported',?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                              (next_code(db), title, desc, area, type_id, source_id, user["id"],
-                              json.dumps(custom, ensure_ascii=False), patrol_answer_id))
+                              json.dumps(custom, ensure_ascii=False), patrol_answer_id,
+                              *(extra[k] for k in EXTRA_COLS)))
             break
         except sqlite3.IntegrityError:                  # รหัสชนกันตอนสร้างพร้อมกัน — คำนวณใหม่แล้วลองอีกครั้ง
             db.rollback()

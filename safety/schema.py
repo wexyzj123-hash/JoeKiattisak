@@ -38,7 +38,8 @@ def _master(table: str, parent: str = "", parent_table: str = "") -> str:
 MASTER_DDL = (_master("factories") + _master("departments", "factory_id", "factories")
               + _master("lines", "department_id", "departments") + _master("risk_areas", "line_id", "lines")
               + _master("hazard_types") + _master("hazard_sources") + _master("incident_causes")
-              + _master("user_levels") + _master("positions"))
+              + _master("user_levels") + _master("positions")
+              + _master("hiyari_types") + _master("safety_measures"))
 
 ROLES_DDL = """
 CREATE TABLE IF NOT EXISTS safety_roles (
@@ -94,6 +95,22 @@ BEGIN SELECT RAISE(ABORT, 'report_submissions is append-only'); END;
 DEFAULT_LEVELS_L = (("L0", "L0"), ("L1", "L1"), ("L2", "L2"))
 DEFAULT_POSITIONS = (("OPERATOR", "Operator"), ("LL", "LL"), ("STAFF", "Staff"), ("SR_STAFF", "Sr.Staff"), ("FM", "FM"), ("SV", "SV"), ("SSV", "SSV"),
                      ("MANAGER", "ผู้จัดการ (Manager)"), ("DM", "DM"), ("DGM", "DGM"), ("GM", "GM"))
+
+
+DEFAULT_HIYARI = (("NEAR_MISS", "เกือบเกิดอุบัติเหตุ (Near Miss)"), ("UNSAFE_ACT", "การกระทำที่ไม่ปลอดภัย"),
+                  ("UNSAFE_COND", "สภาพที่ไม่ปลอดภัย"), ("NONE", "ไม่เกี่ยวข้อง"))
+DEFAULT_MEASURES = (("PPE", "อุปกรณ์ป้องกันส่วนบุคคล (PPE)"), ("GUARD", "การ์ด/อุปกรณ์ป้องกันเครื่องจักร"),
+                    ("LOTO", "การล็อกเอาท์-แท็กเอาท์ (LOTO)"), ("SIGN", "ป้ายเตือน/เครื่องหมายความปลอดภัย"),
+                    ("TRAINING", "การอบรม/ขั้นตอนการทำงาน"), ("HOUSEKEEP", "ความสะอาด/การจัดเก็บ (5ส)"))
+
+
+def seed_hazard_form_lists(con) -> None:
+    """ตัวเลือกตั้งต้นของฟอร์มแจ้งอันตราย — ใส่ครั้งเดียว แอดมินแก้/เพิ่ม/ปิดใช้งานเองได้ที่ ข้อมูลหลัก"""
+    if con.execute("SELECT 1 FROM app_settings WHERE key='hazard_form_lists_seeded'").fetchone() is None:
+        con.executemany("INSERT OR IGNORE INTO hiyari_types(code, name_th) VALUES(?,?)", DEFAULT_HIYARI)
+        con.executemany("INSERT OR IGNORE INTO safety_measures(code, name_th) VALUES(?,?)", DEFAULT_MEASURES)
+        con.execute("INSERT INTO app_settings(key, value) VALUES('hazard_form_lists_seeded', '1')")
+    con.commit()
 
 
 def seed_org_people(con) -> None:
@@ -686,6 +703,12 @@ def ensure_schema(con) -> None:
     seed_roles(con)
     seed_org_people(con)
     seed_risk(con)
+    for col, ddl in (("occurred_on", "TEXT"), ("observer", "TEXT NOT NULL DEFAULT ''"), ("location_text", "TEXT NOT NULL DEFAULT ''"),
+                     ("machine_no", "TEXT NOT NULL DEFAULT ''"), ("hiyari_type_id", "INTEGER"), ("measure_id", "INTEGER"),
+                     ("temp_action", "TEXT NOT NULL DEFAULT ''"), ("perm_action", "TEXT NOT NULL DEFAULT ''"),
+                     ("plan_due_date", "TEXT"), ("rpt_likelihood", "INTEGER"), ("rpt_severity", "INTEGER"), ("rpt_score", "INTEGER")):
+        _add_column(con, "hazards", col, ddl)
+    seed_hazard_form_lists(con)
     _add_column(con, "hazards", "level_requires_approval", "INTEGER NOT NULL DEFAULT 0")
     _add_column(con, "hazards", "version", "INTEGER NOT NULL DEFAULT 0")
     _add_column(con, "job_runs", "started_at", "TEXT")
