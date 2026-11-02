@@ -94,8 +94,7 @@ def home():
         if _allowed(r):
             badge = fetch_badge(r, current_app.config["SERVICE_TOKEN"]) if g.user and r["key"] in BADGE_APPS else None   # ตัวเลขภายในเห็นเฉพาะผู้ล็อกอิน
             apps.append({"key": r["key"], "name_th": r["name_th"], "badge": badge, "link": r["link_mode"] == "link"})
-    pending = get_db().execute("SELECT COUNT(*) FROM users WHERE pending=1").fetchone()[0] if g.user and g.user["role"] == "admin" else 0
-    return render_template("launcher.html", apps=apps, any_badge=any(a["badge"] for a in apps), pending=pending)
+    return render_template("launcher.html", apps=apps, any_badge=any(a["badge"] for a in apps))
 
 
 @bp.route("/go/<key>")
@@ -103,7 +102,7 @@ def go(key: str):
     row = get_db().execute("SELECT * FROM app_registry WHERE key=? AND enabled=1", (key,)).fetchone()
     if row is None:
         abort(404)
-    if row["link_mode"] == "link":                      # ระบบเดิมที่ไม่มี SSO: เปิดที่อยู่ตรง ๆ (มีหน้าล็อกอินของตัวเอง) ห้ามส่ง token ไปให้
+    if row["link_mode"] in ("link", "direct"):                      # ระบบเดิมที่ไม่มี SSO: เปิดที่อยู่ตรง ๆ (มีหน้าล็อกอินของตัวเอง) ห้ามส่ง token ไปให้
         if not _allowed(row):
             return redirect(url_for("auth.login", next=request.full_path.rstrip("?"))) if g.user is None else abort(403)
         return redirect(public_url(row["url"], request.host))

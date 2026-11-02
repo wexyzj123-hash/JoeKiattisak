@@ -37,7 +37,8 @@ def _master(table: str, parent: str = "", parent_table: str = "") -> str:
 
 MASTER_DDL = (_master("factories") + _master("departments", "factory_id", "factories")
               + _master("lines", "department_id", "departments") + _master("risk_areas", "line_id", "lines")
-              + _master("hazard_types") + _master("hazard_sources") + _master("incident_causes"))
+              + _master("hazard_types") + _master("hazard_sources") + _master("incident_causes")
+              + _master("user_levels") + _master("positions"))
 
 ROLES_DDL = """
 CREATE TABLE IF NOT EXISTS safety_roles (
@@ -87,6 +88,21 @@ BEGIN SELECT RAISE(ABORT, 'report_submissions is append-only'); END;
 CREATE TRIGGER IF NOT EXISTS report_submissions_no_delete BEFORE DELETE ON report_submissions
 BEGIN SELECT RAISE(ABORT, 'report_submissions is append-only'); END;
 """
+
+
+# ระดับ (L0-L2) และตำแหน่งในองค์กร — ผู้ดูแลเพิ่ม/แก้ได้ที่เมนู «ข้อมูลองค์กร» (ใส่ครั้งเดียว ไม่เติมกลับสิ่งที่ลบหรือแก้)
+DEFAULT_LEVELS_L = (("L0", "L0"), ("L1", "L1"), ("L2", "L2"))
+DEFAULT_POSITIONS = (("OPERATOR", "Operator"), ("LL", "LL"), ("STAFF", "Staff"), ("SR_STAFF", "Sr.Staff"), ("FM", "FM"), ("SV", "SV"), ("SSV", "SSV"),
+                     ("MANAGER", "ผู้จัดการ (Manager)"), ("DM", "DM"), ("DGM", "DGM"), ("GM", "GM"))
+
+
+def seed_org_people(con) -> None:
+    if con.execute("SELECT 1 FROM app_settings WHERE key='people_lists_seeded'").fetchone() is None:
+        con.executemany("INSERT OR IGNORE INTO user_levels(code, name_th) VALUES(?,?)", DEFAULT_LEVELS_L)
+        con.executemany("INSERT OR IGNORE INTO positions(code, name_th) VALUES(?,?)", DEFAULT_POSITIONS)
+        con.execute("INSERT INTO app_settings(key, value) VALUES('people_lists_seeded', '1')")
+    con.execute("INSERT OR IGNORE INTO app_settings(key, value) VALUES('self_register', '1')")
+    con.commit()
 
 
 def seed_roles(con) -> None:
@@ -196,9 +212,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_custom_fields_key ON custom_fields(COALESCE
 NOTIFY_EVENTS = ("hazard_reported", "hazard_assessed", "hazard_assigned", "hazard_closed", "hazard_rejected", "due_soon", "overdue",
                  "incident_reported", "incident_assigned", "incident_closed",
                  "capa_assigned", "capa_done", "capa_verified", "capa_reopened", "capa_due_soon", "capa_overdue", "patrol_due", "patrol_overdue",
-                 "report_due_soon", "report_overdue")
-NOTIFY_CHANNELS = ("inapp", "telegram", "line", "teams", "email")
+                 "report_due_soon", "report_overdue", "user_requested")
+NOTIFY_CHANNELS = ("inapp", "telegram", "line", "teams", "email")           # ที่ตารางรองรับ (คงไว้ให้ข้อมูลเดิมอ่านได้)
 OUTBOX_CHANNELS = ("telegram", "line", "teams", "email")
+ACTIVE_CHANNELS = ("inapp", "teams", "email")                                  # ที่เปิดใช้จริงตอนนี้ — Telegram/LINE ปิดไว้ก่อน
+ACTIVE_OUTBOX = ("teams", "email")
 OUTBOX_STATUSES = ("pending", "sent", "failed", "dead", "cancelled")
 
 def _rules_table(name: str) -> str:
@@ -262,14 +280,14 @@ CREATE TABLE IF NOT EXISTS job_runs (
 """
 
 DEFAULT_SETTINGS = (("quiet_start", "22:00"), ("quiet_end", "06:00"), ("daily_time", "07:30"))
-_ALL = "inapp,telegram,line,email"
+_ALL = "inapp,email"
 DEFAULT_RULES = (
-    ("hazard_reported", "role:assessor", "inapp,telegram", 0, None),
-    ("hazard_assessed", "role:dept_head,role:admin", "inapp,telegram,line", 0, 17),
+    ("hazard_reported", "role:assessor", "inapp,email", 0, None),
+    ("hazard_assessed", "role:dept_head,role:admin", "inapp,email", 0, 17),
     ("hazard_assigned", "owner", _ALL, 0, None),
     ("hazard_closed", "reporter", "inapp", 0, None),
     ("hazard_rejected", "reporter", "inapp", 0, None),
-    ("due_soon", "owner", "inapp,telegram", 2, None),
+    ("due_soon", "owner", "inapp,email", 2, None),
     ("overdue", "owner", _ALL, 1, None),
     ("overdue", "owner,role:dept_head", _ALL, 3, None),
     ("overdue", "role:admin,role:dept_head", _ALL, 7, None),
@@ -295,7 +313,7 @@ def rebuild_notify_rules_if_needed(con) -> None:
 
 
 INCIDENT_RULES = (
-    ("incident_reported", "role:assessor", "inapp,telegram", 0, None),
+    ("incident_reported", "role:assessor", "inapp,email", 0, None),
     ("incident_assigned", "owner", _ALL, 0, None),
     ("incident_closed", "reporter", "inapp", 0, None),
 )
@@ -309,6 +327,20 @@ def seed_notify(con) -> None:
                         DEFAULT_RULES)
         con.execute("INSERT INTO app_settings(key, value) VALUES('notify_rules_seeded', '1')")
     con.execute("INSERT OR IGNORE INTO app_settings(key, value) VALUES('require_capa_verified', '0')")
+    if con.execute("SELECT 1 FROM app_settings WHERE key='channels_trimmed_v1'").fetchone() is None:   # Telegram/LINE ปิดไว้ก่อน: ตัดออกจากกฎเดิม (ถ้ามีอยู่ใช้อีเมลแทน) และยกเลิกคิวค้าง
+        for rid, ch in con.execute("SELECT id, channels FROM notify_rules").fetchall():
+            parts = [c for c in ch.split(",") if c]
+            keep = [c for c in parts if c not in ("telegram", "line")]
+            if len(keep) != len(parts):
+                if "email" not in keep:
+                    keep.append("email")
+                con.execute("UPDATE notify_rules SET channels=? WHERE id=?", (",".join(keep) or "inapp", rid))
+        con.execute("UPDATE notify_outbox SET status='cancelled' WHERE channel IN ('telegram','line') AND status IN ('pending','failed')")
+        con.execute("INSERT INTO app_settings(key, value) VALUES('channels_trimmed_v1', '1')")
+    if con.execute("SELECT 1 FROM app_settings WHERE key='user_request_rule_seeded'").fetchone() is None:
+        con.execute("INSERT INTO notify_rules(event, recipients, channels, offset_days, min_score) VALUES('user_requested','role:admin','inapp,email',0,NULL)")
+        con.execute("INSERT INTO app_settings(key, value) VALUES('user_request_rule_seeded', '1')")
+    con.execute("INSERT OR IGNORE INTO app_settings(key, value) VALUES('backlog_digest', '1')")
     if con.execute("SELECT 1 FROM app_settings WHERE key='patrol_rules_seeded'").fetchone() is None:
         con.executemany("INSERT INTO notify_rules(event, recipients, channels, offset_days, min_score) VALUES(?,?,?,?,?)", PATROL_RULES)
         con.execute("INSERT INTO app_settings(key, value) VALUES('patrol_rules_seeded', '1')")
@@ -586,9 +618,9 @@ BEGIN SELECT RAISE(ABORT, 'capa_events is append-only'); END;
 """
 
 REPORT_RULES = (
-    ("report_due_soon", "role:dept_head", "inapp,telegram", 3, None),
-    ("report_overdue", "role:dept_head", "inapp,telegram", 1, None),
-    ("report_overdue", "role:assessor", "inapp,telegram", 3, None),
+    ("report_due_soon", "role:dept_head", "inapp,email", 3, None),
+    ("report_overdue", "role:dept_head", "inapp,email", 1, None),
+    ("report_overdue", "role:assessor", "inapp,email", 3, None),
 )
 
 PATROL_RULES = (
@@ -596,13 +628,13 @@ PATROL_RULES = (
     ("capa_done", "role:assessor", "inapp", 0, None),
     ("capa_verified", "owner", "inapp", 0, None),
     ("capa_reopened", "owner", "inapp", 0, None),
-    ("capa_due_soon", "owner", "inapp,telegram", 2, None),
+    ("capa_due_soon", "owner", "inapp,email", 2, None),
     ("capa_overdue", "owner", _ALL, 1, None),
     ("capa_overdue", "owner,role:dept_head", _ALL, 3, None),
     ("capa_overdue", "role:admin,role:dept_head", _ALL, 7, None),
     ("patrol_due", "owner_else:assessor", "inapp", 0, None),
-    ("patrol_overdue", "owner_else:assessor,role:dept_head", "inapp,telegram", 1, None),
-    ("patrol_overdue", "owner_else:assessor,role:dept_head", "inapp,telegram", 5, None),
+    ("patrol_overdue", "owner_else:assessor,role:dept_head", "inapp,email", 1, None),
+    ("patrol_overdue", "owner_else:assessor,role:dept_head", "inapp,email", 5, None),
 )
 
 DEFAULT_LIKELIHOOD = ("แทบไม่เกิด", "เกิดได้ยาก", "เกิดได้บางครั้ง", "เกิดบ่อย", "เกิดบ่อยมาก")
@@ -633,6 +665,15 @@ def ensure_schema(con) -> None:
     _add_column(con, "safety_users", "requested_org", "TEXT NOT NULL DEFAULT ''")        # ที่ผู้ใช้ระบุเองตอนขอบัญชีที่ Hub (ข้อมูลอ้างอิงให้แอดมิน ไม่ใช่ขอบเขตสิทธิ์)
     _add_column(con, "safety_users", "factory_id", "INTEGER")
     _add_column(con, "safety_users", "department_id", "INTEGER")
+    _add_column(con, "safety_users", "username", "TEXT")                                      # บัญชีของ Safety เอง (แยกจาก Hub)
+    _add_column(con, "safety_users", "password_hash", "TEXT NOT NULL DEFAULT ''")
+    _add_column(con, "safety_users", "pending", "INTEGER NOT NULL DEFAULT 0")                 # 1 = ขอสร้างบัญชีเอง รอผู้ดูแลอนุมัติ
+    _add_column(con, "safety_users", "level_id", "INTEGER")
+    _add_column(con, "safety_users", "position_id", "INTEGER")
+    _add_column(con, "safety_users", "req_factory_id", "INTEGER")                             # โรงงาน/แผนกที่ผู้ขอบัญชีระบุ (เติมให้อัตโนมัติตอนอนุมัติ)
+    _add_column(con, "safety_users", "req_department_id", "INTEGER")
+    _add_column(con, "safety_users", "teams_webhook", "TEXT")
+    con.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_safety_username ON safety_users(lower(username)) WHERE username IS NOT NULL AND username <> ''")
     _add_column(con, "safety_users", "telegram_chat_id", "TEXT")
     _add_column(con, "safety_users", "line_user_id", "TEXT")
     _add_column(con, "safety_users", "email", "TEXT")
@@ -643,6 +684,7 @@ def ensure_schema(con) -> None:
     con.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_hazards_patrol_answer ON hazards(patrol_answer_id) WHERE patrol_answer_id IS NOT NULL")
     rebuild_notify_rules_if_needed(con)
     seed_roles(con)
+    seed_org_people(con)
     seed_risk(con)
     _add_column(con, "hazards", "level_requires_approval", "INTEGER NOT NULL DEFAULT 0")
     _add_column(con, "hazards", "version", "INTEGER NOT NULL DEFAULT 0")

@@ -56,7 +56,7 @@ def test_events_and_default_rules_seeded_once(db):
     db.execute("DELETE FROM notify_rules WHERE event LIKE 'report_%'"); db.commit()
     ensure_schema(db)
     assert db.execute("SELECT COUNT(*) FROM notify_rules WHERE event LIKE 'report_%'").fetchone()[0] == 0          # แอดมินลบแล้วไม่ถูกใส่กลับ
-    assert db.execute("SELECT COUNT(*) FROM notify_rules").fetchone()[0] == 23
+    assert db.execute("SELECT COUNT(*) FROM notify_rules").fetchone()[0] == 24
 
 
 def test_upgrade_from_older_rule_table_adds_report_events_keeping_edits(tmp_path):

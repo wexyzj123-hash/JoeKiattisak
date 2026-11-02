@@ -228,3 +228,5 @@
   .ss *, .ss { animation: none !important; transition: none !important; }
   .ss-ring { opacity: 0 !important; } .ss-spark { opacity: .6 !important; }
 }
+.hub-admin-link { margin: 18px 0 0; text-align: center; font-size: .8rem; opacity: .6; }
+.hub-admin-link a { color: inherit; }

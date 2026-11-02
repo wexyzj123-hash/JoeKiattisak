@@ -168,8 +168,8 @@ def test_messages_never_contain_people_names(w):
     iid = w.inc(title="รถตักชนเสา", severity=None)
     w.db.execute("INSERT INTO incident_people(incident_id, role, name, employee_no, note) VALUES(?,?,?,?,?)",
                  (iid, "injured", "สมชาย ใจดี", "E1234", "แขนหัก"))
-    w.db.execute("UPDATE notify_rules SET channels='inapp,telegram' WHERE event='incident_reported'")
-    w.db.execute("UPDATE safety_users SET telegram_chat_id='12345', notify_channels='inapp,telegram' WHERE id=?", (w.asr_a,))
+    w.db.execute("UPDATE notify_rules SET channels='inapp,email' WHERE event='incident_reported'")
+    w.db.execute("UPDATE safety_users SET email='a@example.com', notify_channels='inapp,email' WHERE id=?", (w.asr_a,))
     w.db.commit()
     emit_incident(w.db, "incident_reported", iid, w.rep)
     for table in ("notifications", "notify_outbox"):
@@ -182,8 +182,8 @@ def test_messages_never_contain_people_names(w):
 
 
 def test_lost_time_accident_is_urgent_in_outbox_and_minor_one_is_not(w):
-    w.db.execute("UPDATE notify_rules SET channels='inapp,telegram' WHERE event='incident_reported'")
-    w.db.execute("UPDATE safety_users SET telegram_chat_id='12345', notify_channels='inapp,telegram' WHERE id=?", (w.asr_a,))
+    w.db.execute("UPDATE notify_rules SET channels='inapp,email' WHERE event='incident_reported'")
+    w.db.execute("UPDATE safety_users SET email='a@example.com', notify_channels='inapp,email' WHERE id=?", (w.asr_a,))
     w.db.commit()
     lt = w.inc(injury_severity_id=severity_id(w.db, "lost_time"), code="IN-LT")
     fa = w.inc(injury_severity_id=severity_id(w.db, "first_aid"), code="IN-FA")

@@ -16,6 +16,7 @@ class Item:
 class Group:
     title: str
     items: list[Item]
+    open: bool = False                # กลุ่มที่มีหน้าปัจจุบันอยู่ (และกลุ่มหน้าหลัก) เปิดไว้ตั้งต้น — กลุ่มอื่นพับเป็นดรอปดาวน์
 
 
 # (กลุ่ม, [(ชื่อเมนู, ลิงก์, ไอคอน, สิทธิ์ที่ต้องมี)])
@@ -44,6 +45,8 @@ MENU = (
         ("แผนก", "/master/departments", "layers", "master.view"),
         ("ไลน์/กลุ่มงาน", "/master/lines", "sliders", "master.view"),
         ("สาเหตุอุบัติเหตุ", "/master/incident-causes", "tag", "master.view"),
+        ("ตำแหน่ง", "/master/positions", "users", "master.view"),
+        ("ระดับ (L0-L2)", "/master/user-levels", "layers", "master.view"),
     )),
     ("ผู้ดูแลระบบ", (
         ("ประเภทผู้ใช้งาน", "/admin/roles", "shield", "roles.manage"),
@@ -65,9 +68,13 @@ def nav_items(user_permissions: set[str], current_path: str) -> list[Group]:
               for title, items in MENU]
     groups = [g for g in groups if g.items]
     if groups:                                                                   # หน้าหลักปักไว้บนสุดสำหรับทุกคนที่เห็นเมนูใด ๆ
-        groups.insert(0, Group("เมนูหลัก", [Item("หน้าหลัก", "/", "home")]))
+        groups.insert(0, Group("เมนูหลัก", [Item("หน้าหลัก", "/", "home")], open=True))
     matches = [i for g in groups for i in g.items
                if current_path == i.href or (i.href != "/" and current_path.startswith(i.href + "/"))]
     if matches:
-        max(matches, key=lambda i: len(i.href)).active = True        # ตรงที่สุดเพียงรายการเดียว
+        best = max(matches, key=lambda i: len(i.href))
+        best.active = True                                           # ตรงที่สุดเพียงรายการเดียว
+        for grp in groups:
+            if best in grp.items:
+                grp.open = True
     return groups

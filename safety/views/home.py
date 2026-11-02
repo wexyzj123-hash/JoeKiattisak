@@ -29,7 +29,7 @@ def theme_css():
     return send_file(THEME_CSS, mimetype="text/css", max_age=3600)
 
 
-SAFETY_ASSETS = {"premium.css": "text/css", "premium.js": "text/javascript"}
+SAFETY_ASSETS = {"premium.css": "text/css", "premium.js": "text/javascript", "auth.css": "text/css", "auth.js": "text/javascript", "register.js": "text/javascript"}
 
 
 @bp.route("/static/safety/<name>")
@@ -90,10 +90,10 @@ def signout():
         resp = make_response("", 204)
         resp.headers["Cache-Control"] = "no-store"
         return resp
-    return redirect(hub_public("/login"))
+    return redirect("/login")
 
 
 @bp.route("/logout", methods=["POST"])
 def logout():
     session.clear()
-    return redirect(hub_public("/logout"))
+    return redirect(hub_public())                          # ออกจาก Safety → กลับหน้า Hub (หน้ารวมลิงก์ระบบ เปิดดูได้โดยไม่ต้องล็อกอิน)

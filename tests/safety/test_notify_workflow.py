@@ -89,7 +89,7 @@ def test_reassign_notifies_new_owner_once_and_same_owner_again_is_deduped(w):
 
 def test_emit_failure_does_not_block_transition(w, monkeypatch):
     monkeypatch.setattr(notify, "_queue_external", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
-    w.db.execute("UPDATE safety_users SET telegram_chat_id='1', notify_channels='inapp,telegram' WHERE role='assessor'"); w.db.commit()
+    w.db.execute("UPDATE safety_users SET email='a@example.com', notify_channels='inapp,email' WHERE role='assessor'"); w.db.commit()
     hid, errors = workflow.report(w.db, w.u("rep"), w.form())
     assert errors == [] and w.row(hid)["status"] == "reported" and notes(w) == []
     assert workflow.assess(w.db, w.u("asr"), hid, 5, 5) == [] and w.row(hid)["status"] == "assessed"
@@ -111,7 +111,7 @@ def test_report_by_assessor_does_not_notify_self(w):
 
 
 def test_external_outbox_rows_written_with_transition(w):
-    w.db.execute("UPDATE safety_users SET telegram_chat_id='777', notify_channels='inapp,telegram' WHERE id=?", (w.ids["asr2"],)); w.db.commit()
+    w.db.execute("UPDATE safety_users SET email='asr2@example.com', notify_channels='inapp,email' WHERE id=?", (w.ids["asr2"],)); w.db.commit()
     hid = w.hazard("rep")
     rows = [tuple(r) for r in w.db.execute("SELECT channel, target, status FROM notify_outbox")]
-    assert rows == [("telegram", "777", "pending")]
+    assert rows == [("email", "asr2@example.com", "pending")]

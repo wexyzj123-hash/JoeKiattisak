@@ -116,7 +116,15 @@ table th, table td { text-align: left; padding: 8px 10px; border-bottom: 1px sol
 .nav-toggle { position: absolute; opacity: 0; pointer-events: none; }
 .nav-burger { display: none; cursor: pointer; border: 1px solid rgba(255,255,255,.5); border-radius: 10px; padding: 6px 12px; color: var(--shell-text); font-weight: 700; align-items: center; gap: 6px; }
 .nav-body { display: flex; flex-direction: column; flex: 1; }
-.nav-group { padding: 14px 20px 6px; color: var(--shell-text); opacity: .82; font-size: .78rem; letter-spacing: .05em; }
+.nav-sec { display: block; }
+.nav-group { padding: 12px 20px 6px; color: var(--shell-text); opacity: .9; font-size: .78rem; letter-spacing: .05em; display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; list-style: none; user-select: none; }
+.nav-group::-webkit-details-marker { display: none; }
+.nav-group:hover { opacity: 1; }
+.nav-group .icon { transition: transform .2s; flex: none; }
+.nav-sec:not([open]) > .nav-group .icon { transform: rotate(-90deg); }
+.nav-group:focus-visible { outline: 3px solid #fff; outline-offset: -3px; border-radius: 8px; }
+.nav-collapse { display: none; }
+@media (min-width: 801px) { .nav-collapse { display: inline-grid; } .shell.nav-hidden { grid-template-columns: minmax(0, 1fr); } .shell.nav-hidden .sidebar { display: none; } }
 .nav-item { display: flex; align-items: center; gap: 10px; padding: 9px 14px; margin: 2px 12px; color: var(--shell-text); text-decoration: none; border-radius: 12px; }
 .nav-item:hover { background: rgba(255,255,255,.14); }
 .nav-item.active { background: #ffffff; color: #0a3a8f; font-weight: 700; }

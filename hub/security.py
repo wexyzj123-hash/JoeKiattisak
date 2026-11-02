@@ -7,19 +7,10 @@ from urllib.parse import urlsplit
 from functools import wraps
 
 from flask import abort, g, redirect, request, session, url_for
-from werkzeug.security import check_password_hash, generate_password_hash
+from shared.auth import MIN_PASSWORD, check_password, hash_password, safe_next  # noqa: F401  (ใช้ร่วมกับ Safety; คงชื่อเดิมไว้ให้ import เดิมทำงานได้)
 
 CSRF_KEY = "_csrf"
-MIN_PASSWORD = 8
 ROLE_TH = {"admin": "ผู้ดูแลระบบ", "supervisor": "หัวหน้างาน", "technician": "ช่างผู้ตรวจ", "viewer": "ผู้ดูข้อมูล"}
-
-
-def hash_password(password: str) -> str:
-    return generate_password_hash(password or "", method="pbkdf2:sha256:600000", salt_length=16)
-
-
-def check_password(password_hash: str, password: str) -> bool:
-    return check_password_hash(password_hash, password or "")
 
 
 def csrf_token() -> str:
@@ -39,18 +30,6 @@ def install_csrf(app) -> None:
             want = session.get(CSRF_KEY) or ""
             if not want or not hmac.compare_digest(sent, want):
                 abort(400)
-
-
-def safe_next(target: str | None) -> str:
-    """รับเฉพาะ path ภายในเว็บ — กัน open redirect"""
-    if not target or not target.startswith("/") or target.startswith("//") or "\\" in target:
-        return "/"
-    if any(ord(ch) <= 0x20 or ord(ch) == 0x7F for ch in target):     # tab/newline/space/NUL — เบราว์เซอร์ตัดทิ้งแล้วกลายเป็น //host
-        return "/"
-    parts = urlsplit(target)
-    if parts.scheme or parts.netloc:
-        return "/"
-    return target
 
 
 def load_user() -> None:

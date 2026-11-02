@@ -33,7 +33,7 @@ def test_viewer_lacks_master_edit_and_unknown_role_has_none(safety_app):
 
 
 def test_permission_required_403_and_anonymous_redirect(safety_app):
-    assert safety_app.test_client().get("/admin/roles").headers["Location"] == "http://hub.test"
+    assert safety_app.test_client().get("/admin/roles").headers["Location"] == "/login?next=/admin/roles"
     assert login(safety_app, "viewer").get("/admin/roles").status_code == 403
 
 

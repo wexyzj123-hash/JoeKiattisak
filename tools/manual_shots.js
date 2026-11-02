@@ -13,9 +13,10 @@ process.stdin.on('end', async () => {
 
   // ---- Hub ----
   add('hub-login', { app: 'hub', who: null, url: '/login' });
+  add('login', { who: null, url: '/login' });
+  add('register', { who: null, url: '/register', full: true, fill: { username: 'somying.k', name: 'สมหญิง ใจดี', factory_id: { label: /บางนา/ }, department_id: { label: /ผลิต/ }, line_id: { label: /ประกอบ/ }, position_id: { label: /LL/ }, level_id: { label: /L0/ }, email: 'somying.k@example.com' } });
   add('hub-launcher', { app: 'hub', who: 'hub', url: '/' });
   add('hub-launcher-public', { app: 'hub', who: null, url: '/' });
-  add('hub-register', { app: 'hub', who: null, url: '/register', full: true, fill: { username: 'somying.k', name_th: 'สมหญิง ใจดี', factory_id: { label: /บางนา/ }, department_id: { label: /ผลิต/ }, line_id: { label: /ประกอบ/ } } });
   add('hub-users', { app: 'hub', who: 'hub', url: '/admin/users', full: true });
   add('hub-apps', { app: 'hub', who: 'hub', url: '/admin/apps', full: true });
   // ---- ผู้แจ้ง ----
@@ -55,6 +56,7 @@ process.stdin.on('end', async () => {
   add('drawer', { who: 'admin', url: '/', click: 'tr[data-drawer-row] td', waitMs: 900 });
   add('admin-roles', { who: 'admin', url: '/admin/roles', full: true });
   add('admin-users', { who: 'admin', url: '/admin/users', full: true });
+  add('master-positions', { who: 'admin', url: '/master/positions' });
   add('master-risk-areas', { who: 'admin', url: '/master/risk-areas', full: true });
   add('master-risk-area-new', { who: 'admin', url: '/master/risk-areas/new', full: true });
   add('master-hazard-types', { who: 'admin', url: '/master/hazard-types' });

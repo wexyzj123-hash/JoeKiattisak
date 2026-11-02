@@ -12,7 +12,7 @@ import sqlite3
 import threading
 from datetime import date, datetime, timedelta
 
-from . import notify, patrol, report_due, timeutil
+from . import digest, notify, patrol, report_due, timeutil
 from .db import connect
 
 log = logging.getLogger("safety.scheduler")
@@ -201,6 +201,13 @@ def run_daily(db, today: date | None = None, force: bool = False, backup_dir: st
     patrol_notifications, patrol_errors = _patrol_reminders(db, today)
     report_notifications, report_errors = _report_reminders(db, today)
     errors += capa_errors + patrol_errors + report_errors
+    try:
+        digest_queued = digest.queue_all(db, today)         # สรุปงานค้างรายวันทางอีเมล/Teams
+        db.commit()
+    except Exception:                                      # noqa: BLE001 — สรุปงานค้างต้องไม่ทำให้การเตือนปกติเสีย
+        log.exception("backlog digest failed")
+        db.rollback()
+        digest_queued, errors = 0, errors + 1
     outbox = db.execute("SELECT COUNT(*) FROM notify_outbox").fetchone()[0] - outbox_before
     path = None
     try:
@@ -212,7 +219,7 @@ def run_daily(db, today: date | None = None, force: bool = False, backup_dir: st
     db.execute("UPDATE job_runs SET finished_at=datetime('now','localtime') WHERE job='daily' AND run_date=?", (today.isoformat(),))
     db.commit()
     return {"skipped": False, "notifications": notifications, "outbox": outbox, "errors": errors, "backup": path,
-            "capa_notifications": capa_notifications, "patrol_notifications": patrol_notifications, "report_notifications": report_notifications}
+            "capa_notifications": capa_notifications, "patrol_notifications": patrol_notifications, "report_notifications": report_notifications, "digest": digest_queued}
 
 
 def start_scheduler(app, interval: float = 60.0) -> threading.Thread:

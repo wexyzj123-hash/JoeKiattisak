@@ -2,29 +2,90 @@
 {% block title %}ผู้ใช้งาน · AIAT Safety{% endblock %}
 {% block body %}
 <h1>ผู้ใช้งาน</h1>
-<p style="color:var(--muted)">ผู้ใช้จะปรากฏที่นี่หลังเข้าสู่ระบบผ่าน AIAT Hub ครั้งแรก</p>
+<p style="color:var(--muted)">บัญชีของ Safety แยกจากระบบอื่น — สร้างบัญชีเองได้ที่นี่ หรือให้ผู้ใช้ขอสร้างบัญชีที่หน้าเข้าสู่ระบบแล้วอนุมัติ</p>
+
+{% if pending %}
+<section class="card" id="pending" style="max-width:none;margin:0 0 20px;border-color:#d89a1a">
+  <h2>รออนุมัติ ({{ pending | length }})</h2>
+  <p style="color:var(--muted)">ผู้ขอบัญชียังเข้าระบบไม่ได้จนกว่าคุณจะอนุมัติ ตรวจว่าเป็นพนักงานจริง เลือกบทบาทและขอบเขตให้เหมาะสม (ช่องขอบเขตเติมตามที่ผู้ขอระบุไว้แล้ว แก้ได้)</p>
+  <div style="overflow-x:auto"><table class="table-stack" style="width:100%">
+  <tr><th>ผู้ขอ</th><th>สังกัดที่ระบุ</th><th>ตำแหน่ง / ระดับ</th><th>อนุมัติเป็น</th></tr>
+  {% for u in pending %}
+  <tr>
+    <td data-label="ผู้ขอ"><strong>{{ u['name'] }}</strong><br><small style="color:var(--muted)">{{ u['username'] }}{% if u['email'] %} · {{ u['email'] }}{% endif %}</small></td>
+    <td data-label="สังกัดที่ระบุ">{{ u['requested_org'] or '-' }}</td>
+    <td data-label="ตำแหน่ง / ระดับ">{{ positions | selectattr('id', 'equalto', u['position_id']) | map(attribute='name_th') | first | default('-') }} · {{ levels | selectattr('id', 'equalto', u['level_id']) | map(attribute='name_th') | first | default('-') }}</td>
+    <td data-label="อนุมัติเป็น">
+      <form method="post" style="display:grid;gap:6px;min-width:260px"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ u['id'] }}"><input type="hidden" name="action" value="approve">
+        <select name="role" aria-label="บทบาท">{% for r in roles %}<option value="{{ r['key'] }}" {{ 'selected' if r['key'] == 'reporter' }}>{{ r['name_th'] }}</option>{% endfor %}</select>
+        <select name="factory_id" aria-label="โรงงาน"><option value="">ทุกโรงงาน</option>{% for f in factories if f['active'] %}<option value="{{ f['id'] }}" {{ 'selected' if f['id'] == u['req_factory_id'] }}>{{ f['name_th'] }}</option>{% endfor %}</select>
+        <select name="department_id" aria-label="แผนก"><option value="">ทุกแผนก</option>{% for d in departments if d['active'] %}<option value="{{ d['id'] }}" {{ 'selected' if d['id'] == u['req_department_id'] }}>{{ d['factory'] }} › {{ d['name_th'] }}</option>{% endfor %}</select>
+        <input type="hidden" name="position_id" value="{{ u['position_id'] or '' }}"><input type="hidden" name="level_id" value="{{ u['level_id'] or '' }}">
+        <button type="submit">อนุมัติ</button></form>
+      <form method="post" style="margin-top:6px"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ u['id'] }}"><input type="hidden" name="action" value="reject"><button type="submit">ปฏิเสธ (ลบคำขอ)</button></form>
+    </td>
+  </tr>
+  {% endfor %}
+  </table></div>
+</section>
+{% endif %}
+
 <div class="card" style="max-width:none;margin:0;overflow-x:auto">
 <table class="table-stack" style="width:100%">
-  <tr><th>ชื่อ</th><th>บทบาท</th><th>ขอบเขตหน่วยงาน</th><th>สถานะ</th><th>เข้าครั้งแรก</th><th>ดำเนินการ</th></tr>
+  <tr><th>ชื่อ</th><th>บทบาท</th><th>ตำแหน่ง / ระดับ</th><th>ขอบเขตหน่วยงาน</th><th>สถานะ</th><th>สร้างเมื่อ</th><th>ดำเนินการ</th></tr>
   {% for u in users %}
   <tr>
-    <td>{{ u['name'] }}{% if u['requested_org'] %}<br><small style="color:var(--muted)">ระบุเองว่า: {{ u['requested_org'] }}</small>{% endif %}</td><td>{{ u['role_name'] or u['role'] }}</td>
-    <td>{{ u['factory_name'] or 'ทุกโรงงาน' }}{% if u['department_name'] %} › {{ u['department_name'] }}{% endif %}</td>
-    <td>{{ 'ใช้งาน' if u['active'] else 'ปิดใช้งาน' }}</td><td>{{ u['created_at'] }}</td>
-    <td style="display:flex;gap:6px;flex-wrap:wrap">
+    <td data-label="ชื่อ"><strong>{{ u['name'] }}</strong>{% if u['username'] %}<br><small style="color:var(--muted)">{{ u['username'] }}</small>{% else %}<br><small style="color:var(--muted)">ยังไม่มีชื่อผู้ใช้/รหัสผ่าน — ตั้งรหัสผ่านใหม่ที่ช่องด้านขวา</small>{% endif %}{% if u['requested_org'] %}<br><small style="color:var(--muted)">ระบุเองว่า: {{ u['requested_org'] }}</small>{% endif %}</td>
+    <td data-label="บทบาท">{{ u['role_name'] or u['role'] }}</td>
+    <td data-label="ตำแหน่ง / ระดับ">{{ positions | selectattr('id', 'equalto', u['position_id']) | map(attribute='name_th') | first | default('-') }} · {{ levels | selectattr('id', 'equalto', u['level_id']) | map(attribute='name_th') | first | default('-') }}</td>
+    <td data-label="ขอบเขตหน่วยงาน">{{ u['factory_name'] or 'ทุกโรงงาน' }}{% if u['department_name'] %} › {{ u['department_name'] }}{% endif %}</td>
+    <td data-label="สถานะ">{{ 'ใช้งาน' if u['active'] else 'ปิดใช้งาน' }}</td><td data-label="สร้างเมื่อ">{{ u['created_at'] }}</td>
+    <td data-label="ดำเนินการ" style="display:flex;gap:6px;flex-wrap:wrap">
       <form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ u['id'] }}">
         <input type="hidden" name="action" value="set_role">
         <select name="role">{% for r in roles %}<option value="{{ r['key'] }}" {{ 'selected' if r['key'] == u['role'] }}>{{ r['name_th'] }}</option>{% endfor %}</select>
         <button type="submit">เปลี่ยนบทบาท</button></form>
+      <form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ u['id'] }}">
+        <input type="hidden" name="action" value="set_profile">
+        <select name="position_id" aria-label="ตำแหน่ง"><option value="">ไม่ระบุตำแหน่ง</option>{% for p in positions if p['active'] or p['id'] == u['position_id'] %}<option value="{{ p['id'] }}" {{ 'selected' if p['id'] == u['position_id'] }}>{{ p['name_th'] }}</option>{% endfor %}</select>
+        <select name="level_id" aria-label="ระดับ"><option value="">ไม่ระบุระดับ</option>{% for l in levels if l['active'] or l['id'] == u['level_id'] %}<option value="{{ l['id'] }}" {{ 'selected' if l['id'] == u['level_id'] }}>{{ l['name_th'] }}</option>{% endfor %}</select>
+        <button type="submit">บันทึกตำแหน่ง/ระดับ</button></form>
       <form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ u['id'] }}">
         <input type="hidden" name="action" value="set_scope">
         <select name="factory_id"><option value="">ทุกโรงงาน</option>{% for f in factories if f['active'] or f['id'] == u['factory_id'] %}<option value="{{ f['id'] }}" {{ 'selected' if f['id'] == u['factory_id'] }}>{{ f['name_th'] }}</option>{% endfor %}</select>
         <select name="department_id"><option value="">ทุกแผนก</option>{% for d in departments if d['active'] or d['id'] == u['department_id'] %}<option value="{{ d['id'] }}" {{ 'selected' if d['id'] == u['department_id'] }}>{{ d['factory'] }} › {{ d['name_th'] }}</option>{% endfor %}</select>
         <button type="submit">กำหนดขอบเขต</button></form>
       <form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ u['id'] }}">
+        <input type="hidden" name="action" value="reset_password"><input name="password" type="password" minlength="8" placeholder="รหัสผ่านใหม่" autocomplete="new-password" required style="width:9rem">
+        <button type="submit">ตั้งรหัสผ่านใหม่</button></form>
+      <form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ u['id'] }}">
         <input type="hidden" name="action" value="toggle"><button type="submit">{{ 'ปิดใช้งาน' if u['active'] else 'เปิดใช้งาน' }}</button></form>
     </td>
   </tr>
   {% endfor %}
 </table></div>
+
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:16px;margin-top:20px">
+<form method="post" class="card" style="max-width:none;margin:0">
+  <h2>เพิ่มผู้ใช้</h2>
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="create">
+  <label>ชื่อผู้ใช้ (อังกฤษ/ตัวเลข 3-32 ตัว) <input name="username" pattern="[A-Za-z0-9._-]{3,32}" required autocomplete="off"></label>
+  <label>ชื่อ-นามสกุล <input name="name" maxlength="100" required></label>
+  <label>รหัสผ่านเริ่มต้น (อย่างน้อย 8 ตัวอักษร) <input name="password" type="password" minlength="8" required autocomplete="new-password"></label>
+  <label>อีเมล (ไม่บังคับ) <input name="email" type="email" maxlength="254"></label>
+  <label>บทบาท <select name="role">{% for r in roles %}<option value="{{ r['key'] }}" {{ 'selected' if r['key'] == 'reporter' }}>{{ r['name_th'] }}</option>{% endfor %}</select></label>
+  <label>ตำแหน่ง <select name="position_id"><option value="">ไม่ระบุ</option>{% for p in positions if p['active'] %}<option value="{{ p['id'] }}">{{ p['name_th'] }}</option>{% endfor %}</select></label>
+  <label>ระดับ <select name="level_id"><option value="">ไม่ระบุ</option>{% for l in levels if l['active'] %}<option value="{{ l['id'] }}">{{ l['name_th'] }}</option>{% endfor %}</select></label>
+  <label>โรงงาน <select name="factory_id"><option value="">ทุกโรงงาน</option>{% for f in factories if f['active'] %}<option value="{{ f['id'] }}">{{ f['name_th'] }}</option>{% endfor %}</select></label>
+  <label>แผนก <select name="department_id"><option value="">ทุกแผนก</option>{% for d in departments if d['active'] %}<option value="{{ d['id'] }}">{{ d['factory'] }} › {{ d['name_th'] }}</option>{% endfor %}</select></label>
+  <button type="submit">เพิ่มผู้ใช้</button>
+</form>
+<form method="post" class="card" style="max-width:none;margin:0;align-self:start">
+  <h2>การขอสร้างบัญชีด้วยตนเอง</h2>
+  <p style="color:var(--muted)">สถานะตอนนี้: <strong>{{ 'เปิดรับคำขอ' if reg_open else 'ปิดรับคำขอ' }}</strong> — {{ 'ผู้ใช้กดขอสร้างบัญชีจากหน้าเข้าสู่ระบบได้ และต้องรอคุณอนุมัติ' if reg_open else 'ไม่มีลิงก์ขอสร้างบัญชีบนหน้าเข้าสู่ระบบ ต้องให้ผู้ดูแลสร้างบัญชีให้เท่านั้น' }}</p>
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="set_registration"><input type="hidden" name="open" value="{{ '0' if reg_open else '1' }}">
+  <button type="submit">{{ 'ปิดรับคำขอสร้างบัญชี' if reg_open else 'เปิดรับคำขอสร้างบัญชี' }}</button>
+  <p><small style="color:var(--muted)">เมื่อมีคำขอใหม่ ผู้ดูแลระบบได้รับแจ้งเตือนในกระดิ่ง (และอีเมลถ้าตั้งไว้) ตามกฎที่หน้า «การแจ้งเตือน»</small></p>
+</form>
+</div>
 {% endblock %}

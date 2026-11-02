@@ -98,7 +98,7 @@ def test_unexpected_exception_is_retryable_and_message_is_generic(db):
 
 
 def test_unconfigured_channel_dead_with_reason_and_no_secret_in_error(db):
-    rids = [add(db, c) for c in ("telegram", "line", "teams", "email")]
+    rids = [add(db, c, "teams") if c == "teams" else add(db, c) for c in ("telegram", "line", "teams", "email")]
     deliver_due(db, NOW, None, {"SMTP_PASSWORD": SECRET})                     # transport จริง ไม่มีโทเค็น/โฮสต์
     for rid in rids:
         r = row(db, rid)
@@ -505,3 +505,19 @@ def test_plain_smtp_without_tls_setting_does_not_call_starttls(monkeypatch):
     monkeypatch.setattr(delivery.smtplib, "SMTP", FakeSMTP)
     send_email("a@b.co", "s", "b", {"SMTP_HOST": "mail.example"})
     assert FakeSMTP.instances[0].starttls_context is None
+
+
+def test_personal_teams_webhook_posts_to_the_users_own_url_and_rejects_foreign_hosts(db, monkeypatch):
+    from safety import delivery
+    posted = []
+    monkeypatch.setattr(delivery, "_post_json", lambda url, payload, headers, env, what: posted.append((url, payload["text"][:20])))
+    delivery.send_teams("https://contoso.webhook.office.com/webhookb2/abc", "หัวข้อ", "เนื้อหา", {})
+    assert posted and posted[0][0] == "https://contoso.webhook.office.com/webhookb2/abc"
+    for bad in ("https://evil.example.com/x", "http://contoso.webhook.office.com/x", "https://169.254.169.254/latest", "https://localhost/x"):
+        with pytest.raises(delivery.TransportError):
+            delivery.send_teams(bad, "s", "b", {})
+    assert len(posted) == 1
+    delivery.send_teams("teams", "s", "b", {"TEAMS_WEBHOOK_URL": "https://central.example/hook"})            # ช่องกลาง ผู้ดูแลตั้งเองใน .env
+    assert posted[-1][0] == "https://central.example/hook"
+    with pytest.raises(delivery.TransportError):
+        delivery.send_teams("teams", "s", "b", {})

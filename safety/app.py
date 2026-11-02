@@ -48,6 +48,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.jinja_env.globals.update(aisin_wordmark=lambda *a, **k: Markup(brand.aisin_wordmark(*a, **k)), shield_logo=lambda *a, **k: Markup(brand.shield_logo(*a, **k)),
                                  BRAND_TITLE=brand.TITLE, BRAND_TAGLINE=brand.TAGLINE, BRAND_FOOTER=brand.FOOTER)
     app.jinja_env.globals["icon"] = icon
+    app.jinja_env.globals["hub_home"] = lambda: hub_public()           # ลิงก์ไปหน้า Hub (หน้าแรกรวมลิงก์ระบบ) ในหน้าเข้าสู่ระบบ
     install_csrf(app)
     app.before_request(load_user)
     if app.config.get("HUB_STATUS_CHECK") is None:
@@ -58,17 +59,18 @@ def create_app(test_config: dict | None = None) -> Flask:
         """ผู้ใช้ที่ถูกปิดที่ Hub ต้องหลุดจาก Safety (ตรวจแบบจำผลไว้ — ดู hubcheck.py)"""
         if not app.config["HUB_STATUS_CHECK"] or not app.config["SERVICE_TOKEN"] or g.get("user") is None:
             return None
-        if request.path.startswith(("/sso", "/api/", "/static/", "/signout")):
-            return None
+        if request.path.startswith(("/sso", "/api/", "/static/", "/signout")) or g.user["hub_uid"] < 0:
+            return None                                       # บัญชีที่สร้างใน Safety เอง (hub_uid ติดลบ) ไม่ผูกกับ Hub
         from flask import redirect, session
         from .hubcheck import hub_user_active
         if not hub_user_active(app, g.user["hub_uid"]):
             session.clear()
-            return redirect(hub_public())
+            return redirect("/login")
         return None
 
     from .views import (api, criteria, custom_fields, hazards, home, master, notifications, notify_admin, overview, pages, profile, search, injury_admin, incidents, patrol_admin, patrols, capas, drawer, report_due, reports,
-                        roles, sso, users)
+                        roles, sso, users, auth)
+    app.register_blueprint(auth.bp)
     app.register_blueprint(notify_admin.bp)
     app.register_blueprint(search.bp)
     app.register_blueprint(injury_admin.bp)

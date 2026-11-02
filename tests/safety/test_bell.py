@@ -112,20 +112,24 @@ def test_empty_state_renders(safety_app):
     assert "ยังไม่มีการแจ้งเตือน" in html
 
 
+TEAMS_OK = "https://contoso.webhook.office.com/webhookb2/abc123"
+
+
 def test_profile_shows_and_saves_contacts_and_opt_in(safety_app):
     me = login(safety_app, "reporter")
     assert me.get("/profile").status_code == 200
-    r = me.post("/profile", data={"_csrf": csrf(me), "telegram_chat_id": " 123456 ", "line_user_id": "U" + "a" * 32,
-                                  "email": "me@example.com", "channels": ["telegram", "email"]})
+    r = me.post("/profile", data={"_csrf": csrf(me), "teams_webhook": f" {TEAMS_OK} ", "email": "me@example.com", "channels": ["teams", "email"]})
     assert r.status_code == 302
-    row = sql(safety_app, "SELECT telegram_chat_id, line_user_id, email, notify_channels FROM safety_users WHERE id=?", (me.uid,))[0]
-    assert tuple(row) == ("123456", "U" + "a" * 32, "me@example.com", "inapp,telegram,email")
+    row = sql(safety_app, "SELECT teams_webhook, email, notify_channels FROM safety_users WHERE id=?", (me.uid,))[0]
+    assert tuple(row) == (TEAMS_OK, "me@example.com", "inapp,email,teams")
     html = me.get("/profile").get_data(as_text=True)
-    assert 'value="123456"' in html and "me@example.com" in html and re.search(r'name="channels" value="telegram"[^>]*checked', html)
+    assert "me@example.com" in html and re.search(r'name="channels" value="teams"[^>]*checked', html) and "บันทึกข้อมูลติดต่อเรียบร้อยแล้ว" in html
+    assert "Telegram" not in html and "LINE" not in html                                                # ปิดไว้ก่อน
 
 
-@pytest.mark.parametrize("field, bad", [("telegram_chat_id", "abc"), ("telegram_chat_id", "1" * 30), ("line_user_id", "u" + "a" * 32),
-                                        ("line_user_id", "U123"), ("email", "no-at"), ("email", "a b@c.d"), ("email", "a@b.c\r\nBcc: x@y.z")])
+@pytest.mark.parametrize("field, bad", [("teams_webhook", "http://x.webhook.office.com/a"), ("teams_webhook", "https://evil.example.com/hook"),
+                                        ("teams_webhook", "https://127.0.0.1/hook"), ("teams_webhook", "https://a.webhook.office.com.evil.com/x"),
+                                        ("email", "no-at"), ("email", "a b@c.d"), ("email", "a@b.c\r\nBcc: x@y.z")])
 def test_profile_rejects_bad_contacts_and_keeps_old_values(safety_app, field, bad):
     me = login(safety_app, "reporter")
     me.post("/profile", data={"_csrf": csrf(me), "email": "keep@example.com", "channels": ["email"]})
@@ -137,20 +141,35 @@ def test_profile_rejects_bad_contacts_and_keeps_old_values(safety_app, field, ba
 
 def test_profile_channel_needs_contact_and_clearing_allowed(safety_app):
     me = login(safety_app, "reporter")
-    r = me.post("/profile", data={"_csrf": csrf(me), "channels": ["telegram"]})
+    r = me.post("/profile", data={"_csrf": csrf(me), "channels": ["teams"]})
     assert r.status_code == 200 and "กรุณากรอก" in r.get_data(as_text=True)
     me.post("/profile", data={"_csrf": csrf(me), "email": "x@example.com", "channels": ["email"]})
-    me.post("/profile", data={"_csrf": csrf(me), "email": "", "telegram_chat_id": "", "line_user_id": ""})
-    row = sql(safety_app, "SELECT telegram_chat_id, line_user_id, email, notify_channels FROM safety_users WHERE id=?", (me.uid,))[0]
-    assert tuple(row) == (None, None, None, "inapp")
+    me.post("/profile", data={"_csrf": csrf(me), "email": "", "teams_webhook": ""})
+    row = sql(safety_app, "SELECT teams_webhook, email, notify_channels FROM safety_users WHERE id=?", (me.uid,))[0]
+    assert tuple(row) == (None, None, "inapp")
 
 
 def test_profile_cannot_change_role_or_scope_or_unknown_channels(safety_app):
     me = login(safety_app, "reporter")
     me.post("/profile", data={"_csrf": csrf(me), "role": "admin", "factory_id": "1", "department_id": "1", "active": "0", "name": "แฮ็ก",
-                              "channels": ["inapp", "teams", "sms", "telegram"], "telegram_chat_id": "5"})
+                              "channels": ["inapp", "teams", "sms", "telegram"], "email": "a@example.com"})
     row = sql(safety_app, "SELECT role, factory_id, department_id, active, name, notify_channels FROM safety_users WHERE id=?", (me.uid,))[0]
-    assert tuple(row) == ("reporter", None, None, 1, "ทดสอบ", "inapp,telegram")
+    assert tuple(row)[:5] == ("reporter", None, None, 1, "ทดสอบ") and "telegram" not in row[5] and "sms" not in row[5]
+
+
+def test_profile_password_change_needs_current_password_and_logs_new_hash(safety_app):
+    from shared.auth import check_password, hash_password
+    me = login(safety_app, "reporter")
+    sql(safety_app, "UPDATE safety_users SET password_hash=? WHERE id=?", (hash_password("Old-pass-1"), me.uid))
+    bad = me.post("/profile", data={"_csrf": csrf(me), "action": "password", "old_password": "wrong", "new_password": "New-pass-123", "new_password2": "New-pass-123"})
+    assert "รหัสผ่านปัจจุบันไม่ถูกต้อง" in bad.get_data(as_text=True)
+    short = me.post("/profile", data={"_csrf": csrf(me), "action": "password", "old_password": "Old-pass-1", "new_password": "short", "new_password2": "short"})
+    assert "อย่างน้อย 8" in short.get_data(as_text=True)
+    mism = me.post("/profile", data={"_csrf": csrf(me), "action": "password", "old_password": "Old-pass-1", "new_password": "New-pass-123", "new_password2": "other-pass-1"})
+    assert "ไม่ตรงกัน" in mism.get_data(as_text=True)
+    ok = me.post("/profile", data={"_csrf": csrf(me), "action": "password", "old_password": "Old-pass-1", "new_password": "New-pass-123", "new_password2": "New-pass-123"})
+    assert ok.status_code == 302
+    assert check_password(sql(safety_app, "SELECT password_hash FROM safety_users WHERE id=?", (me.uid,))[0][0], "New-pass-123")
 
 
 def test_profile_xss_escaped(safety_app):

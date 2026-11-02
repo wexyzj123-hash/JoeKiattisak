@@ -54,7 +54,10 @@
   <div class="card" style="max-width:none;margin:0">
     <h2>สถานะช่องทาง</h2>
     <p style="color:var(--muted)">โทเค็นและรหัสผ่านตั้งในไฟล์ <code>.env</code> เท่านั้น ไม่แสดงในหน้านี้</p>
-    {% for c in ('telegram', 'line', 'teams', 'email') %}<p><strong>{{ channel_th[c] }}:</strong> {{ status[c] }}</p>{% endfor %}
+    {% for c in ('email', 'teams') %}<p><strong>{{ channel_th[c] }}:</strong> {{ status[c] }}</p>{% endfor %}
+    <p style="color:var(--muted)"><small>ผู้ใช้แต่ละคนใส่อีเมลและ Webhook ของ Teams ของตัวเองได้ที่ «โปรไฟล์ของฉัน» ระบบส่งแจ้งเตือนงานมอบหมาย ใกล้ครบกำหนด เกินกำหนด และสรุปงานค้างรายวัน ตามกฎด้านบนและที่ผู้ใช้เลือกรับ ช่องทางอื่นนอกจากอีเมลและ Teams ยังไม่เปิดใช้</small></p>
+    <form method="post" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="digest_toggle"><input type="hidden" name="on" value="{{ '0' if digest_on else '1' }}">
+      <span>สรุปงานค้างรายวัน (อีเมล/Teams): <strong>{{ 'เปิด' if digest_on else 'ปิด' }}</strong></span><button type="submit">{{ 'ปิด' if digest_on else 'เปิด' }}การส่งสรุปงานค้าง</button></form>
     <form method="post" style="display:flex;gap:8px;flex-wrap:wrap"><input type="hidden" name="_csrf" value="{{ csrf_token() }}">
       <button name="action" value="send_test">ส่งข้อความทดสอบถึงฉัน</button><button name="action" value="run_daily_now">รันงานประจำวันตอนนี้</button></form>
   </div>

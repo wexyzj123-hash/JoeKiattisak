@@ -9,7 +9,7 @@ from tests.safety.factories import add_chain, add_hazard, add_user
 EVENTS = {"hazard_reported", "hazard_assessed", "hazard_assigned", "hazard_closed", "hazard_rejected", "due_soon", "overdue",
           "incident_reported", "incident_assigned", "incident_closed",
           "capa_assigned", "capa_done", "capa_verified", "capa_reopened", "capa_due_soon", "capa_overdue", "patrol_due", "patrol_overdue",
-          "report_due_soon", "report_overdue"}
+          "report_due_soon", "report_overdue", "user_requested"}
 
 
 @pytest.fixture
@@ -53,11 +53,11 @@ def test_outbox_unique_per_channel_target_key(db):
 
 def test_default_rules_seeded_once_and_not_overwritten(db):
     rules = db.execute("SELECT * FROM notify_rules ORDER BY id").fetchall()
-    assert {r["event"] for r in rules} == EVENTS and len(rules) == 26
+    assert {r["event"] for r in rules} == EVENTS and len(rules) == 27
     by = {(r["event"], r["offset_days"]): r for r in rules}
-    assert by[("hazard_reported", 0)]["recipients"] == "role:assessor" and by[("hazard_reported", 0)]["channels"] == "inapp,telegram"
+    assert by[("hazard_reported", 0)]["recipients"] == "role:assessor" and by[("hazard_reported", 0)]["channels"] == "inapp,email"
     assert by[("hazard_assessed", 0)]["min_score"] == 17 and by[("hazard_assessed", 0)]["recipients"] == "role:dept_head,role:admin"
-    assert by[("hazard_assigned", 0)]["channels"] == "inapp,telegram,line,email" and by[("hazard_assigned", 0)]["recipients"] == "owner"
+    assert by[("hazard_assigned", 0)]["channels"] == "inapp,email" and by[("hazard_assigned", 0)]["recipients"] == "owner"
     assert by[("hazard_closed", 0)]["recipients"] == "reporter" and by[("hazard_rejected", 0)]["recipients"] == "reporter"
     assert by[("due_soon", 2)]["recipients"] == "owner"
     assert [by[("overdue", d)]["recipients"] for d in (1, 3, 7)] == ["owner", "owner,role:dept_head", "role:admin,role:dept_head"]
@@ -66,7 +66,7 @@ def test_default_rules_seeded_once_and_not_overwritten(db):
     db.commit()
     ensure_schema(db); seed_notify(db)
     assert db.execute("SELECT enabled, channels FROM notify_rules WHERE event='hazard_closed'").fetchone()[:] == (0, "inapp")
-    assert db.execute("SELECT COUNT(*) FROM notify_rules").fetchone()[0] == 25                      # ไม่เติมกฎที่ลบไปกลับมา
+    assert db.execute("SELECT COUNT(*) FROM notify_rules").fetchone()[0] == 26                      # ไม่เติมกฎที่ลบไปกลับมา
 
 
 def test_default_settings_present_and_kept(db):
@@ -98,7 +98,7 @@ def test_existing_phase3_database_upgrades_in_place(tmp_path):
     ensure_schema(con)
     row = con.execute("SELECT name, email, notify_channels FROM safety_users WHERE id=?", (u,)).fetchone()
     assert (row["name"], row["email"], row["notify_channels"]) == ("เดิม", None, "inapp")
-    assert con.execute("SELECT COUNT(*) FROM notify_rules").fetchone()[0] == 26
+    assert con.execute("SELECT COUNT(*) FROM notify_rules").fetchone()[0] == 27
 
 
 def test_ensure_schema_idempotent(db):

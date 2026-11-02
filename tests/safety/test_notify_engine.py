@@ -116,28 +116,46 @@ def outbox(db):
     return [tuple(r) for r in db.execute("SELECT channel, target, urgent FROM notify_outbox ORDER BY id")]
 
 
+HOOK = "https://contoso.webhook.office.com/webhookb2/abc"
+
+
 def test_external_rows_only_for_opted_in_users_with_valid_contact(n):
-    set_contacts(n.db, n.owner, notify_channels="inapp,telegram,line,email", telegram_chat_id="123456",
-                 line_user_id="U" + "a" * 32, email="owner@example.com")
+    set_contacts(n.db, n.owner, notify_channels="inapp,teams,email", teams_webhook=HOOK, email="owner@example.com")
     bad = add_user(n.db, "assessor", "ติดต่อเสีย")
-    set_contacts(n.db, bad, notify_channels="inapp,telegram,email", telegram_chat_id="abc", email="no-at-sign")
+    set_contacts(n.db, bad, notify_channels="inapp,teams,email", teams_webhook="https://evil.example.com/x", email="no-at-sign")
     nooptin = add_user(n.db, "assessor", "ไม่สมัคร")
-    set_contacts(n.db, nooptin, telegram_chat_id="999")                              # มี contact แต่ไม่ได้เลือกช่องทาง
+    set_contacts(n.db, nooptin, email="x@example.com")                               # มี contact แต่ไม่ได้เลือกช่องทาง
+    legacy = add_user(n.db, "assessor", "ใช้ช่องทางที่ปิดไว้")
+    set_contacts(n.db, legacy, notify_channels="inapp,telegram,line", telegram_chat_id="123456", line_user_id="U" + "a" * 32)
     hid = n.hz(owner_id=n.owner)
-    emit(n.db, "hazard_assigned", hid, n.asr_all)                                     # owner: inapp,telegram,line,email
-    assert sorted(outbox(n.db)) == [("email", "owner@example.com", 0), ("line", "U" + "a" * 32, 0), ("telegram", "123456", 0)]
-    emit(n.db, "hazard_reported", hid, n.rep)                                         # assessor: inapp,telegram
-    chats = [r for r in outbox(n.db) if r[0] == "telegram"]
-    assert ("telegram", "999", 0) not in chats and not any(r[1] == "abc" for r in chats)
+    emit(n.db, "hazard_assigned", hid, n.asr_all)                                     # owner: inapp,email (กฎตั้งต้น) — Teams เมื่อกฎเลือก teams
+    assert sorted(outbox(n.db)) == [("email", "owner@example.com", 0)]
+    n.db.execute("UPDATE notify_rules SET channels='inapp,teams,email' WHERE event='hazard_assigned'"); n.db.commit()
+    hid2 = n.hz(owner_id=n.owner)
+    emit(n.db, "hazard_assigned", hid2, n.asr_all)
+    assert sorted(outbox(n.db)) == [("email", "owner@example.com", 0), ("email", "owner@example.com", 0), ("teams", HOOK, 0)]
+    emit(n.db, "hazard_reported", hid, n.rep)                                         # assessor: inapp,email
+    rows = outbox(n.db)
+    assert not any(r[0] in ("telegram", "line") for r in rows) and not any(r[1] in ("no-at-sign", "https://evil.example.com/x") for r in rows)
+
+
+def test_telegram_and_line_are_switched_off_even_if_a_rule_still_lists_them(n):
+    set_contacts(n.db, n.owner, notify_channels="inapp,telegram,line", telegram_chat_id="123456", line_user_id="U" + "a" * 32)
+    n.db.execute("UPDATE notify_rules SET channels='inapp,telegram,line' WHERE event='hazard_assigned'"); n.db.commit()
+    emit(n.db, "hazard_assigned", n.hz(owner_id=n.owner), n.asr_all)
+    assert outbox(n.db) == []
 
 
 @pytest.mark.parametrize("channel, good, bad", [
     ("telegram", ["123", "-100123456", "0"], ["", "abc", "12 3", "1" * 21, "12\n3"]),
     ("line", ["U" + "0" * 32, "U" + "f" * 32], ["", "u" + "0" * 32, "U" + "0" * 31, "U" + "G" * 32]),
+    ("teams", ["https://a.webhook.office.com/webhookb2/x", "https://prod-01.westus.logic.azure.com:443/workflows/x?sig=1"],
+     ["", "http://a.webhook.office.com/x", "https://evil.example.com/x", "https://a.webhook.office.com.evil.com/x", "https://127.0.0.1/x",
+      "https://user:pw@a.webhook.office.com/x", "https://a.webhook.office.com:8443/x", "https://a.webhook.office.com/x y", "https://a.webhook.office.com/x\r\nHost: e"]),
     ("email", ["a@b.co", "นาย@example.com"], ["", "ab", "a@@b", "a b@c.d", "a@b.c\r\nBcc: x@y.z", "@b.c", "a@", "x" * 250 + "@b.cd"]),
 ])
 def test_valid_contact(channel, good, bad):
-    field = {"telegram": "telegram_chat_id", "line": "line_user_id", "email": "email"}[channel]
+    field = {"telegram": "telegram_chat_id", "line": "line_user_id", "email": "email", "teams": "teams_webhook"}[channel]
     for g in good:
         assert valid_contact(channel, {field: g}) == g
     for b in bad:
@@ -146,20 +164,22 @@ def test_valid_contact(channel, good, bad):
 
 
 def test_urgent_flag_for_requires_approval_level_and_late_overdue(n):
-    set_contacts(n.db, n.owner, notify_channels="inapp,telegram", telegram_chat_id="1")
+    set_contacts(n.db, n.owner, notify_channels="inapp,email", email="o@example.com")
+    n.db.execute("UPDATE notify_rules SET channels='inapp,email' WHERE event IN ('due_soon','overdue')"); n.db.commit()
     plain = n.hz(owner_id=n.owner, level_requires_approval=0)
     emit(n.db, "due_soon", plain, None, offset_days=2)
-    assert outbox(n.db) == [("telegram", "1", 0)]
+    assert outbox(n.db) == [("email", "o@example.com", 0)]
     strict = n.hz(owner_id=n.owner, level_requires_approval=1)
     emit(n.db, "due_soon", strict, None, offset_days=2)
-    assert outbox(n.db)[-1] == ("telegram", "1", 1)
+    assert outbox(n.db)[-1] == ("email", "o@example.com", 1)
     late = n.hz(owner_id=n.owner)
     emit(n.db, "overdue", late, None, offset_days=1); emit(n.db, "overdue", late, None, offset_days=3)
     flags = [r[2] for r in n.db.execute("SELECT channel, target, urgent FROM notify_outbox WHERE dedupe_key LIKE 'overdue:%' ORDER BY id")]
     assert 0 in flags and 1 in flags
 
 
-def test_teams_single_row_per_rule_and_hazard(n):
+def test_teams_single_row_per_rule_and_hazard(n, monkeypatch):
+    monkeypatch.setenv("TEAMS_WEBHOOK_URL", "https://hook.example/central")
     n.db.execute("UPDATE notify_rules SET channels='inapp,teams' WHERE event='hazard_reported'"); n.db.commit()
     hid = n.hz()
     emit(n.db, "hazard_reported", hid, n.rep); emit(n.db, "hazard_reported", hid, n.rep)
@@ -195,7 +215,8 @@ def test_failure_inside_emit_is_swallowed_and_rolled_back(n, monkeypatch, caplog
     hid = n.hz()
     n.db.execute("UPDATE hazards SET title='ก่อน emit' WHERE id=?", (hid,))           # งานของผู้เรียกใน transaction เดียวกัน
     monkeypatch.setattr(notify, "_queue_external", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
-    n.db.execute("UPDATE safety_users SET telegram_chat_id='1', notify_channels='inapp,telegram' WHERE id=?", (n.asr_all,))
+    n.db.execute("UPDATE safety_users SET email='a@example.com', notify_channels='inapp,email' WHERE id=?", (n.asr_all,))
+    n.db.execute("UPDATE notify_rules SET channels='inapp,email' WHERE event='hazard_reported'"); n.db.commit()
     assert emit(n.db, "hazard_reported", hid, n.rep) == 0
     assert n.notes() == []                                                            # แถวที่สร้างไปครึ่งทางถูก rollback
     assert n.row(hid)["title"] == "ก่อน emit"                                          # งานของผู้เรียกไม่หาย

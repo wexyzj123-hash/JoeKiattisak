@@ -9,11 +9,11 @@ import time
 
 from flask import Blueprint, flash, g, redirect, render_template, request
 
-from .. import scheduler
+from .. import digest, scheduler
 from ..db import get_db
 from ..notify import clean, valid_contact
 from ..perms import permission_required
-from ..schema import NOTIFY_CHANNELS, NOTIFY_EVENTS, OUTBOX_CHANNELS
+from ..schema import ACTIVE_CHANNELS, ACTIVE_OUTBOX, NOTIFY_EVENTS
 
 bp = Blueprint("notify_admin", __name__, url_prefix="/admin")
 HHMM_RE = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
@@ -23,7 +23,7 @@ EVENT_TH = {"hazard_reported": "แจ้งอันตรายใหม่", 
             "incident_reported": "แจ้งอุบัติเหตุใหม่", "incident_assigned": "มอบหมายผู้สอบสวน", "incident_closed": "ปิดรายการอุบัติเหตุ",
             "capa_assigned": "มอบหมาย CAPA", "capa_done": "CAPA ดำเนินการเสร็จ", "capa_verified": "CAPA ยืนยันผลแล้ว", "capa_reopened": "CAPA ถูกตีกลับ",
             "capa_due_soon": "CAPA ใกล้ครบกำหนด", "capa_overdue": "CAPA เกินกำหนด", "patrol_due": "ถึงรอบตรวจความปลอดภัย", "patrol_overdue": "เลยรอบตรวจความปลอดภัย",
-            "report_due_soon": "ใกล้ครบกำหนดส่งรายงาน", "report_overdue": "เกินกำหนดส่งรายงาน"}
+            "report_due_soon": "ใกล้ครบกำหนดส่งรายงาน", "report_overdue": "เกินกำหนดส่งรายงาน", "user_requested": "มีคำขอสร้างบัญชีใหม่"}
 SOON_EVENTS = ("due_soon", "capa_due_soon", "report_due_soon")                       # offset = จำนวนวันก่อนครบกำหนด (0-60)
 LATE_EVENTS = ("overdue", "capa_overdue", "patrol_overdue", "report_overdue")         # offset = จำนวนวันหลังครบกำหนด (ตั้งแต่ 1)
 CHANNEL_TH = {"inapp": "ในระบบ", "telegram": "Telegram", "line": "LINE", "teams": "Teams", "email": "อีเมล"}
@@ -43,9 +43,9 @@ def validate_rule(db, form, rule_id: int | None = None) -> tuple[dict | None, li
     event = form.get("event", "")
     if event not in NOTIFY_EVENTS:
         errors.append("เหตุการณ์ไม่ถูกต้อง")
-    channels = [c for c in NOTIFY_CHANNELS if c in form.getlist("channels")]
-    if not channels or any(c not in NOTIFY_CHANNELS for c in form.getlist("channels")):
-        errors.append("เลือกช่องทางอย่างน้อย 1 ช่องทาง (ในระบบ/Telegram/LINE/Teams/อีเมล)")
+    channels = [c for c in ACTIVE_CHANNELS if c in form.getlist("channels")]
+    if not channels or any(c not in ACTIVE_CHANNELS for c in form.getlist("channels")):
+        errors.append("เลือกช่องทางอย่างน้อย 1 ช่องทาง (ในระบบ/Teams/อีเมล)")
     roles = {r[0] for r in db.execute("SELECT key FROM safety_roles")}
     recipients: list[str] = []
     for item in (p.strip() for p in form.get("recipients", "").split(",")):
@@ -96,13 +96,13 @@ def mask_target(channel: str, target: str) -> str:
 
 
 def channel_status() -> dict[str, str]:
+    """สถานะช่องทางที่เปิดใช้ (อีเมล และ Teams) — แสดงเพียงว่าตั้งค่าแล้วหรือยัง ไม่แสดงค่า"""
     env = os.environ
     teams = (env.get("TEAMS_WEBHOOK_URL") or "").strip()
     return {
-        "telegram": "ตั้งค่าแล้ว" if env.get("TELEGRAM_BOT_TOKEN") else "ยังไม่ได้ตั้งค่า (TELEGRAM_BOT_TOKEN)",
-        "line": "ตั้งค่าแล้ว" if env.get("LINE_CHANNEL_TOKEN") else "ยังไม่ได้ตั้งค่า (LINE_CHANNEL_TOKEN)",
-        "teams": ("ตั้งค่าแล้ว" if teams.lower().startswith("https://") else "ต้องเป็น https (TEAMS_WEBHOOK_URL)") if teams else "ยังไม่ได้ตั้งค่า (TEAMS_WEBHOOK_URL)",
-        "email": "ตั้งค่าแล้ว" if env.get("SMTP_HOST") else "ยังไม่ได้ตั้งค่า (SMTP_HOST)",
+        "teams": ("ช่อง Teams กลางตั้งค่าแล้ว" if teams.lower().startswith("https://") else "ช่อง Teams กลางต้องเป็น https (TEAMS_WEBHOOK_URL)") if teams
+        else "ช่อง Teams กลางยังไม่ได้ตั้งค่า (TEAMS_WEBHOOK_URL) — แต่ผู้ใช้แต่ละคนใส่ Webhook ของตัวเองที่โปรไฟล์ได้",
+        "email": "ตั้งค่าแล้ว" if env.get("SMTP_HOST") else "ยังไม่ได้ตั้งค่า (SMTP_HOST, SMTP_FROM)",
     }
 
 
@@ -133,22 +133,30 @@ def _rule_action(db, action: str, form) -> None:
     db.commit()
 
 
-def _send_test(db) -> str:
+def _send_test(db) -> tuple[str, str]:
+    """ส่งข้อความทดสอบถึงตัวเองทันทีทุกช่องทางที่เลือกไว้ในโปรไฟล์ แล้วรายงานผลจริง (สำเร็จ/ล้มเหลวพร้อมเหตุผล) — ผู้ดูแลกดเองครั้งละคำขอ จึงยอมให้รอผลสั้น ๆ"""
+    from .. import delivery
     user, opted = g.user, set((g.user["notify_channels"] or "").split(","))
     stamp = f"test:{user['id']}:{time.time_ns()}"
     title, body = "ทดสอบการแจ้งเตือน AIAT Safety", "ข้อความทดสอบจากหน้าตั้งค่าการแจ้งเตือน — หากเห็นข้อความนี้แสดงว่าช่องทางทำงานปกติ"
     db.execute("INSERT INTO notifications(user_id, event, title, body, link, dedupe_key) VALUES(?,?,?,?,?,?)",
                (user["id"], "test", title, body, "/notifications", stamp))
-    queued = 0
-    for channel in OUTBOX_CHANNELS:
-        target = valid_contact(channel, user) if channel != "teams" and channel in opted else None
-        if target:
-            db.execute("INSERT INTO notify_outbox(channel, target, subject, body, next_try_at, dedupe_key) "
-                       "VALUES(?,?,?,?, datetime('now','localtime'), ?)", (channel, target, title, body, stamp))
-            queued += 1
     db.commit()
-    return (f"ส่งข้อความทดสอบเข้าคิวแล้ว {queued} ช่องทาง (และเข้ากระดิ่งของคุณ)" if queued
-            else "ยังไม่มีช่องทางภายนอกที่ใช้ได้ — ไปที่ 'โปรไฟล์ของฉัน' กรอกข้อมูลติดต่อและเลือกช่องทางก่อน (ข้อความทดสอบเข้ากระดิ่งแล้ว)")
+    env = {**os.environ, "NOTIFY_HTTP_TIMEOUT": "6"}
+    ok, bad, names = [], [], {"email": "อีเมล", "teams": "Teams"}
+    for channel in ACTIVE_OUTBOX:
+        target = valid_contact(channel, user) if channel in opted else None
+        if not target:
+            continue
+        try:
+            delivery.REAL[channel](target, title, body, env)
+            ok.append(names[channel])
+        except delivery.TransportError as exc:
+            bad.append(f"{names[channel]} ({exc})")
+    if not ok and not bad:
+        return ("ยังไม่มีช่องทางภายนอกที่ใช้ได้ — ไปที่ 'โปรไฟล์ของฉัน' กรอกอีเมลหรือ Teams และเลือกรับก่อน (ข้อความทดสอบเข้ากระดิ่งแล้ว)", "")
+    msg = ("ส่งข้อความทดสอบสำเร็จ: " + ", ".join(ok) if ok else "") + (" · " if ok and bad else "") + ("ส่งไม่สำเร็จ: " + ", ".join(bad) if bad else "")
+    return (msg, "celebrate" if ok and not bad else "")
 
 
 @bp.route("/notifications", methods=["GET", "POST"])
@@ -166,6 +174,10 @@ def notifications():
                 db.commit()
             else:
                 flash("เวลาต้องเป็นรูปแบบ HH:MM (00:00-23:59) ทั้ง 3 ช่อง")
+        elif action == "digest_toggle":
+            db.execute("INSERT INTO app_settings(key, value) VALUES('backlog_digest', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", ("1" if request.form.get("on") == "1" else "0",))
+            db.commit()
+            flash("เปิดส่งสรุปงานค้างรายวันแล้ว" if request.form.get("on") == "1" else "ปิดส่งสรุปงานค้างรายวันแล้ว")
         elif action in ("outbox_retry", "outbox_cancel"):
             oid = _int(request.form.get("id"))
             if action == "outbox_retry":
@@ -175,7 +187,8 @@ def notifications():
                 db.execute("UPDATE notify_outbox SET status='cancelled' WHERE id=? AND status IN ('pending','failed')", (oid,))
             db.commit()
         elif action == "send_test":
-            flash(_send_test(db))
+            msg, cat = _send_test(db)
+            flash(msg, cat) if cat else flash(msg)
         elif action == "run_daily_now":
             res = scheduler.run_daily(db, force=True)
             flash(f"รันงานประจำวันแล้ว: แจ้งเตือนใหม่ {res['notifications']} รายการ, เข้าคิวภายนอก {res['outbox']}, ข้อผิดพลาด {res['errors']}"
@@ -188,6 +201,6 @@ def notifications():
         "SELECT * FROM notify_outbox WHERE status <> 'sent' ORDER BY id DESC LIMIT 50")]
     return render_template(
         "notify_admin.html", rules=rule_rows, settings=settings, counts=counts, outbox=pending, status=channel_status(),
-        event_th=EVENT_TH, channel_th=CHANNEL_TH, status_th=STATUS_TH, channels=NOTIFY_CHANNELS, events=NOTIFY_EVENTS,
+        event_th=EVENT_TH, channel_th=CHANNEL_TH, status_th=STATUS_TH, channels=ACTIVE_CHANNELS, events=NOTIFY_EVENTS,
         roles=db.execute("SELECT key FROM safety_roles ORDER BY key").fetchall(),
-        no_enabled=not any(r["enabled"] for r in rule_rows))
+        no_enabled=not any(r["enabled"] for r in rule_rows), digest_on=digest.enabled(db))

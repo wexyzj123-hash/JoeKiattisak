@@ -76,4 +76,4 @@ def test_real_apps_work_under_a_prefix(tmp_path):
     saf = safety_app({"TESTING": True, "DATABASE": str(tmp_path / "s.db"), "SECRET_KEY": "k", "SSO_SECRET": secret, "SERVICE_TOKEN": "s",
                       "HUB_URL": "http://h:5000/safety-hub", "UPLOAD_ROOT": str(tmp_path / "up"), "URL_PREFIX": "/safety-hub/app"})
     r = saf.test_client().get("/")
-    assert r.status_code == 302 and r.headers["Location"].startswith("http://h:5000/safety-hub")
+    assert r.status_code == 302 and r.headers["Location"] == "/safety-hub/app/login"        # ยังไม่ล็อกอิน → หน้าเข้าสู่ระบบของ Safety (เติม prefix ให้)

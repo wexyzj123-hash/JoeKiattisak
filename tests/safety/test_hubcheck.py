@@ -62,7 +62,7 @@ def test_disabled_hub_user_signed_out_within_cache_ttl(app, monkeypatch):
     assert c.get("/hazards").status_code == 200                                              # ยังอยู่ใน cache 60 วินาที
     clock["t"] += 31
     r = c.get("/hazards")
-    assert r.status_code == 302 and r.headers["Location"] == "http://hub.test"
+    assert r.status_code == 302 and r.headers["Location"] == "/login"
     with c.session_transaction() as s:
         assert "suid" not in s
     assert c.get("/hazards").status_code == 302                                              # ออกจากระบบจริง

@@ -42,7 +42,7 @@ class Live:
 def main(out: str) -> None:
     from hub.app import create_app as hub_app
     from hub.db import connect as hub_connect
-    from hub.security import hash_password
+    from shared.auth import hash_password
     from safety import capa, images, incident_flow, incidents, patrol, patrol_admin, report_due, workflow
     from safety.app import create_app as safety_app
     from safety.db import connect
@@ -89,6 +89,19 @@ def main(out: str) -> None:
     prasit = user("dept_head", "ประสิทธิ์ มั่นคง", 103, department_id=d1)             # หัวหน้าฝ่ายผลิต
     nattaya = user("assessor", "ณัฐยา สุขสม", 104)                                    # จป. อีกคน (ผู้ยืนยัน)
     U = lambda i: user_row(con, i)
+    # ชื่อผู้ใช้ ตำแหน่ง ระดับ ของผู้ใช้สาธิต และคำขอสร้างบัญชีที่รออนุมัติ (ใช้โค้ดจริงของระบบ)
+    pos = {r["code"]: r["id"] for r in con.execute("SELECT id, code FROM positions")}
+    lvl = {r["code"]: r["id"] for r in con.execute("SELECT id, code FROM user_levels")}
+    for uid, uname, p_, l_ in ((admin, "admin", "GM", "L2"), (somchai, "somchai", "OPERATOR", "L0"), (wipa, "wipa", "SR_STAFF", "L1"),
+                               (prasit, "prasit", "MANAGER", "L2"), (nattaya, "nattaya", "STAFF", "L1")):
+        con.execute("UPDATE safety_users SET username=?, position_id=?, level_id=?, email=? WHERE id=?", (uname, pos[p_], lvl[l_], f"{uname}@example.com", uid))
+    con.execute("UPDATE safety_users SET password_hash=? WHERE id=?", (hash_password("Passw0rd!"), admin))        # ให้มีผู้ดูแลที่ล็อกอินได้ (หน้า /register ต้องการ)
+    con.commit()
+    from safety import accounts
+    for uname, name, p_, l_, fac, dep, org in (("somying.k", "สมหญิง ใจดี", "LL", "L0", f, d1, "โรงงานบางนา › ฝ่ายผลิต › ไลน์ประกอบ 1"),
+                                               ("anan.p", "อนันต์ พิทักษ์", "SV", "L1", f, d2, "โรงงานบางนา › ฝ่ายซ่อมบำรุง › ห้องซ่อมบำรุง")):
+        accounts.create_user(con, username=uname, name=name, password="Passw0rd!", active=0, pending=1, position_id=pos[p_], level_id=lvl[l_],
+                             email=f"{uname}@example.com", requested_org=org, req_factory_id=fac, req_department_id=dep)
 
     # รายการอันตราย: ผ่านฟังก์ชันจริงของระบบ
     def hz(title, desc, area, t, s, who=somchai, shots=1):

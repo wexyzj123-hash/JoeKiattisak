@@ -4,13 +4,15 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
+from urllib.parse import urlsplit
 from datetime import date
 from typing import Mapping
 
 from .hazards import user_in_scope
 from .perms import user_permissions
-from .schema import NOTIFY_EVENTS, OUTBOX_CHANNELS
+from .schema import ACTIVE_OUTBOX, NOTIFY_EVENTS, OUTBOX_CHANNELS  # noqa: F401
 
 log = logging.getLogger("safety.notify")
 
@@ -25,9 +27,27 @@ def clean(text, limit: int) -> str:
     return re.sub(r"\s+", " ", UNSAFE_RE.sub(" ", "" if text is None else str(text))).strip()[:limit]
 
 
+TEAMS_HOST_SUFFIXES = ("webhook.office.com", "office.com", "logic.azure.com", "azure.com", "powerplatform.com", "microsoft.com")
+
+
+def teams_host_ok(url: str, env=None) -> bool:
+    """Webhook ของ Teams รายบุคคลต้องเป็น https และโฮสต์อยู่ในโดเมนของ Microsoft (หรือที่ผู้ดูแลอนุญาตด้วย TEAMS_ALLOWED_HOSTS) — กันผู้ใช้ชี้เซิร์ฟเวอร์ไปยิงเครือข่ายภายใน"""
+    env = os.environ if env is None else env
+    try:
+        parts = urlsplit(url)
+        host = (parts.hostname or "").lower()
+        port = parts.port
+    except ValueError:
+        return False
+    if parts.scheme != "https" or not host or parts.username or parts.password or port not in (None, 443):
+        return False
+    extra = tuple(h.strip().lower() for h in str(env.get("TEAMS_ALLOWED_HOSTS", "")).split(",") if h.strip())
+    return any(host == suf or host.endswith("." + suf) for suf in TEAMS_HOST_SUFFIXES + extra)
+
+
 def valid_contact(channel: str, user) -> str | None:
     """ค่าติดต่อของผู้ใช้สำหรับช่องทางนั้นถ้ารูปแบบถูกต้อง ไม่เช่นนั้น None"""
-    field = {"telegram": "telegram_chat_id", "line": "line_user_id", "email": "email"}.get(channel)
+    field = {"telegram": "telegram_chat_id", "line": "line_user_id", "email": "email", "teams": "teams_webhook"}.get(channel)
     try:
         value = user[field] if field else None
     except (KeyError, IndexError):
@@ -38,6 +58,8 @@ def valid_contact(channel: str, user) -> str | None:
         return value if CHAT_RE.match(value) else None
     if channel == "line":
         return value if LINE_RE.match(value) else None
+    if channel == "teams":
+        return value if len(value) <= 600 and not re.search(r"[\s\x00-\x1f\x7f]", value) and teams_host_ok(value) else None
     if len(value) > 254 or re.search(r"[\s\x00-\x1f\x7f]", value) or value.count("@") != 1:
         return None
     local, domain = value.split("@")
@@ -165,15 +187,38 @@ def _write_rows(db, event: str, rec, title: str, body: str, stage: str, ref: str
                 created += 1
                 note_id = cur.lastrowid
             opted = set(_split(user["notify_channels"]))
-            for channel in OUTBOX_CHANNELS:
-                if channel == "teams" or channel not in channels or channel not in opted:
+            for channel in ACTIVE_OUTBOX:                      # อีเมล และ Teams รายบุคคล (webhook ของผู้ใช้เอง) — เฉพาะที่ผู้ใช้เลือกรับและกรอกถูกต้อง
+                if channel not in channels or channel not in opted:
                     continue
                 target = valid_contact(channel, user)
                 if target:
                     _queue_external(db, channel, target, title, body, urgent, note_id, key)
-        if "teams" in channels:                                # ประกาศกลุ่มหนึ่งข้อความต่อกฎ+รายการ+ขั้น
+        if "teams" in channels and (os.environ.get("TEAMS_WEBHOOK_URL") or "").strip():     # ประกาศเข้าช่อง Teams กลาง (ถ้าตั้งไว้) หนึ่งข้อความต่อกฎ+รายการ+ขั้น
             _queue_external(db, "teams", "teams", title, body, urgent, None, key)
     return created
+
+
+def emit_user_request(db, user_id: int) -> int:
+    """แจ้งผู้ดูแลระบบว่ามีคำขอสร้างบัญชีใหม่ (ไม่มีข้อมูลลับ: ไม่ใส่รหัสผ่าน/อีเมลในข้อความ); สัญญาเดียวกับ emit (SAVEPOINT, ไม่ throw, ไม่ commit)"""
+    db.execute("SAVEPOINT notify")
+    try:
+        u = db.execute("SELECT u.name, u.username, u.requested_org, p.name_th AS position, l.name_th AS level FROM safety_users u "
+                       "LEFT JOIN positions p ON p.id = u.position_id LEFT JOIN user_levels l ON l.id = u.level_id WHERE u.id=?", (user_id,)).fetchone()
+        if u is None:
+            db.execute("RELEASE notify")
+            return 0
+        title = clean(f"คำขอสร้างบัญชีใหม่: {u['name']}", TITLE_MAX)
+        body = clean(f"{u['username']} · {u['requested_org']} · {u['position'] or '-'} {u['level'] or ''} — รอผู้ดูแลระบบอนุมัติ", BODY_MAX)
+        rec = {"department_id": None, "reported_by": None, "owner_id": None, "id": user_id}
+        created = _write_rows(db, "user_requested", rec, title, body, "new", f"u{user_id}", "/admin/users#pending", None, None, user_id, None, False,
+                              frozenset({"users.manage"}), frozenset())
+        db.execute("RELEASE notify")
+        return created
+    except Exception:                                              # noqa: BLE001 — การแจ้งเตือนต้องไม่ทำให้การขอบัญชีล้ม
+        log.exception("emit_user_request(user=%s) failed; rolled back", user_id)
+        db.execute("ROLLBACK TO notify")
+        db.execute("RELEASE notify")
+        return 0
 
 
 def emit(db, event: str, hazard_id: int, actor_id: int | None, *, offset_days: int | None = None,

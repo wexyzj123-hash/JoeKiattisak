@@ -25,7 +25,7 @@ def test_scene_css_is_public_and_respects_reduced_motion(hub_app):
 def test_launcher_keeps_greeting_mascot_and_tiles(hub_app, monkeypatch):
     monkeypatch.setattr(launcher, "fetch_badge", lambda *a, **k: 3)
     html = login_as(hub_app).get("/").get_data(as_text=True)
-    assert "สวัสดี" in html and "mascot-alert" in html and 'class="tile"' in html and "เลือกระบบที่ต้องการใช้งาน" in html
+    assert "mascot-alert" in html and 'class="tile"' in html and "เลือกระบบที่ต้องการใช้งาน" in html and "AIAT Hub" in html
 
 
 def test_default_system_names_are_english_and_old_defaults_are_renamed(hub_app):
@@ -67,22 +67,13 @@ def test_gate_page_has_depth_layers_accent_tiles_and_assets(hub_app, monkeypatch
     assert "perspective" in c.get("/static/hub/scene.css").get_data(as_text=True)
 
 
-def test_login_pages_are_safety_only_with_animated_safety_scene_and_no_mascot_or_other_zones(hub_app):
-    c = hub_app.test_client()
+def test_hub_login_is_admin_only_and_launcher_has_no_login_or_one_time_signin_text(hub_app):
     from tests.hub.test_auth import add_user
     add_user(hub_app)
-    for path in ("/login", "/register"):
-        html = c.get(path).get_data(as_text=True)
-        assert 'class="ss"' in html and "AIAT Safety" in html and "<b>Safety</b>" in html, path
-        assert "mascot" not in html and "Environment" not in html and "Utility" not in html and 'class="tz"' not in html, path
-        assert "เข้าสู่ระบบครั้งเดียว" not in html and "ใช้ได้ทุกระบบ" not in html and "ทุกระบบที่คุณมีสิทธิ์" not in html, path
-        assert html.count('id="ss-glow"') == 1 and 'id="ss-gold"' in html and "Safety 4.0" not in html, path
-        assert not re.search(r"<script|onload=|href=\"http", html.split('class="ss"', 1)[1].split("</svg>", 1)[0]), path
-    assert 'href="/"' in c.get("/login").get_data(as_text=True)                                  # ลิงก์กลับหน้า Hub
+    c = hub_app.test_client()
+    login = c.get("/login").get_data(as_text=True)
+    assert "ผู้ดูแล Hub" in login and "เข้าสู่ระบบครั้งเดียว" not in login and "/register" not in login and "Safety 4.0" not in login
+    home = c.get("/").get_data(as_text=True)
+    assert "เข้าสู่ระบบครั้งเดียว" not in home and "ใช้ได้ทุกระบบ" not in home and "hub-login-btn" not in home
 
 
-def test_safety_scene_css_has_the_animations_and_reduced_motion_fallback(hub_app):
-    css = hub_app.test_client().get("/static/hub/scene.css").get_data(as_text=True)
-    for k in ("ss-orbit", "ss-ring", "ss-check", "ss-tape", "ss-shield", "ss-spark"):
-        assert f".{k}" in css, k
-    assert ".ss *, .ss { animation: none !important" in css

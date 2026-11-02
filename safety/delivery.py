@@ -86,7 +86,13 @@ def send_line(target: str, subject: str, body: str, env: Mapping) -> None:
 
 
 def send_teams(target: str, subject: str, body: str, env: Mapping) -> None:
-    url = (env.get("TEAMS_WEBHOOK_URL") or "").strip()
+    if target and target != "teams":                       # Webhook ของผู้ใช้เอง: ตรวจโดเมนซ้ำก่อนยิง (กัน SSRF)
+        from .notify import teams_host_ok
+        if not teams_host_ok(target, env):
+            raise TransportError("Webhook ของ Teams ไม่ถูกต้อง", retryable=False)
+        url = target
+    else:
+        url = (env.get("TEAMS_WEBHOOK_URL") or "").strip()
     if not url.lower().startswith("https://"):
         raise TransportError(UNCONFIGURED, retryable=False)
     _post_json(url, {"text": _text(subject, body, "teams", "\n\n")}, {}, env, "Teams")

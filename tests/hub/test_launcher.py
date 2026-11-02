@@ -34,15 +34,23 @@ def test_launcher_is_public_but_sso_apps_need_login(hub_app, monkeypatch):
     from hub.views import launcher
     monkeypatch.setattr(launcher, "fetch_badge", lambda *a, **k: 9)
     add_app(hub_app, "staff", "เฉพาะหัวหน้า", required_role="supervisor")
+    add_app(hub_app, "sso1", "ระบบที่ใช้บัญชี Hub")
+    sql(hub_app, "UPDATE app_registry SET link_mode='sso' WHERE key='sso1'")
     c = hub_app.test_client()
     r = c.get("/")
     html = r.get_data(as_text=True)
     assert r.status_code == 200 and "Safety" in html and "เฉพาะหัวหน้า" not in html          # ไม่ล็อกอิน: เห็นเฉพาะระบบที่ไม่จำกัดบทบาท
-    assert 'href="/login"' in html and "user-menu" not in html and 'class="badge"' not in html   # ไม่โชว์ตัวเลขภายใน
-    assert "เข้าสู่ระบบครั้งเดียว" not in html
-    r = c.get("/go/safety")
-    assert r.status_code == 302 and "/login?next=/go/safety" in r.headers["Location"]
+    assert "user-menu" not in html and 'class="badge"' not in html and "hub-login-btn" not in html   # ไม่มีปุ่มเข้าสู่ระบบ ไม่โชว์ตัวเลขภายใน
+    assert "เข้าสู่ระบบครั้งเดียว" not in html and "จะขอรหัสผ่าน" not in html and "สำหรับผู้ดูแล Hub" in html
+    r = c.get("/go/sso1")
+    assert r.status_code == 302 and "/login?next=/go/sso1" in r.headers["Location"]
     assert c.get("/go/staff").status_code == 302
+
+
+def test_safety_tile_is_a_plain_link_without_token_or_login(hub_app):
+    """Safety มีบัญชีของตัวเอง: Hub ส่งผู้ใช้ไปหน้า Safety ตรง ๆ ไม่ต้องล็อกอินที่ Hub และไม่ส่ง token"""
+    r = hub_app.test_client().get("/go/safety")
+    assert r.status_code == 302 and r.headers["Location"] == "http://safety.test" and "token" not in r.headers["Location"]
 
 
 def test_legacy_link_apps_open_without_login_but_role_limited_ones_do_not(hub_app):
@@ -76,6 +84,7 @@ def test_disabled_app_404_on_go(hub_app):
 
 
 def test_go_redirects_with_verifiable_token(hub_app):
+    sql(hub_app, "UPDATE app_registry SET link_mode='sso' WHERE key='safety'")
     r = login_as(hub_app, role="supervisor").get("/go/safety")
     assert r.status_code == 302
     u = urlparse(r.headers["Location"])
@@ -91,6 +100,7 @@ def test_go_forbidden_for_wrong_role(hub_app):
 
 
 def test_disabled_user_session_refused_on_go(hub_app):
+    sql(hub_app, "UPDATE app_registry SET link_mode='sso' WHERE key='safety'")
     c = login_as(hub_app)
     sql(hub_app, "UPDATE users SET active=0")
     r = c.get("/go/safety")

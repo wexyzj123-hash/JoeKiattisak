@@ -6,7 +6,7 @@ import secrets
 from functools import wraps
 
 from flask import abort, current_app, g, redirect, request, session
-from .urls import hub_public
+from urllib.parse import quote
 
 CSRF_KEY = "_csrf"
 
@@ -42,11 +42,17 @@ def load_user() -> None:
     g.user = row
 
 
+def login_redirect():
+    """ยังไม่ล็อกอิน → หน้าเข้าสู่ระบบของ Safety (จำหน้าที่ตั้งใจไปไว้ใน next เฉพาะคำขอแบบ GET)"""
+    nxt = request.full_path.rstrip("?") if request.method == "GET" and request.path != "/" else ""
+    return redirect("/login" + (f"?next={quote(nxt, safe='/')}" if nxt else ""))
+
+
 def safety_login_required(view):
     @wraps(view)
     def wrapped(*a, **kw):
         if g.get("user") is None:
-            return redirect(hub_public())
+            return login_redirect()
         return view(*a, **kw)
     return wrapped
 

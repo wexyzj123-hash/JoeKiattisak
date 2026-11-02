@@ -7,7 +7,6 @@ import sqlite3
 from flask import Blueprint, flash, g, redirect, render_template, request
 
 from ..db import get_db
-from ..settings import registration_open, set_setting
 from ..security import MIN_PASSWORD, ROLE_TH, hash_password, role_required
 
 bp = Blueprint("admin", __name__, url_prefix="/admin")
@@ -43,7 +42,7 @@ def apps():
                 flash("ที่อยู่ระบบต้องขึ้นต้นด้วย http:// หรือ https://")
             elif role not in ("",) + tuple(ROLE_TH):
                 flash("บทบาทที่จำกัดสิทธิ์ไม่ถูกต้อง")
-            elif f.get("link_mode", "sso") not in ("sso", "link"):
+            elif f.get("link_mode", "sso") not in ("sso", "link", "direct"):
                 flash("รูปแบบการเชื่อมต่อไม่ถูกต้อง")
             else:
                 db.execute("""INSERT INTO app_registry(key,name_th,url,icon,required_role,sort,link_mode) VALUES(?,?,?,?,?,?,?)
@@ -79,28 +78,8 @@ def users():
                     db.commit()
                 except sqlite3.IntegrityError:
                     flash("ชื่อผู้ใช้นี้มีอยู่แล้ว")
-        elif action == "set_registration":
-            set_setting(db, "self_register", "1" if f.get("open") == "1" else "0")
-            flash("เปิดรับคำขอสร้างบัญชีด้วยตนเองแล้ว" if f.get("open") == "1" else "ปิดรับคำขอสร้างบัญชีด้วยตนเองแล้ว (คำขอที่ค้างอยู่ยังอนุมัติหรือปฏิเสธได้)")
         elif target is None:
             flash("ไม่พบผู้ใช้")
-        elif action == "approve":
-            role = f.get("role", "")
-            if not target["pending"] or role not in ROLE_TH:
-                flash("ไม่พบคำขอที่รออนุมัติ หรือบทบาทไม่ถูกต้อง")
-            else:
-                db.execute("UPDATE users SET active=1, pending=0, role=? WHERE id=? AND pending=1", (role, uid))
-                db.commit()
-                flash(f"อนุมัติบัญชี {target['username']} แล้ว")
-        elif action == "reject":
-            if not target["pending"]:
-                flash("ปฏิเสธได้เฉพาะคำขอที่รออนุมัติ")
-            else:
-                db.execute("DELETE FROM users WHERE id=? AND pending=1", (uid,))
-                db.commit()
-                flash(f"ปฏิเสธและลบคำขอของ {target['username']} แล้ว")
-        elif target["pending"] and action in ("toggle", "set_role", "reset_password"):
-            flash("บัญชีนี้รออนุมัติ — กดอนุมัติหรือปฏิเสธก่อน")
         elif action == "toggle":
             if target["active"] and target["role"] == "admin" and _active_admin_count(db, target["id"]) == 0:
                 flash("ปิดใช้งานผู้ดูแลระบบคนสุดท้ายไม่ได้")
@@ -124,6 +103,5 @@ def users():
                 db.execute("UPDATE users SET password_hash=? WHERE id=?", (hash_password(f["password"]), uid))
                 db.commit()
         return redirect("/admin/users")
-    rows = db.execute("SELECT * FROM users WHERE pending=0 ORDER BY id").fetchall()
-    pending = db.execute("SELECT * FROM users WHERE pending=1 ORDER BY id").fetchall()
-    return render_template("admin_users.html", users=rows, pending=pending, roles=ROLE_TH, reg_open=registration_open(db))
+    rows = db.execute("SELECT * FROM users ORDER BY id").fetchall()
+    return render_template("admin_users.html", users=rows, roles=ROLE_TH)

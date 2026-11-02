@@ -1,4 +1,4 @@
-/* hub/assets/register.js — เลือกโรงงาน → แผนก → ไลน์ แบบต่อเนื่องในฟอร์มขอสร้างบัญชี (ข้อมูลจาก Safety) */
+/* safety/assets/register.js — เลือกโรงงาน → แผนก → ไลน์ แบบต่อเนื่องในฟอร์มขอสร้างบัญชี */
 (function () {
   var data = document.getElementById('org-data');
   if (!data) return;

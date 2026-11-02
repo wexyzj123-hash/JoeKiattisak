@@ -25,12 +25,12 @@ def test_admin_sees_home_plus_all_groups_in_screenshot_order():
         ["รายงานอุบัติเหตุ / Near Miss", "สถิติอุบัติเหตุ"],
         ["ตรวจความปลอดภัย (Safety Patrol)", "CAPA"],
         ["รายงานและสถิติ"],
-        ["โรงงาน", "แผนก", "ไลน์/กลุ่มงาน", "สาเหตุอุบัติเหตุ"],
+        ["โรงงาน", "แผนก", "ไลน์/กลุ่มงาน", "สาเหตุอุบัติเหตุ", "ตำแหน่ง", "ระดับ (L0-L2)"],
         ["ประเภทผู้ใช้งาน", "ผู้ใช้งาน", "เกณฑ์ความเสี่ยง", "ฟิลด์เพิ่มเติม", "ระดับความรุนแรงการบาดเจ็บ", "แบบตรวจความปลอดภัย", "แผนการตรวจ", "กำหนดส่งรายงาน", "ตั้งค่า CAPA", "การแจ้งเตือน"]]
     hrefs = [i.href for g in groups for i in g.items]
     assert hrefs == ["/", "/overview", "/overview/departments", "/master/risk-areas", "/hazards", "/master/hazard-sources",
                      "/master/hazard-types", "/incidents", "/incidents/stats", "/patrols", "/capas", "/reports", "/master/factories", "/master/departments", "/master/lines",
-                     "/master/incident-causes", "/admin/roles", "/admin/users", "/admin/criteria", "/admin/custom-fields",
+                     "/master/incident-causes", "/master/positions", "/master/user-levels", "/admin/roles", "/admin/users", "/admin/criteria", "/admin/custom-fields",
                      "/admin/injury-severities", "/admin/checklists", "/admin/patrol-plans", "/admin/report-due", "/admin/capa-settings", "/admin/notifications"]
 
 
@@ -141,3 +141,23 @@ def test_every_nav_link_resolves_for_admin(safety_app):
     for g in nav_items(ALL, "/"):
         for item in g.items:
             assert c.get(item.href).status_code == 200, item.href
+
+
+def test_groups_are_collapsible_dropdowns_with_the_current_group_open():
+    groups = nav_items(ALL, "/hazards")
+    open_titles = [g.title for g in groups if g.open]
+    assert open_titles == ["เมนูหลัก", "ระบบข้อมูลหลัก"]                       # หน้าหลักปักไว้ + กลุ่มที่มีหน้าปัจจุบัน
+    assert [g.title for g in nav_items(ALL, "/admin/users") if g.open] == ["เมนูหลัก", "ผู้ดูแลระบบ"]
+    assert [g.title for g in nav_items(ALL, "/") if g.open] == ["เมนูหลัก"]
+
+
+def test_layout_renders_details_groups_and_a_sidebar_hide_button(safety_app):
+    from tests.safety.helpers import login
+    html = login(safety_app, "admin").get("/admin/users").get_data(as_text=True)
+    assert html.count('<details class="nav-sec"') == 7 and 'id="nav-collapse"' in html and 'aria-expanded="true"' in html
+    sec = html.split('data-key="ผู้ดูแลระบบ"')[1][:20]
+    assert " open" in sec                                                       # กลุ่มของหน้าปัจจุบันเปิดอยู่
+    assert "<details class=\"nav-sec\" data-key=\"อุบัติเหตุ\">" in html           # กลุ่มอื่นพับไว้
+    assert "aiat.nav.hidden" in html and "localStorage" in html
+    css = safety_app.test_client().get("/static/theme.css").get_data(as_text=True)
+    assert ".nav-sec:not([open])" in css and ".shell.nav-hidden .sidebar" in css

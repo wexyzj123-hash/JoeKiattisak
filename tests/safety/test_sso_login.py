@@ -77,16 +77,16 @@ def test_inactive_safety_user_403(safety_app):
     assert safety_app.test_client().get("/sso?token=" + token()).status_code == 403
 
 
-def test_home_redirects_to_hub_when_anonymous(safety_app):
+def test_home_redirects_to_safety_login_when_anonymous(safety_app):
     r = safety_app.test_client().get("/")
-    assert r.status_code == 302 and r.headers["Location"] == "http://hub.test"
+    assert r.status_code == 302 and r.headers["Location"] == "/login"
 
 
-def test_logout_goes_through_hub(safety_app):
+def test_logout_returns_to_the_hub_home_page(safety_app):
     c = safety_app.test_client()
     c.get("/sso?token=" + token())
     r = c.post("/logout", data={"_csrf": csrf(c)})
-    assert r.status_code == 302 and r.headers["Location"] == "http://hub.test/logout"
+    assert r.status_code == 302 and r.headers["Location"] == "http://hub.test"
     assert c.get("/").status_code == 302
 
 
@@ -108,11 +108,11 @@ def test_token_for_another_audience_rejected(safety_app, aud):
     assert users(safety_app) == []
 
 
-def test_signout_clears_safety_session_and_returns_to_hub_login(safety_app):
+def test_signout_clears_safety_session_and_returns_to_safety_login(safety_app):
     c = safety_app.test_client()
     c.get("/sso?token=" + token())
     r = c.get("/signout")
-    assert r.status_code == 302 and r.headers["Location"] == "http://hub.test/login"
+    assert r.status_code == 302 and r.headers["Location"] == "/login"
     assert c.get("/").status_code == 302
 
 

@@ -15,7 +15,7 @@ def post(c, **data):
 
 
 def rule_form(**kw):
-    return {"action": "rule_create", "event": "hazard_closed", "recipients": "reporter,owner", "channels": ["inapp", "telegram"],
+    return {"action": "rule_create", "event": "hazard_closed", "recipients": "reporter,owner", "channels": ["inapp", "email"],
             "offset_days": "0", "min_score": "", **kw}
 
 
@@ -38,10 +38,12 @@ def test_create_update_toggle_delete_rule(safety_app):
     assert post(c, **rule_form(recipients="reporter, owner ,reporter")).status_code == 302
     r = rules(safety_app)[-1]
     assert (r["event"], r["recipients"], r["channels"], r["offset_days"], r["min_score"], r["enabled"]) == \
-        ("hazard_closed", "reporter,owner", "inapp,telegram", 0, None, 1) and len(rules(safety_app)) == n0 + 1
-    post(c, action="rule_update", id=str(r["id"]), event="hazard_closed", recipients="owner", channels=["inapp", "line", "email"], offset_days="0", min_score="")
+        ("hazard_closed", "reporter,owner", "inapp,email", 0, None, 1) and len(rules(safety_app)) == n0 + 1
+    post(c, action="rule_update", id=str(r["id"]), event="hazard_closed", recipients="owner", channels=["inapp", "line"], offset_days="0", min_score="")     # line ปิดไว้ก่อน → ปฏิเสธ ค่าเดิมคงอยู่
+    assert rules(safety_app, f"id={r['id']}")[0]["channels"] == "inapp,email"
+    post(c, action="rule_update", id=str(r["id"]), event="hazard_closed", recipients="owner", channels=["inapp", "teams", "email"], offset_days="0", min_score="")
     r = rules(safety_app, f"id={r['id']}")[0]
-    assert (r["recipients"], r["channels"]) == ("owner", "inapp,line,email")
+    assert (r["recipients"], r["channels"]) == ("owner", "inapp,teams,email")
     post(c, action="rule_toggle", id=str(r["id"]))
     assert rules(safety_app, f"id={r['id']}")[0]["enabled"] == 0
     post(c, action="rule_delete", id=str(r["id"]))
@@ -125,7 +127,7 @@ def test_channel_status_shows_configured_flags_never_secrets(safety_app, monkeyp
         monkeypatch.delenv(k, raising=False)
     c = login(safety_app)
     html = c.get(URL).get_data(as_text=True)
-    assert html.count("ยังไม่ได้ตั้งค่า") >= 4
+    assert html.count("ยังไม่ได้ตั้งค่า") >= 2 and "Telegram" not in html.split("สถานะช่องทาง")[1].split("คิวข้อความ")[0] and "LINE" not in html.split("สถานะช่องทาง")[1].split("คิวข้อความ")[0]
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN", secret); monkeypatch.setenv("SMTP_HOST", "smtp.secret-host.example")
     monkeypatch.setenv("SMTP_PASSWORD", secret + "2"); monkeypatch.setenv("TEAMS_WEBHOOK_URL", "https://hook.example/" + secret)
     html = c.get(URL).get_data(as_text=True)
@@ -175,20 +177,35 @@ def test_outbox_view_masks_targets_and_escapes(safety_app):
     assert "ส่งไม่สำเร็จถาวร" in html and "ล้มเหลว (จะลองใหม่)" in html
 
 
-def test_send_test_queues_to_own_contacts_only(safety_app):
+def test_send_test_sends_now_to_own_contacts_only_and_reports_the_real_result(safety_app, monkeypatch):
+    from safety import delivery
+    sent = []
+    monkeypatch.setitem(delivery.REAL, "email", lambda target, subject, body, env: sent.append(("email", target)))
+    monkeypatch.setitem(delivery.REAL, "teams", lambda target, subject, body, env: sent.append(("teams", target)))
     c = login(safety_app)
     other = login(safety_app, "reporter")
+    hook = "https://contoso.webhook.office.com/webhookb2/abc"
     con = connect(safety_app.config["DATABASE"])
-    con.execute("UPDATE safety_users SET telegram_chat_id='111', email='me@example.com', notify_channels='inapp,telegram,email' WHERE id=?", (c.uid,))
-    con.execute("UPDATE safety_users SET telegram_chat_id='999', notify_channels='inapp,telegram' WHERE id=?", (other.uid,))
+    con.execute("UPDATE safety_users SET teams_webhook=?, email='me@example.com', notify_channels='inapp,teams,email' WHERE id=?", (hook, c.uid))
+    con.execute("UPDATE safety_users SET email='other@example.com', notify_channels='inapp,email' WHERE id=?", (other.uid,))
     con.commit()
-    post(c, action="send_test")
-    rows = sorted(tuple(r) for r in sql(safety_app, "SELECT channel, target FROM notify_outbox"))
-    assert rows == [("email", "me@example.com"), ("telegram", "111")]
+    r = post(c, action="send_test")
+    assert sorted(sent) == [("email", "me@example.com"), ("teams", hook)]                  # ส่งหาตัวเองเท่านั้น
+    assert "ส่งข้อความทดสอบสำเร็จ: Teams, อีเมล" in c.get(URL).get_data(as_text=True)
     assert sql(safety_app, "SELECT COUNT(*) FROM notifications WHERE user_id=? AND title LIKE '%ทดสอบ%'", (c.uid,))[0][0] == 1
     assert sql(safety_app, "SELECT COUNT(*) FROM notifications WHERE user_id=?", (other.uid,))[0][0] == 0
-    post(c, action="send_test")                                                          # กดซ้ำคิวใหม่ได้ (คีย์ต่างกัน)
-    assert len(sql(safety_app, "SELECT 1 FROM notify_outbox")) == 4
+
+
+def test_send_test_reports_failure_reason_without_secret(safety_app, monkeypatch):
+    from safety import delivery
+    def boom(target, subject, body, env):
+        raise delivery.TransportError("SMTP: เชื่อมต่อไม่สำเร็จหรือหมดเวลา")
+    monkeypatch.setitem(delivery.REAL, "email", boom)
+    c = login(safety_app)
+    sql(safety_app, "UPDATE safety_users SET email='me@example.com', notify_channels='inapp,email' WHERE id=?", (c.uid,))
+    post(c, action="send_test")
+    html = c.get(URL).get_data(as_text=True)
+    assert "ส่งไม่สำเร็จ: อีเมล (SMTP: เชื่อมต่อไม่สำเร็จหรือหมดเวลา)" in html and "ส่งข้อความทดสอบสำเร็จ" not in html
 
 
 def test_send_test_without_contacts_explains(safety_app):

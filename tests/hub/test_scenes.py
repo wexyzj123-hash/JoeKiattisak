@@ -21,7 +21,7 @@ def test_launcher_mascot_is_alert_only_when_a_badge_is_positive(hub_app, monkeyp
     assert f"mascot-{mood}" in html
     other = "alert" if mood == "default" else "default"
     assert f"mascot-{other}" not in html
-    assert "สวัสดี" in html
+    assert "AIAT Hub" in html
 
 
 def test_launcher_escapes_user_name_next_to_mascot(hub_app, monkeypatch):

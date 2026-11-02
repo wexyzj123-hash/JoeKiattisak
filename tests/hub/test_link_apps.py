@@ -77,7 +77,7 @@ def test_old_database_gets_link_mode_column(tmp_path):
                       "CREATE TABLE users(id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, name_th TEXT DEFAULT '', password_hash TEXT, role TEXT DEFAULT 'viewer', active INTEGER DEFAULT 1);"
                       "INSERT INTO app_registry(key,name_th,url) VALUES('safety','S','http://s.test');")
     ensure_schema(con); ensure_schema(con)
-    assert con.execute("SELECT link_mode FROM app_registry").fetchone()[0] == "sso"
+    assert con.execute("SELECT link_mode FROM app_registry").fetchone()[0] == "direct"        # Safety มีบัญชีของตัวเอง → ย้ายเป็นลิงก์ตรง (แท็บเดิม) ครั้งเดียว
 
 
 def test_go_uses_the_host_the_user_came_in_on_for_loopback_urls(hub_app):
@@ -98,11 +98,11 @@ def test_go_uses_the_host_the_user_came_in_on_for_loopback_urls(hub_app):
 def test_default_legacy_links_added_automatically_only_when_port_5000_is_alive(hub_app):
     con = connect(hub_app.config["DATABASE"])
     seed_link_apps(con, {}, hub_port=5001, probe=lambda port: False)
-    assert con.execute("SELECT COUNT(*) FROM app_registry WHERE link_mode='link'").fetchone()[0] == 0
+    assert con.execute("SELECT COUNT(*) FROM app_registry WHERE link_mode='link' AND key <> 'safety'").fetchone()[0] == 0
     seed_link_apps(con, {}, hub_port=5000, probe=lambda port: True)                                   # Hub เองอยู่ 5000 → ไม่ลิงก์ไปตัวเอง
-    assert con.execute("SELECT COUNT(*) FROM app_registry WHERE link_mode='link'").fetchone()[0] == 0
+    assert con.execute("SELECT COUNT(*) FROM app_registry WHERE link_mode='link' AND key <> 'safety'").fetchone()[0] == 0
     seed_link_apps(con, {}, hub_port=5001, probe=lambda port: port == 5000)
-    got = {r["key"]: r["url"] for r in con.execute("SELECT key, url FROM app_registry WHERE link_mode='link'")}
+    got = {r["key"]: r["url"] for r in con.execute("SELECT key, url FROM app_registry WHERE link_mode='link' AND key <> 'safety'")}
     assert got == {"utcmms": "http://localhost:5000/", "echeck": "http://localhost:5000/echeck/dashboard"}
     con.execute("UPDATE app_registry SET enabled=0 WHERE key='utcmms'"); con.commit()
     seed_link_apps(con, {}, hub_port=5001, probe=lambda port: True)
