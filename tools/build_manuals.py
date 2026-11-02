@@ -16,7 +16,7 @@ CROPS = {
     "home-reporter": ("full", None), "home-mobile": ("full", None), "hazard-form-mobile": ("full", None), "hub-login": ("full", None), "hub-register": ("full", None), "login": ("full", None), "register": ("full", None), "hub-launcher-public": ("full", None), "hub-launcher": ("full", None),
     "drawer": ("full", None), "home-admin": ("body", 1500),
 }
-BODY_MAX = {"admin-criteria": 1500, "hazard-form": 640, "hazard-form-filled": 760, "notifications": 560, "profile": 560, "hazard-list": 620, "search": 520, "capa-list": 620, "patrol-list": 640,
+BODY_MAX = {"admin-criteria": 1500, "hazard-form": 1150, "hazard-form-filled": 1250, "notifications": 560, "profile": 560, "hazard-list": 620, "search": 520, "capa-list": 620, "patrol-list": 640,
             "reports-index": 600, "master-hazard-types": 600}
 
 

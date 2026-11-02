@@ -91,6 +91,7 @@ process.stdin.on('end', async () => {
       }
       if (j.click) { await page.locator(j.click).first().click(); }
       await page.waitForTimeout(j.waitMs || 1600);
+      if (j.full) await page.addStyleTag({ content: '.topbar,.sidebar,aside{position:static !important}' });   // ภาพยาว: ไม่ให้แถบบน/เมนูที่ตรึงไว้ไปโผล่กลางภาพ
       const file = path.join(job.out, j.name + '.png');
       await page.screenshot({ path: file, fullPage: !!j.full });
       log.push(`${resp.status()} ${j.name}`);
