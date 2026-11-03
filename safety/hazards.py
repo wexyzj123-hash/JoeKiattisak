@@ -68,6 +68,35 @@ def visible_hazard(db, user, hazard_id: int):
     return row
 
 
+AUTO_PREFIX = "AUTO-"
+
+
+def _crumb(db, td, row) -> str:
+    text = breadcrumb(db, td, row["id"])
+    return text.rsplit(" › ", 1)[0] if row["code"].startswith(AUTO_PREFIX) else text      # พื้นที่อัตโนมัติ = ระดับไลน์ ไม่โชว์คำว่า "ทั่วไป"
+
+
+def ensure_line_area(db, line_id: int) -> int:
+    """ฟอร์มแจ้งอันตรายเลือกถึงระดับไลน์ + พิมพ์สถานที่เอง — ระบบเก็บพื้นที่ภายในระดับไลน์ให้อัตโนมัติ (ใช้กับขอบเขตสิทธิ์/รายงานเดิม)"""
+    code = f"{AUTO_PREFIX}{line_id}"
+    row = db.execute("SELECT id, active FROM risk_areas WHERE code=?", (code,)).fetchone()
+    if row is None:
+        cur = db.execute("INSERT INTO risk_areas(code, name_th, line_id, description) VALUES(?,?,?,?)",
+                         (code, "ทั่วไป", line_id, "สร้างอัตโนมัติจากฟอร์มแจ้งอันตราย (เลือกถึงระดับไลน์)"))
+        return cur.lastrowid
+    if not row["active"]:
+        db.execute("UPDATE risk_areas SET active=1 WHERE id=?", (row["id"],))
+    return row["id"]
+
+
+def location_history(db, user, limit: int = 50) -> list[str]:
+    """สถานที่ที่เคยกรอกในรายการที่ผู้ใช้เห็น (ใช้เป็นตัวช่วยเติมคำ และดูย้อนหลังได้)"""
+    scope_sql, args = hazard_scope_sql(user)
+    rows = db.execute("SELECT h.location_text AS t, COUNT(*) AS n FROM hazards h WHERE h.location_text <> '' AND " + scope_sql +
+                      " GROUP BY h.location_text ORDER BY n DESC, MAX(h.id) DESC LIMIT ?", args + [limit]).fetchall()
+    return [r["t"] for r in rows]
+
+
 def risk_area_options(db, user) -> list:
     """พื้นที่เสี่ยงที่เลือกได้: ตัวมัน ไลน์ แผนก และโรงงานต้องใช้งานอยู่ทั้งหมด และอยู่ในขอบเขตผู้ใช้"""
     conds, args = ["ra.active=1", "l.active=1", "d.active=1", "f.active=1"], []
@@ -82,7 +111,7 @@ def risk_area_options(db, user) -> list:
                       f"WHERE {' AND '.join(conds)} ORDER BY f.code, d.code, l.code, ra.code", args).fetchall()
     td = REGISTRY["risk-areas"]
     return [{"id": r["id"], "code": r["code"], "name_th": r["name_th"], "factory_id": r["factory_id"], "department_id": r["department_id"],
-             "line_id": r["line_id"], "department_name": r["department_name"], "line_name": r["line_name"], "breadcrumb": breadcrumb(db, td, r["id"])}
+             "line_id": r["line_id"], "department_name": r["department_name"], "line_name": r["line_name"], "breadcrumb": _crumb(db, td, r)}
             for r in rows]
 
 

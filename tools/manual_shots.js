@@ -25,7 +25,7 @@ process.stdin.on('end', async () => {
   add('hazard-form', { who: 'reporter', url: '/hazards/new', full: true });
   add('hazard-form-filled', { who: 'reporter', url: '/hazards/new', full: true, fill: {
     title: 'ถังสารเคมีวางโล่ง ไม่มีฝาปิด', description: 'ถังโซเดียมไฮดรอกไซด์ 20 ลิตร วางข้างทางเดินในคลัง ไม่มีฝาปิดและไม่มีป้ายบอกชนิดสารเคมี',
-    risk_area_id: { label: /คลังสารเคมี/ }, hazard_type_id: { label: /สารเคมี/ }, source_id: { label: /พนักงานแจ้ง/ },
+    '#f_factory': { label: /บางนา/ }, '#f_dept': { label: /ซ่อมบำรุง/ }, line_id: { label: /ห้องซ่อมบำรุง/ }, hazard_type_id: { label: /สารเคมี/ }, source_id: { label: /พนักงานแจ้ง/ },
     machine_no: 'CH-02', location_text: 'ข้างทางเดินในคลัง', hiyari_type_id: { label: /สภาพที่ไม่ปลอดภัย/ },
     rpt_severity: { label: /^B/ }, rpt_likelihood: { label: /Moderate/ }, rpt_measure: { label: /Moderate/ }, temp_action: 'ปิดฝาและกั้นเขตชั่วคราว' } });
   add('hazard-detail-mine', { who: 'reporter', url: `/hazards/${ids.h1}`, full: true });
@@ -84,7 +84,7 @@ process.stdin.on('end', async () => {
       const resp = await page.goto(base + j.url, { waitUntil: 'networkidle' });
       if (j.fill) {
         for (const [k, v] of Object.entries(j.fill)) {
-          const el = page.locator(`[name="${k}"]`);
+          const el = page.locator(k.startsWith('#') ? k : `[name="${k}"]`);
           if (typeof v === 'string') await el.fill(v);
           else { const opts = await el.locator('option').allTextContents(); const hit = opts.find((t) => v.label.test(t)); await el.selectOption({ label: hit }); }
         }

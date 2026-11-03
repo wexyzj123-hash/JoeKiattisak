@@ -97,7 +97,7 @@ def test_emit_twice_is_idempotent(n):
     assert (len(n.notes()), n.db.execute("SELECT COUNT(*) FROM notify_outbox").fetchone()[0]) == before
 
 
-@pytest.mark.parametrize("score, expected", [(16, 0), (17, 2), (25, 2)])
+@pytest.mark.parametrize("score, expected", [(18, 0), (19, 2), (25, 2)])
 def test_min_score_filters_assessed_rule(n, score, expected):
     hid = n.hz(score=score, status="assessed", level_name="x", level_color="#fff")
     assert emit(n.db, "hazard_assessed", hid, n.asr_all) == expected                 # dept_head + admin

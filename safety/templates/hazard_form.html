@@ -21,14 +21,12 @@
     <label>วันที่เกิดเหตุ <input type="date" name="occurred_on" value="{{ values.get('occurred_on', today) }}" max="{{ today }}"></label>
     <label>ผู้พบเห็น <input name="observer" maxlength="200" value="{{ values.get('observer', g.user['name']) }}"></label>
 
-    <label>โรงงาน <select id="f_factory"><option value="">— เลือก —</option>{% for f in org.factories %}<option value="{{ f.id }}">{{ f.name }}</option>{% endfor %}</select></label>
-    <label>แผนก <select id="f_dept" disabled><option value="">— เลือก —</option></select></label>
-    <label>ไลน์/กลุ่มงาน <select id="f_line" disabled><option value="">— เลือก —</option></select></label>
+    <label>โรงงาน * <select id="f_factory" required><option value="">— เลือก —</option>{% for f in org.factories %}<option value="{{ f.id }}">{{ f.name }}</option>{% endfor %}</select></label>
+    <label>แผนก * <select id="f_dept" required disabled><option value="">— เลือก —</option></select></label>
+    <label>ไลน์/กลุ่มงาน * <select name="line_id" id="f_line" required disabled><option value="">— เลือก —</option></select></label>
 
-    <label>พื้นที่เสี่ยง * <select name="risk_area_id" id="f_area" required><option value="">— เลือก —</option>
-      {% for a in areas %}<option value="{{ a['id'] }}" {{ 'selected' if values.get('risk_area_id', '') | string == a['id'] | string }}>{{ a['breadcrumb'] }}</option>{% endfor %}</select>
-      <small id="f_hint" style="color:var(--muted);display:none">ยังไม่มีพื้นที่เสี่ยงในไลน์นี้ — แจ้งผู้ดูแลระบบให้เพิ่มที่ ข้อมูลหลัก › พื้นที่เสี่ยง</small></label>
-    <label>สถานที่ <input name="location_text" maxlength="200" value="{{ values.get('location_text', '') }}" placeholder="เช่น หน้าเครื่อง / ทางเดินหลัก"></label>
+    <label class="hz-span2">สถานที่ <input name="location_text" list="f_loc_list" maxlength="200" value="{{ values.get('location_text', '') }}" placeholder="พิมพ์เอง เช่น หน้าเครื่อง / ทางเดินหลัก (ระบบจำไว้ให้เลือกครั้งต่อไปและค้นย้อนหลังได้)" autocomplete="off">
+      <datalist id="f_loc_list">{% for t in locations %}<option value="{{ t }}">{% endfor %}</datalist></label>
     <label>หมายเลขเครื่องจักร <input name="machine_no" maxlength="200" value="{{ values.get('machine_no', '') }}"></label>
 
     <label>แหล่งที่มา * <select name="source_id" required><option value="">— เลือก —</option>
@@ -74,7 +72,7 @@
   </div>
   <div style="display:flex;gap:8px;margin-top:14px"><button type="submit">บันทึกการแจ้ง</button><a class="btn" href="/hazards">ยกเลิก</a></div>
 </form>
-<script type="application/json" id="hz-data">{{ {'areas': areas, 'levels': score_levels, 'sel': values.get('risk_area_id', '')|string, 'org': org} | tojson }}</script>
+<script type="application/json" id="hz-data">{{ {'levels': score_levels, 'sel_line': values.get('line_id', '')|string, 'org': org} | tojson }}</script>
 <script>
 // ประเภทอันตราย → แสดงเฉพาะฟิลด์เพิ่มเติมของประเภทนั้น (เซิร์ฟเวอร์ตรวจซ้ำเสมอ)
 (function () {
@@ -89,39 +87,25 @@
   }
   sel.addEventListener('change', apply); apply();
 })();
-// โรงงาน → แผนก → ไลน์ → พื้นที่เสี่ยง (ตัวกรองช่วยเลือก; ค่าที่ส่งคือพื้นที่เสี่ยง และเซิร์ฟเวอร์ตรวจขอบเขตซ้ำ)
+// โรงงาน → แผนก → ไลน์/กลุ่มงาน (รายการมาจากข้อมูลองค์กร ไม่ต้องมีพื้นที่เสี่ยงมาก่อน; เซิร์ฟเวอร์ตรวจขอบเขตซ้ำ)
 (function () {
-  var data = JSON.parse(document.getElementById('hz-data').textContent), areas = data.areas, org = data.org;
-  var F = document.getElementById('f_factory'), D = document.getElementById('f_dept'), L = document.getElementById('f_line'), A = document.getElementById('f_area'), H = document.getElementById('f_hint');
-  function load(select, items, text) {
+  var org = JSON.parse(document.getElementById('hz-data').textContent).org, sel = JSON.parse(document.getElementById('hz-data').textContent).sel_line;
+  var F = document.getElementById('f_factory'), D = document.getElementById('f_dept'), L = document.getElementById('f_line');
+  function load(select, items) {
     var keep = select.value; select.innerHTML = '<option value="">— เลือก —</option>';
-    items.forEach(function (it) { var o = document.createElement('option'); o.value = String(it.id); o.textContent = text(it); select.appendChild(o); });
+    items.forEach(function (it) { var o = document.createElement('option'); o.value = String(it.id); o.textContent = it.name; select.appendChild(o); });
     if (items.some(function (it) { return String(it.id) === keep; })) select.value = keep;
     select.disabled = items.length === 0;
   }
   function refresh() {
-    load(D, org.departments.filter(function (d) { return !F.value || String(d.factory_id) === F.value; }), function (d) { return d.name; });
-    load(L, org.lines.filter(function (l) {
-      if (D.value) return String(l.department_id) === D.value;
-      var dep = org.departments.filter(function (d) { return d.id === l.department_id; })[0];
-      return !F.value || (dep && String(dep.factory_id) === F.value);
-    }), function (l) { return l.name; });
-    var inL = areas.filter(function (a) {
-      return (!F.value || String(a.factory_id) === F.value) && (!D.value || String(a.department_id) === D.value) && (!L.value || String(a.line_id) === L.value);
-    });
-    load(A, inL, function (a) { return a.breadcrumb; }); A.disabled = false;
-    H.style.display = (L.value && inL.length === 0) ? '' : 'none';
+    load(D, org.departments.filter(function (d) { return F.value && String(d.factory_id) === F.value; }));
+    load(L, org.lines.filter(function (l) { return D.value && String(l.department_id) === D.value; }));
   }
   F.addEventListener('change', function () { D.value = ''; L.value = ''; refresh(); });
   D.addEventListener('change', function () { L.value = ''; refresh(); });
-  L.addEventListener('change', refresh);
-  A.addEventListener('change', function () {
-    var a = areas.filter(function (x) { return String(x.id) === A.value; })[0]; if (!a) return;
-    F.value = String(a.factory_id); refresh(); D.value = String(a.department_id); refresh(); L.value = String(a.line_id); refresh(); A.value = String(a.id);
-  });
-  var pre = areas.filter(function (x) { return String(x.id) === data.sel; })[0];
-  if (pre) { F.value = String(pre.factory_id); refresh(); D.value = String(pre.department_id); refresh(); L.value = String(pre.line_id); refresh(); A.value = String(pre.id); }
-  else { if (org.factories.length === 1) F.value = String(org.factories[0].id); refresh(); }
+  var pre = org.lines.filter(function (l) { return String(l.id) === sel; })[0];
+  if (pre) { var dep = org.departments.filter(function (d) { return d.id === pre.department_id; })[0]; F.value = String(dep.factory_id); refresh(); D.value = String(dep.id); refresh(); L.value = String(pre.id); }
+  else { if (org.factories.length === 1) F.value = String(org.factories[0].id); refresh(); if (org.departments.length && D.options.length === 2) { D.value = D.options[1].value; refresh(); } }
 })();
 // คะแนนความเสี่ยง = คะแนนความรุนแรง + ความถี่ + มาตรการป้องกัน (ค่าที่เก็บจริงคำนวณที่เซิร์ฟเวอร์ตามเกณฑ์ปัจจุบัน)
 (function () {

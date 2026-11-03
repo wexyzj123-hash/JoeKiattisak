@@ -73,7 +73,7 @@ def test_report_form_and_submit_with_photo_and_custom_field(env):
     env.db.commit()
     c = login(env.app, "reporter")
     html = c.get("/hazards/new").get_data(as_text=True)
-    assert "พื้นที่ A" in html and "สารเคมี" in html and "อุณหภูมิ (°C)" in html and "โรงงาน A › แผนก A" in html
+    assert "สารเคมี" in html and "อุณหภูมิ (°C)" in html and 'name="line_id"' in html and 'name="risk_area_id"' not in html
     r = c.post("/hazards/new", data={"_csrf": csrf(c), **env.form(cf_temp="85.5"), "photos": (io.BytesIO(png()), "a.png")},
                content_type="multipart/form-data")
     assert r.status_code == 302

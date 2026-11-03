@@ -11,7 +11,7 @@ from typing import Mapping
 
 from . import capa, notify, timeutil
 from .customfields import fields_for_type, validate_custom
-from .hazards import add_event, next_code, risk_area_options, user_in_scope, visible_hazard
+from .hazards import add_event, ensure_line_area, next_code, org_options, risk_area_options, user_in_scope, visible_hazard
 from .perms import user_permissions
 from .risk import calc_score, level_for_score
 
@@ -117,8 +117,15 @@ def report(db, user, form: Mapping, *, patrol_answer_id: int | None = None, requ
         errors.append(f"หัวข้อยาวเกิน {TITLE_MAX} ตัวอักษร")
     if len(desc) > DESC_MAX:
         errors.append(f"รายละเอียดยาวเกิน {DESC_MAX} ตัวอักษร")
-    area = _int(form.get("risk_area_id"))
-    if area is None or area not in {o["id"] for o in risk_area_options(db, user)}:
+    area, line = _int(form.get("risk_area_id")), _int(form.get("line_id"))
+    if area is None and (form.get("risk_area_id") or "").strip() == "" and line is not None:      # ฟอร์มปกติ: เลือกถึงไลน์ + พิมพ์สถานที่เอง
+        if line in {l["id"] for l in org_options(db, user)["lines"]}:
+            area = ensure_line_area(db, line)
+        else:
+            errors.append("กรุณาเลือกไลน์/กลุ่มงานที่ใช้งานอยู่และอยู่ในขอบเขตของคุณ")
+    elif area is None and (form.get("risk_area_id") or "").strip() == "":
+        errors.append("กรุณาเลือกโรงงาน แผนก และไลน์/กลุ่มงาน")
+    elif area is None or area not in {o["id"] for o in risk_area_options(db, user)}:
         errors.append("กรุณาเลือกพื้นที่เสี่ยงที่ใช้งานอยู่และอยู่ในขอบเขตของคุณ")
     type_id, source_id = _int(form.get("hazard_type_id")), _int(form.get("source_id"))
     if type_id is None or not db.execute("SELECT 1 FROM hazard_types WHERE id=? AND active=1", (type_id,)).fetchone():

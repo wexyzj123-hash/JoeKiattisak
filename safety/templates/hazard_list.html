@@ -14,17 +14,17 @@
     {% for k, v in status_th.items() %}<option value="{{ k }}" {{ 'selected' if f.status == k }}>{{ v }}</option>{% endfor %}</select></label>
   <label>ระดับความเสี่ยง <select name="level"><option value="">ทั้งหมด</option><option value="none" {{ 'selected' if f.level == 'none' }}>ยังไม่ประเมิน</option>
     {% for l in levels %}<option value="{{ l['name_th'] }}" {{ 'selected' if f.level == l['name_th'] }}>{{ l['name_th'] }}</option>{% endfor %}</select></label>
-  <label>พื้นที่เสี่ยง <select name="area"><option value="">ทั้งหมด</option>
+  <label>ไลน์ / พื้นที่ <select name="area"><option value="">ทั้งหมด</option>
     {% for a in areas %}<option value="{{ a['id'] }}" {{ 'selected' if f.area == a['id'] }}>{{ a['name_th'] }}</option>{% endfor %}</select></label>
   <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="mine" value="1" {{ 'checked' if f.mine == '1' }}> เฉพาะของฉัน</label>
   <button type="submit">ค้นหา</button>
 </form>
 <div class="card" style="max-width:none;margin:0;overflow-x:auto">
 <table class="table-stack" style="width:100%">
-  <tr>{{ th('code', 'รหัส') }}<th>หัวข้อ</th><th>พื้นที่</th>{{ th('score', 'ความเสี่ยง') }}{{ th('status', 'สถานะ') }}{{ th('due_date', 'ครบกำหนด') }}<th>ผู้แจ้ง</th><th>ผู้รับผิดชอบ</th>{{ th('reported_at', 'แจ้งเมื่อ') }}</tr>
+  <tr>{{ th('code', 'รหัส') }}<th>หัวข้อ</th><th>ไลน์ · สถานที่</th>{{ th('score', 'ความเสี่ยง') }}{{ th('status', 'สถานะ') }}{{ th('due_date', 'ครบกำหนด') }}<th>ผู้แจ้ง</th><th>ผู้รับผิดชอบ</th>{{ th('reported_at', 'แจ้งเมื่อ') }}</tr>
   {% for r in rows %}
   <tr>
-    <td><a href="/hazards/{{ r['id'] }}">{{ r['code'] }}</a></td><td>{{ r['title'] }}</td><td>{{ r['area_name'] }}</td>
+    <td><a href="/hazards/{{ r['id'] }}">{{ r['code'] }}</a></td><td>{{ r['title'] }}</td><td>{{ r['area_name'] }}{% if r['location_text'] %} · {{ r['location_text'] }}{% endif %}</td>
     <td>{% if r['level_name'] %}<span class="chip" style="background:{{ r['level_color'] }}">{{ r['level_name'] }} ({{ r['score'] }})</span>{% else %}<span style="color:var(--muted)">ยังไม่ประเมิน</span>{% endif %}</td>
     <td>{{ status_th[r['status']] }}</td>
     <td>{{ r['due_date'] or '' }}{% if r['overdue'] %} <span class="chip" style="background:var(--danger)">เกินกำหนด</span>{% endif %}</td>

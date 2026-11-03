@@ -56,7 +56,7 @@ def test_default_rules_seeded_once_and_not_overwritten(db):
     assert {r["event"] for r in rules} == EVENTS and len(rules) == 27
     by = {(r["event"], r["offset_days"]): r for r in rules}
     assert by[("hazard_reported", 0)]["recipients"] == "role:assessor" and by[("hazard_reported", 0)]["channels"] == "inapp,email"
-    assert by[("hazard_assessed", 0)]["min_score"] == 17 and by[("hazard_assessed", 0)]["recipients"] == "role:dept_head,role:admin"
+    assert by[("hazard_assessed", 0)]["min_score"] == 19 and by[("hazard_assessed", 0)]["recipients"] == "role:dept_head,role:admin"
     assert by[("hazard_assigned", 0)]["channels"] == "inapp,email" and by[("hazard_assigned", 0)]["recipients"] == "owner"
     assert by[("hazard_closed", 0)]["recipients"] == "reporter" and by[("hazard_rejected", 0)]["recipients"] == "reporter"
     assert by[("due_soon", 2)]["recipients"] == "owner"

@@ -12,7 +12,7 @@ from flask import Blueprint, abort, current_app, flash, g, redirect, render_temp
 from .. import capa, timeutil, workflow
 from ..customfields import fields_for_type
 from ..db import get_db
-from ..hazards import EVENT_TH, STATUS_TH, can_view_all, hazard_scope_sql, next_code, org_options, risk_area_options, user_in_scope, visible_hazard
+from ..hazards import EVENT_TH, STATUS_TH, can_view_all, hazard_scope_sql, location_history, next_code, org_options, risk_area_options, user_in_scope, visible_hazard
 from ..images import KINDS, MAX_PER_KIND, ImageError, process_image, save_attachment
 from ..master import REGISTRY, active_options
 from ..perms import permission_any, permission_required, user_permissions
@@ -112,7 +112,7 @@ def index():
         lik = sev = None
     q = request.args.get("q", "").strip()
     if q:
-        conds.append("(h.code LIKE ? ESCAPE '\\' OR h.title LIKE ? ESCAPE '\\')"); args += [_like(q)] * 2
+        conds.append("(h.code LIKE ? ESCAPE '\\' OR h.title LIKE ? ESCAPE '\\' OR h.location_text LIKE ? ESCAPE '\\' OR h.machine_no LIKE ? ESCAPE '\\')"); args += [_like(q)] * 4
     flags = {k: request.args.get(k) == "1" for k in ("open", "overdue", "high", "closed_month")}      # ลิงก์จากการ์ดตัวเลขหน้าหลัก
     if flags["open"] or flags["overdue"] or flags["high"]:
         conds.append("h.status IN ('reported','assessed','assigned')")
@@ -135,7 +135,7 @@ def index():
     pages = max(1, math.ceil(total / PER_PAGE))
     page = min(max(_int(request.args.get("page"), 1), 1), pages)
     rows = db.execute(
-        f"SELECT h.*, a.name_th AS area_name, u.name AS reporter_name, o.name AS owner_name, "
+        f"SELECT h.*, CASE WHEN a.code LIKE 'AUTO-%' THEN (SELECT name_th FROM lines WHERE id = a.line_id) ELSE a.name_th END AS area_name, u.name AS reporter_name, o.name AS owner_name, "
         f"(h.due_date IS NOT NULL AND h.due_date < ? AND h.status IN ('reported','assessed','assigned')) AS overdue "
         f"FROM hazards h JOIN risk_areas a ON a.id = h.risk_area_id JOIN safety_users u ON u.id = h.reported_by "
         f"LEFT JOIN safety_users o ON o.id = h.owner_id WHERE {where} "
@@ -156,7 +156,7 @@ def _form_context(values, errors):
         types=active_options(db, REGISTRY["hazard-types"]), sources=active_options(db, REGISTRY["hazard-sources"]),
         custom_fields=db.execute("SELECT * FROM custom_fields WHERE active=1 ORDER BY sort, id").fetchall(), max_photos=MAX_PER_KIND,
         hiyari=active_options(db, REGISTRY["hiyari-types"]),
-        org=org_options(db, g.user), next_code=next_code(db), today=timeutil.today().isoformat(),
+        org=org_options(db, g.user), locations=location_history(db, g.user), next_code=next_code(db), today=timeutil.today().isoformat(),
         scales=scale_rows(db),
         score_levels=[dict(level_name=lv["name_th"], color=lv["color"], min=lv["min_score"], max=lv["max_score"]) for lv in list_levels(db)])
 
@@ -181,6 +181,13 @@ def new():
 
 
 # ---------- รายละเอียด ----------
+def _area_crumb(db, h):
+    from ..master import breadcrumb
+    text = breadcrumb(db, REGISTRY["risk-areas"], h["risk_area_id"])
+    code = db.execute("SELECT code FROM risk_areas WHERE id=?", (h["risk_area_id"],)).fetchone()
+    return text.rsplit(" › ", 1)[0] if code and code["code"].startswith("AUTO-") else text
+
+
 def _custom_rows(db, hazard):
     try:
         values = json.loads(hazard["custom"] or "{}")
@@ -221,7 +228,7 @@ def detail(hazard_id):
     events = db.execute("SELECT e.*, u.name AS actor FROM hazard_events e LEFT JOIN safety_users u ON u.id = e.actor_id "
                         "WHERE e.hazard_id=? ORDER BY e.id", (hazard_id,)).fetchall()
     return render_template(
-        "hazard_detail.html", capas=capa.for_source(db, g.user, "hazard", hazard_id), can_capa="capa.create" in perms, h=h, refs=refs, crumb=breadcrumb(db, REGISTRY["risk-areas"], h["risk_area_id"]),
+        "hazard_detail.html", capas=capa.for_source(db, g.user, "hazard", hazard_id), can_capa="capa.create" in perms, h=h, refs=refs, crumb=_area_crumb(db, h),
         custom=_custom_rows(db, h), actions=actions, events=events, status_th=STATUS_TH, event_th=EVENT_TH,
         photos={k: db.execute("SELECT * FROM hazard_attachments WHERE hazard_id=? AND kind=? ORDER BY id", (hazard_id, k)).fetchall() for k in KINDS},
         overdue=bool(h["due_date"] and h["due_date"] < today and is_open),

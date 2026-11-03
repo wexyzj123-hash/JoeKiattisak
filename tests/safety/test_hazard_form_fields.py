@@ -87,4 +87,28 @@ def test_org_filters_list_departments_and_lines_even_without_risk_areas(env):
     org = org_options(db, user_row(db, uid))
     assert "แผนกว่าง" in [d["name"] for d in org["departments"]] and "ไลน์ว่าง" in [l["name"] for l in org["lines"]]
     html = c.get("/hazards/new").get_data(as_text=True)
-    assert '"departments"' in html and 'id="f_hint"' in html
+    import json, re
+    data = json.loads(re.search(r'id="hz-data">(.*?)</script>', html, re.S).group(1))
+    assert "แผนกว่าง" in [d["name"] for d in data["org"]["departments"]] and "ไลน์ว่าง" in [l["name"] for l in data["org"]["lines"]]
+
+
+def test_form_has_no_risk_area_field_and_line_plus_free_text_location_is_stored(env):
+    """ตัดช่องพื้นที่เสี่ยงออก: เลือกโรงงาน/แผนก/ไลน์ + พิมพ์สถานที่เอง; สถานที่ถูกเก็บเป็นประวัติให้เลือก/ค้นย้อนหลัง"""
+    app, db, chain, t, s = env
+    c = login(app, "reporter")
+    page = c.get("/hazards/new").get_data(as_text=True)
+    assert 'name="risk_area_id"' not in page and 'name="line_id"' in page and 'id="f_loc_list"' in page
+    data = {"_csrf": csrf(c), "title": "น้ำมันหก", "line_id": str(chain["l"]), "hazard_type_id": str(t), "source_id": str(s),
+            "location_text": "หน้าเครื่องปั๊ม 3"}
+    r = c.post("/hazards/new", data=data)
+    assert r.status_code == 302
+    row = db.execute("SELECT h.*, a.code AS acode, a.line_id FROM hazards h JOIN risk_areas a ON a.id=h.risk_area_id ORDER BY h.id DESC LIMIT 1").fetchone()
+    assert row["location_text"] == "หน้าเครื่องปั๊ม 3" and row["acode"].startswith("AUTO-") and row["line_id"] == chain["l"]
+    detail = c.get(r.headers["Location"]).get_data(as_text=True)
+    assert "หน้าเครื่องปั๊ม 3" in detail and "ทั่วไป" not in detail
+    assert "หน้าเครื่องปั๊ม 3" in c.get("/hazards/new").get_data(as_text=True)               # อยู่ในรายการเติมคำ
+    assert "หน้าเครื่องปั๊ม 3" in c.get("/hazards?q=ปั๊ม").get_data(as_text=True)              # ค้นย้อนหลังได้
+    c.post("/hazards/new", data={**data, "_csrf": csrf(c)})
+    assert db.execute("SELECT COUNT(*) FROM risk_areas WHERE code LIKE 'AUTO-%'").fetchone()[0] == 1   # ใช้พื้นที่อัตโนมัติเดิมซ้ำ
+    for bad in ({"line_id": ""}, {"line_id": "99999"}, {"line_id": "abc"}):
+        assert c.post("/hazards/new", data={**data, "_csrf": csrf(c), **bad}).status_code == 200
