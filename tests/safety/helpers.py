@@ -32,3 +32,12 @@ def sql(app, q, args=()):
         return rows
     finally:
         con.close()
+
+
+def login_as(app, uid):
+    """client ที่ล็อกอินเป็นผู้ใช้ Safety ที่มีอยู่แล้ว (รหัสผู้ใช้ uid)"""
+    c = app.test_client()
+    with c.session_transaction() as s:
+        s["suid"] = uid
+    c.uid = uid
+    return c

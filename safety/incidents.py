@@ -7,7 +7,7 @@ import sqlite3
 from datetime import date, datetime
 from typing import Mapping
 
-from . import notify, timeutil
+from . import approvals, notify, timeutil
 from .hazards import hazard_scope_sql, risk_area_options, visible_hazard
 from .perms import user_permissions
 from .risk import calc_score, level_for_score
@@ -203,5 +203,7 @@ def report(db, user, form: Mapping) -> tuple[int | None, list[str]]:
                    [(iid, p["role"], p["name"], p["employee_no"], p["note"]) for p in people])
     add_event(db, iid, user["id"], "reported", None, "reported", data={"kind": kind, "people": len(people)})
     notify.emit_incident(db, "incident_reported", iid, user["id"])
+    notify.emit_unit_notice(db, "incident", iid, user["id"])                  # ประกาศเป็นทางการถึงทุกคนในหน่วยงาน (+GM)
+    approvals.request(db, "incident", iid, user["id"])                        # เปิดสายอนุมัติ (ถ้าเปิดใช้)
     db.commit()
     return iid, []

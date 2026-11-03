@@ -93,7 +93,7 @@ def _covers(db, user, rec) -> bool:
     return db.execute(f"SELECT 1 FROM departments d WHERE {' AND '.join(conds)}", args).fetchone() is not None
 
 
-def recipients_for(db, rule, hazard, actor_id: int | None, owner_fallback_role: str | None = None) -> list:
+def recipients_for(db, rule, hazard, actor_id: int | None, owner_fallback_role: str | None = None, ctx: dict | None = None) -> list:
     """ผู้ใช้ที่ใช้งานอยู่ตามกฎ: reporter / owner / role:<key> (เฉพาะผู้ที่ขอบเขตครอบคลุมรายการ); ไม่รวมผู้กระทำเอง ไม่ซ้ำ"""
     found: dict[int, object] = {}
 
@@ -125,6 +125,18 @@ def recipients_for(db, rule, hazard, actor_id: int | None, owner_fallback_role: 
             for u in db.execute("SELECT * FROM safety_users WHERE role=? AND active=1 ORDER BY id", (kind[5:],)):
                 if _covers(db, u, hazard):
                     add(u)
+        elif kind in ("unit", "approvers") or kind.startswith("position:"):       # หน่วยงานของรายการ / ผู้อนุมัติขั้นปัจจุบัน / ผู้ดำรงตำแหน่ง — แจ้งแม้ไม่มีสิทธิ์เปิดรายการ
+            from . import approvals
+            if kind == "unit":
+                people = approvals.unit_users(db, hazard)
+            elif kind == "approvers":
+                people = approvals.approvers_for(db, hazard, int((ctx or {}).get("step", 1)))
+            else:
+                people = approvals.users_with_positions(db, [kind[9:]], hazard)
+            for u in people:
+                add(u)
+                if ctx is not None:
+                    ctx.setdefault("bypass", set()).add(u["id"])
     return list(found.values())
 
 
@@ -173,7 +185,7 @@ def _queue_external(db, channel: str, target: str, title: str, body: str, urgent
 
 def _write_rows(db, event: str, rec, title: str, body: str, stage: str, ref: str, link: str, hazard_id, incident_id,
                 actor_id, offset_days, urgent_base: bool, require_any: frozenset = frozenset(), allow_ids: frozenset = frozenset(),
-                owner_fallback_role: str | None = None) -> int:
+                owner_fallback_role: str | None = None, ctx: dict | None = None) -> int:
     """เขียนแถวแจ้งเตือน/คิวส่งตามกฎของเหตุการณ์ (ใช้ร่วมกันระหว่างอันตรายและอุบัติเหตุ); คืนจำนวนแถวในระบบที่สร้างใหม่"""
     created = 0
     for rule in db.execute("SELECT * FROM notify_rules WHERE event=? AND enabled=1 ORDER BY id", (event,)).fetchall():
@@ -182,8 +194,11 @@ def _write_rows(db, event: str, rec, title: str, body: str, stage: str, ref: str
         key = f"{event}:{ref}:{rule['id']}:{stage}"
         channels = set(_split(rule["channels"]))
         urgent = int(urgent_base or (event in ("overdue", "capa_overdue", "report_overdue") and rule["offset_days"] >= 3))
-        for user in recipients_for(db, rule, rec, actor_id, owner_fallback_role):
-            if require_any and user["id"] not in allow_ids and not (require_any & user_permissions(db, user)):
+        ctx = {} if ctx is None else ctx
+        for user in recipients_for(db, rule, rec, actor_id, owner_fallback_role, ctx):
+            if user["id"] in ctx.get("skip", ()):
+                continue                                       # ได้รับแจ้งเรื่องเดียวกันจากกฎอื่นแล้ว — ไม่ส่งซ้ำ
+            if require_any and user["id"] not in allow_ids and user["id"] not in ctx.get("bypass", ()) and not (require_any & user_permissions(db, user)):
                 continue                                       # ไม่แจ้งคนที่เปิดรายการนี้ไม่ได้ (ลิงก์จะ 404)
             note_id = None
             if "inapp" in channels:
@@ -292,6 +307,108 @@ def emit_incident(db, event: str, incident_id: int, actor_id: int | None) -> int
         return created
     except Exception:                                              # noqa: BLE001
         log.exception("emit_incident(%s, incident=%s) failed; rolled back", event, incident_id)
+        db.execute("ROLLBACK TO notify")
+        db.execute("RELEASE notify")
+        return 0
+
+
+# ---------- แจ้งหน่วยงาน (ข้อความทางการ) และสายอนุมัติ ----------
+OFFICIAL_SIGN = "จึงเรียนมาเพื่อโปรดทราบ ขอแสดงความนับถือ — ระบบ AIAT Safety"
+
+
+def render_unit_notice(kind: str, rec, extra: Mapping) -> tuple[str, str]:
+    code, title = clean(rec["code"], 40), clean(rec["title"], FIELD_MAX)
+    area = clean(extra.get("area"), FIELD_MAX)
+    when = clean(extra.get("when"), 20)
+    where = f" ณ {area}" if area else ""
+    if kind == "incident":
+        kind_th = KIND_TH.get(rec["kind"], "อุบัติเหตุ")
+        head = f"[แจ้งเพื่อทราบ] เกิด{kind_th}ในหน่วยงาน {code}"
+        body = (f"เรียน ผู้เกี่ยวข้อง\nขอแจ้งให้ทราบว่า ได้เกิดเหตุ{kind_th}{where} เรื่อง \"{title}\" (เลขที่ {code}) เมื่อ {when} "
+                f"ขณะนี้อยู่ระหว่างการสอบสวนและดำเนินการแก้ไข โปรดติดตามความคืบหน้าและให้ความร่วมมือกับผู้เกี่ยวข้อง\n{OFFICIAL_SIGN}")
+    else:
+        head = f"[แจ้งเพื่อทราบ] พบอันตรายในหน่วยงาน {code}"
+        body = (f"เรียน ผู้เกี่ยวข้อง\nขอแจ้งให้ทราบว่า มีการรายงานอันตราย{where} เรื่อง \"{title}\" (เลขที่ {code}) เมื่อ {when} "
+                f"ขณะนี้อยู่ระหว่างการประเมินความเสี่ยงและดำเนินการแก้ไข โปรดใช้ความระมัดระวังและแจ้งผู้ดูแลหากพบเหตุเพิ่มเติม\n{OFFICIAL_SIGN}")
+    return clean(head, TITLE_MAX), clean(body, 1200)
+
+
+def render_approval_message(event: str, kind: str, rec, extra: Mapping) -> tuple[str, str]:
+    code, title = clean(rec["code"], 40), clean(rec["title"], FIELD_MAX)
+    label = "รายการอันตราย" if kind == "hazard" else "รายการอุบัติเหตุ"
+    step, who = extra.get("step"), clean(extra.get("approvers"), 120)
+    if event == "approval_requested":
+        head = f"[ขออนุมัติ] {label} {code} (ขั้นที่ {step}: {who})"
+        body = (f"เรียน ผู้อนุมัติ ({who})\nขอเรียนเชิญพิจารณาอนุมัติ{label} เลขที่ {code} เรื่อง \"{title}\" "
+                f"ตามสายการอนุมัติขั้นที่ {step} โดยเข้าที่เมนู «งานรออนุมัติ» ในระบบ AIAT Safety\n{OFFICIAL_SIGN}")
+    elif event == "approval_completed":
+        head = f"[แจ้งผลการอนุมัติ] {label} {code} ได้รับอนุมัติครบทุกขั้น"
+        body = (f"เรียน ผู้เกี่ยวข้อง\nขอแจ้งว่า{label} เลขที่ {code} เรื่อง \"{title}\" ได้รับการอนุมัติครบทุกขั้นตอนแล้ว "
+                f"สามารถดำเนินการปิดรายการได้เมื่อการแก้ไขเสร็จสมบูรณ์\n{OFFICIAL_SIGN}")
+    else:
+        reason = clean(extra.get("reason"), 300)
+        head = f"[แจ้งผลการอนุมัติ] {label} {code} ไม่ได้รับอนุมัติ"
+        body = (f"เรียน ผู้เกี่ยวข้อง\nขอแจ้งว่า{label} เลขที่ {code} เรื่อง \"{title}\" ไม่ได้รับอนุมัติในขั้นที่ {step}"
+                f"{' เนื่องจาก ' + reason if reason else ''} โปรดตรวจสอบและดำเนินการตามที่เห็นสมควร\n{OFFICIAL_SIGN}")
+    return clean(head, TITLE_MAX), clean(body, 1200)
+
+
+def _base_event_receivers(db, kind: str, ref_id: int) -> frozenset:
+    """ผู้ที่ได้รับแจ้ง 'แจ้งใหม่' ของรายการนี้จากกฎเดิมแล้ว — ไม่ส่งประกาศหน่วยงานซ้ำให้คนเดิม"""
+    col, event = ("hazard_id", "hazard_reported") if kind == "hazard" else ("incident_id", "incident_reported")
+    return frozenset(r[0] for r in db.execute(f"SELECT user_id FROM notifications WHERE {col}=? AND event=?", (ref_id, event)))
+
+
+def emit_unit_notice(db, kind: str, ref_id: int, actor_id: int | None) -> int:
+    """ประกาศเป็นทางการถึงทุกคนที่ผูกกับหน่วยงานของรายการ (และตำแหน่งที่แอดมินกำหนดในกฎ เช่น GM) ผ่านช่องทางที่ผู้ใช้เลือกไว้"""
+    event = "unit_hazard_notice" if kind == "hazard" else "unit_incident_notice"
+    db.execute("SAVEPOINT notify")
+    try:
+        table = "hazards" if kind == "hazard" else "incidents"
+        rec = db.execute(f"SELECT * FROM {table} WHERE id=?", (ref_id,)).fetchone()
+        if rec is None:
+            db.execute("RELEASE notify")
+            return 0
+        area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (rec["risk_area_id"],)).fetchone()
+        when = (rec["occurred_at"] if kind == "incident" else rec["reported_at"]) or ""
+        title, body = render_unit_notice(kind, rec, {"area": area[0] if area else "", "when": str(when).replace("T", " ")[:16]})
+        created = _write_rows(db, event, rec, title, body, "1", f"{kind[0]}{ref_id}", ("/incidents/" if kind == "incident" else "/hazards/") + str(ref_id),
+                              ref_id if kind == "hazard" else None, ref_id if kind == "incident" else None, actor_id, None,
+                              False, ctx={"skip": _base_event_receivers(db, kind, ref_id)})
+        db.execute("RELEASE notify")
+        return created
+    except Exception:                                              # noqa: BLE001
+        log.exception("emit_unit_notice(%s,%s) failed; rolled back", kind, ref_id)
+        db.execute("ROLLBACK TO notify")
+        db.execute("RELEASE notify")
+        return 0
+
+
+def emit_approval(db, event: str, kind: str, ref_id: int, actor_id: int | None, step: int = 1) -> int:
+    if event not in ("approval_requested", "approval_completed", "approval_rejected"):
+        return 0
+    db.execute("SAVEPOINT notify")
+    try:
+        from . import approvals
+        table = "hazards" if kind == "hazard" else "incidents"
+        rec = db.execute(f"SELECT * FROM {table} WHERE id=?", (ref_id,)).fetchone()
+        if rec is None:
+            db.execute("RELEASE notify")
+            return 0
+        reason = ""
+        if event == "approval_rejected":
+            row = db.execute("SELECT comment FROM approvals WHERE kind=? AND ref_id=? AND step=?", (kind, ref_id, step)).fetchone()
+            reason = row[0] if row else ""
+        title, body = render_approval_message(event, kind, rec, {"step": step, "reason": reason,
+                                                                  "approvers": approvals.position_names(db, approvals.step_codes(db, step))})
+        link = "/approvals" if event == "approval_requested" else (("/incidents/" if kind == "incident" else "/hazards/") + str(ref_id))
+        created = _write_rows(db, event, rec, title, body, f"{step}:{db.execute('SELECT COALESCE(MAX(decided_at), created_at) FROM approvals WHERE kind=? AND ref_id=?', (kind, ref_id)).fetchone()[0]}",
+                              f"{kind[0]}{ref_id}", link, ref_id if kind == "hazard" else None, ref_id if kind == "incident" else None,
+                              actor_id, None, True, ctx={"step": step})
+        db.execute("RELEASE notify")
+        return created
+    except Exception:                                              # noqa: BLE001
+        log.exception("emit_approval(%s,%s,%s) failed; rolled back", event, kind, ref_id)
         db.execute("ROLLBACK TO notify")
         db.execute("RELEASE notify")
         return 0

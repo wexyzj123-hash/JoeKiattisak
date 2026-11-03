@@ -24,6 +24,7 @@ MENU = (
     ("ระบบข้อมูลหลัก", (
         ("ภาพรวมดำเนินงาน", "/overview", "overview", "master.view"),
         ("ภาพรวมตามหน่วยงาน", "/overview/departments", "departments", "master.view"),
+        ("งานรออนุมัติ", "/approvals", "check", "approval.act"),
         ("พื้นที่เสี่ยง", "/master/risk-areas", "map-pin", "master.view"),
         ("ลงทะเบียนบันทึกอันตราย", "/hazards", "clipboard", "hazard.report"),
         ("แหล่งที่มา", "/master/hazard-sources", "source", "master.view"),
@@ -59,6 +60,7 @@ MENU = (
         ("แผนการตรวจ", "/admin/patrol-plans", "clock", "patrol.manage"),
         ("กำหนดส่งรายงาน", "/admin/report-due", "clock", "report.manage"),
         ("ตั้งค่า CAPA", "/admin/capa-settings", "sliders", "criteria.manage"),
+        ("สายการอนุมัติ", "/admin/approvals", "shield", "users.manage"),
         ("การแจ้งเตือน", "/admin/notifications", "bell", "users.manage"),
     )),
 )

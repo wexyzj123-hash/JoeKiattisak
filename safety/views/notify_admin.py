@@ -24,7 +24,9 @@ EVENT_TH = {"hazard_reported": "แจ้งอันตรายใหม่", 
             "incident_reported": "แจ้งอุบัติเหตุใหม่", "incident_assigned": "มอบหมายผู้สอบสวน", "incident_closed": "ปิดรายการอุบัติเหตุ",
             "capa_assigned": "มอบหมาย CAPA", "capa_done": "CAPA ดำเนินการเสร็จ", "capa_verified": "CAPA ยืนยันผลแล้ว", "capa_reopened": "CAPA ถูกตีกลับ",
             "capa_due_soon": "CAPA ใกล้ครบกำหนด", "capa_overdue": "CAPA เกินกำหนด", "patrol_due": "ถึงรอบตรวจความปลอดภัย", "patrol_overdue": "เลยรอบตรวจความปลอดภัย",
-            "report_due_soon": "ใกล้ครบกำหนดส่งรายงาน", "report_overdue": "เกินกำหนดส่งรายงาน", "user_requested": "มีคำขอสร้างบัญชีใหม่"}
+            "report_due_soon": "ใกล้ครบกำหนดส่งรายงาน", "report_overdue": "เกินกำหนดส่งรายงาน", "user_requested": "มีคำขอสร้างบัญชีใหม่",
+            "unit_hazard_notice": "ประกาศหน่วยงาน: พบอันตราย (ข้อความทางการ)", "unit_incident_notice": "ประกาศหน่วยงาน: เกิดอุบัติเหตุ (ข้อความทางการ)",
+            "approval_requested": "ขออนุมัติ (ถึงผู้อนุมัติขั้นปัจจุบัน)", "approval_completed": "อนุมัติครบทุกขั้น", "approval_rejected": "ไม่ได้รับอนุมัติ"}
 SOON_EVENTS = ("due_soon", "capa_due_soon", "report_due_soon")                       # offset = จำนวนวันก่อนครบกำหนด (0-60)
 LATE_EVENTS = ("overdue", "capa_overdue", "patrol_overdue", "report_overdue")         # offset = จำนวนวันหลังครบกำหนด (ตั้งแต่ 1)
 CHANNEL_TH = {"inapp": "ในระบบ", "telegram": "Telegram", "line": "LINE", "teams": "Teams", "email": "อีเมล"}
@@ -52,11 +54,11 @@ def validate_rule(db, form, rule_id: int | None = None) -> tuple[dict | None, li
     for item in (p.strip() for p in form.get("recipients", "").split(",")):
         if not item:
             continue
-        if item in ("reporter", "owner") or (ROLE_RE.match(item) and item[5:] in roles) or (item.startswith("owner_else:") and ROLE_RE.match("role:" + item[11:]) and item[11:] in roles):
+        if item in ("reporter", "owner", "unit", "approvers") or (item.startswith("position:") and re.fullmatch(r"position:[A-Za-z0-9_-]{1,32}", item)) or (ROLE_RE.match(item) and item[5:] in roles) or (item.startswith("owner_else:") and ROLE_RE.match("role:" + item[11:]) and item[11:] in roles):
             if item not in recipients:
                 recipients.append(item)
         else:
-            errors.append(f"ผู้รับไม่ถูกต้อง: {clean(item, 40)} (ใช้ reporter, owner, owner_else:<บทบาทสำรอง> หรือ role:<รหัสบทบาทที่มีอยู่>)")
+            errors.append(f"ผู้รับไม่ถูกต้อง: {clean(item, 40)} (ใช้ reporter, owner, unit = ทุกคนในหน่วยงาน, approvers = ผู้อนุมัติขั้นปัจจุบัน, position:<รหัสตำแหน่ง> เช่น position:GM, owner_else:<บทบาทสำรอง> หรือ role:<รหัสบทบาทที่มีอยู่>)")
     if not recipients and channels != ["teams"]:
         errors.append("ต้องมีผู้รับอย่างน้อย 1 กลุ่ม (เว้นว่างได้เฉพาะเมื่อส่งเข้า Teams อย่างเดียว)")
     offset = _int(form.get("offset_days", "0"))

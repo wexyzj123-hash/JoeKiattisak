@@ -70,7 +70,7 @@ def create_app(test_config: dict | None = None) -> Flask:
             return redirect("/login")
         return None
 
-    from .views import (api, criteria, custom_fields, hazards, home, master, notifications, notify_admin, overview, pages, profile, search, injury_admin, incidents, patrol_admin, patrols, capas, drawer, report_due, reports,
+    from .views import (api, criteria, custom_fields, hazards, home, master, notifications, notify_admin, overview, pages, profile, search, approvals as approvals_views, injury_admin, incidents, patrol_admin, patrols, capas, drawer, report_due, reports,
                         roles, sso, users, auth)
     app.register_blueprint(auth.bp)
     app.register_blueprint(notify_admin.bp)
@@ -85,6 +85,7 @@ def create_app(test_config: dict | None = None) -> Flask:
     app.register_blueprint(report_due.bp)
     app.register_blueprint(notifications.bp)
     app.register_blueprint(profile.bp)
+    app.register_blueprint(approvals_views.bp)
     app.register_blueprint(overview.bp)
     app.register_blueprint(hazards.bp)
     app.register_blueprint(custom_fields.bp)
@@ -107,12 +108,17 @@ def create_app(test_config: dict | None = None) -> Flask:
         if g.get("user") is None:
             return {}
         from .db import get_db
+        from . import approvals
         from .nav import nav_items
         from .perms import user_permissions
         from .views.notifications import unread_count
         db = get_db()
         role = db.execute("SELECT name_th FROM safety_roles WHERE key = ?", (g.user["role"],)).fetchone()
-        return {"nav": nav_items(user_permissions(db, g.user), request.path), "unread_count": unread_count(db, g.user["id"]),
+        perms = user_permissions(db, g.user)
+        from .views.approvals import is_approver
+        if is_approver(db, g.user) or g.user["role"] == "admin" and approvals.enabled(db):
+            perms = perms | {"approval.act"}                                  # เมนู «งานรออนุมัติ» เฉพาะผู้ดำรงตำแหน่งในสายอนุมัติ (และแอดมินที่อนุมัติแทน)
+        return {"nav": nav_items(perms, request.path), "unread_count": unread_count(db, g.user["id"]),
                 "role_name": role["name_th"] if role else g.user["role"]}
 
     from shared.prefix import install_prefix

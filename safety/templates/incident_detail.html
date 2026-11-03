@@ -45,6 +45,7 @@
   <h3>รูปหลังแก้ไข</h3>{{ photo_grid(photos['after']) }}
 </div>
 <div style="display:grid;gap:16px;align-content:start">
+  {% include "_approval_card.html" %}
   {% if actions.assign %}
   <form method="post" action="/incidents/{{ i['id'] }}/assign" class="card" style="max-width:none;margin:0">
     <h2>{{ 'เปลี่ยนผู้สอบสวน' if i['status'] == 'investigating' else 'มอบหมายผู้สอบสวน' }}</h2>

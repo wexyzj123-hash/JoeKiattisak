@@ -40,6 +40,7 @@
   <h3>รูปหลังแก้ไข</h3>{{ photo_grid(photos['after']) }}
 </div>
 <div style="display:grid;gap:16px;align-content:start">
+  {% include "_approval_card.html" %}
   {% if actions.assess %}
   <form method="post" action="/hazards/{{ h['id'] }}/assess" class="card" style="max-width:none;margin:0">
     <h2>{{ 'ประเมินใหม่' if h['status'] == 'assessed' else 'ประเมินความเสี่ยง' }}</h2>

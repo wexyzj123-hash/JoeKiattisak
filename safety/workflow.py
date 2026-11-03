@@ -9,7 +9,7 @@ import sqlite3
 from datetime import date, timedelta
 from typing import Mapping
 
-from . import capa, notify, timeutil
+from . import approvals, capa, notify, timeutil
 from .customfields import fields_for_type, validate_custom
 from .hazards import add_event, ensure_line_area, next_code, org_options, risk_area_options, user_in_scope, visible_hazard
 from .perms import user_permissions
@@ -157,6 +157,8 @@ def report(db, user, form: Mapping, *, patrol_answer_id: int | None = None, requ
                 return None, ["สร้างรหัสรายการไม่สำเร็จ กรุณาลองอีกครั้ง"]
     add_event(db, cur.lastrowid, user["id"], "reported", None, "reported")
     notify.emit(db, "hazard_reported", cur.lastrowid, user["id"])
+    notify.emit_unit_notice(db, "hazard", cur.lastrowid, user["id"])         # ประกาศเป็นทางการถึงทุกคนในหน่วยงาน (+GM)
+    approvals.request(db, "hazard", cur.lastrowid, user["id"])               # เปิดสายอนุมัติ (ถ้าเปิดใช้)
     db.commit()
     return cur.lastrowid, []
 
@@ -250,7 +252,7 @@ def close(db, user, hazard_id: int, note: str) -> list[str]:
     if hazard["level_requires_approval"] and user["id"] in _owners_ever(db, hazard):
         return [f"รายการระดับ {hazard['level_name']} ต้องให้ผู้ที่ไม่เคยเป็นผู้รับผิดชอบรายการนี้เป็นผู้ปิดรายการ"]
     return _transition(db, hazard, {"closing_note": note}, "closed", user, "closed", note, notify_event="hazard_closed",
-                       guard=lambda: capa.gate_errors(db, "hazard", hazard["id"]))
+                       guard=lambda: capa.gate_errors(db, "hazard", hazard["id"]) or approvals.gate_errors(db, "hazard", hazard["id"]))
 
 
 def reject(db, user, hazard_id: int, reason: str) -> list[str]:

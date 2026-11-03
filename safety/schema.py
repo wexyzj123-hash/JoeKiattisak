@@ -226,7 +226,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_custom_fields_key ON custom_fields(COALESCE
 NOTIFY_EVENTS = ("hazard_reported", "hazard_assessed", "hazard_assigned", "hazard_closed", "hazard_rejected", "due_soon", "overdue",
                  "incident_reported", "incident_assigned", "incident_closed",
                  "capa_assigned", "capa_done", "capa_verified", "capa_reopened", "capa_due_soon", "capa_overdue", "patrol_due", "patrol_overdue",
-                 "report_due_soon", "report_overdue", "user_requested")
+                 "report_due_soon", "report_overdue", "user_requested",
+                 "unit_hazard_notice", "unit_incident_notice", "approval_requested", "approval_completed", "approval_rejected")
 NOTIFY_CHANNELS = ("inapp", "telegram", "line", "teams", "email")           # ที่ตารางรองรับ (คงไว้ให้ข้อมูลเดิมอ่านได้)
 OUTBOX_CHANNELS = ("telegram", "line", "teams", "email")
 ACTIVE_CHANNELS = ("inapp", "teams", "email")                                  # ที่เปิดใช้จริงตอนนี้ — Telegram/LINE ปิดไว้ก่อน
@@ -326,6 +327,31 @@ def rebuild_notify_rules_if_needed(con) -> None:
         con.commit()
 
 
+APPROVAL_DDL = """
+CREATE TABLE IF NOT EXISTS approvals (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    kind        TEXT NOT NULL CHECK (kind IN ('hazard','incident')),
+    ref_id      INTEGER NOT NULL,
+    step        INTEGER NOT NULL CHECK (step >= 1),
+    status      TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','approved','rejected')),
+    approver_id INTEGER REFERENCES safety_users(id),
+    proxy       INTEGER NOT NULL DEFAULT 0,
+    comment     TEXT NOT NULL DEFAULT '',
+    decided_at  TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+    UNIQUE (kind, ref_id, step)
+);
+CREATE INDEX IF NOT EXISTS idx_approvals_pending ON approvals(status, kind, ref_id);
+"""
+
+APPROVAL_RULES = (
+    ("unit_hazard_notice", "unit,position:GM", "inapp,email,teams", 0, None),
+    ("unit_incident_notice", "unit,position:GM", "inapp,email,teams", 0, None),
+    ("approval_requested", "approvers", "inapp,email,teams", 0, None),
+    ("approval_completed", "reporter,owner,position:GM", "inapp,email,teams", 0, None),
+    ("approval_rejected", "reporter,owner", "inapp,email,teams", 0, None),
+)
+
 INCIDENT_RULES = (
     ("incident_reported", "role:assessor", "inapp,email", 0, None),
     ("incident_assigned", "owner", _ALL, 0, None),
@@ -341,6 +367,11 @@ def seed_notify(con) -> None:
                         DEFAULT_RULES)
         con.execute("INSERT INTO app_settings(key, value) VALUES('notify_rules_seeded', '1')")
     con.execute("INSERT OR IGNORE INTO app_settings(key, value) VALUES('require_capa_verified', '0')")
+    if con.execute("SELECT 1 FROM app_settings WHERE key='approval_rules_seeded'").fetchone() is None:
+        con.executemany("INSERT INTO notify_rules(event, recipients, channels, offset_days, min_score) VALUES(?,?,?,?,?)", APPROVAL_RULES)
+        con.execute("INSERT INTO app_settings(key, value) VALUES('approval_rules_seeded', '1')")
+    con.executemany("INSERT OR IGNORE INTO app_settings(key, value) VALUES(?,?)",
+                    (("approval_enabled", "0"), ("approval_step1", "SV"), ("approval_step2", "DM,DGM"), ("approval_notify", "GM")))
     if con.execute("SELECT 1 FROM app_settings WHERE key='channels_trimmed_v1'").fetchone() is None:   # Telegram/LINE ปิดไว้ก่อน: ตัดออกจากกฎเดิม (ถ้ามีอยู่ใช้อีเมลแทน) และยกเลิกคิวค้าง
         for rid, ch in con.execute("SELECT id, channels FROM notify_rules").fetchall():
             parts = [c for c in ch.split(",") if c]
@@ -717,7 +748,7 @@ def ensure_schema(con) -> None:
     _add_column(con, "safety_users", "line_user_id", "TEXT")
     _add_column(con, "safety_users", "email", "TEXT")
     _add_column(con, "safety_users", "notify_channels", "TEXT NOT NULL DEFAULT 'inapp'")
-    con.executescript(MASTER_DDL + ROLES_DDL + RISK_DDL + HAZARD_DDL + CUSTOM_DDL + NOTIFY_DDL + INCIDENT_DDL + PATROL_DDL + CAPA_DDL + REPORT_DDL)
+    con.executescript(MASTER_DDL + ROLES_DDL + RISK_DDL + HAZARD_DDL + CUSTOM_DDL + NOTIFY_DDL + INCIDENT_DDL + PATROL_DDL + CAPA_DDL + REPORT_DDL + APPROVAL_DDL)
     _add_column(con, "notifications", "incident_id", "INTEGER")
     _add_column(con, "hazards", "patrol_answer_id", "INTEGER")
     con.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_hazards_patrol_answer ON hazards(patrol_answer_id) WHERE patrol_answer_id IS NOT NULL")
