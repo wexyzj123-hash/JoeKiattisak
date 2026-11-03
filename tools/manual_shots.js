@@ -70,6 +70,7 @@ process.stdin.on('end', async () => {
   add('admin-plans', { who: 'admin', url: '/admin/patrol-plans', full: true });
   add('admin-capa-settings', { who: 'admin', url: '/admin/capa-settings', full: true });
   add('admin-report-due', { who: 'admin', url: '/admin/report-due', full: true });
+  add('admin-approvals', { who: 'admin', url: '/admin/approvals', full: true });
   add('admin-notifications', { who: 'admin', url: '/admin/notifications', full: true });
   add('search', { who: 'admin', url: '/search?q=น้ำมัน' });
 
