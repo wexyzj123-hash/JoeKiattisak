@@ -32,7 +32,9 @@ TEAMS_HOST_SUFFIXES = ("webhook.office.com", "office.com", "logic.azure.com", "a
 
 def teams_host_ok(url: str, env=None) -> bool:
     """Webhook ของ Teams รายบุคคลต้องเป็น https และโฮสต์อยู่ในโดเมนของ Microsoft (หรือที่ผู้ดูแลอนุญาตด้วย TEAMS_ALLOWED_HOSTS) — กันผู้ใช้ชี้เซิร์ฟเวอร์ไปยิงเครือข่ายภายใน"""
-    env = os.environ if env is None else env
+    if env is None:
+        from .channel_config import effective_env
+        env = effective_env()
     try:
         parts = urlsplit(url)
         host = (parts.hostname or "").lower()
@@ -43,6 +45,11 @@ def teams_host_ok(url: str, env=None) -> bool:
         return False
     extra = tuple(h.strip().lower() for h in str(env.get("TEAMS_ALLOWED_HOSTS", "")).split(",") if h.strip())
     return any(host == suf or host.endswith("." + suf) for suf in TEAMS_HOST_SUFFIXES + extra)
+
+
+def _central_teams(db) -> str:
+    from .channel_config import effective_env
+    return effective_env(db).get("TEAMS_WEBHOOK_URL", "")
 
 
 def valid_contact(channel: str, user) -> str | None:
@@ -193,7 +200,7 @@ def _write_rows(db, event: str, rec, title: str, body: str, stage: str, ref: str
                 target = valid_contact(channel, user)
                 if target:
                     _queue_external(db, channel, target, title, body, urgent, note_id, key)
-        if "teams" in channels and (os.environ.get("TEAMS_WEBHOOK_URL") or "").strip():     # ประกาศเข้าช่อง Teams กลาง (ถ้าตั้งไว้) หนึ่งข้อความต่อกฎ+รายการ+ขั้น
+        if "teams" in channels and (_central_teams(db) or "").strip():     # ประกาศเข้าช่อง Teams กลาง (ถ้าตั้งไว้) หนึ่งข้อความต่อกฎ+รายการ+ขั้น
             _queue_external(db, "teams", "teams", title, body, urgent, None, key)
     return created
 

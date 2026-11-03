@@ -187,7 +187,9 @@ def _claim(db, outbox_id: int, now: datetime) -> bool:
 
 def deliver_due(db, now: datetime, transports: Mapping[str, Callable] | None = None, env: Mapping | None = None,
                 limit: int = 50) -> dict:
-    env = os.environ if env is None else env
+    if env is None:
+        from .channel_config import effective_env
+        env = effective_env(db)                                      # .env + ค่าที่ผู้ดูแลตั้งบนหน้าเว็บ
     transports = REAL if transports is None else transports
     result = {"sent": 0, "retry": 0, "dead": 0, "deferred": 0}
     result["deferred"] = defer_if_quiet(db, now)

@@ -9,6 +9,7 @@ import time
 
 from flask import Blueprint, flash, g, redirect, render_template, request
 
+from .. import channel_config
 from .. import digest, scheduler
 from ..db import get_db
 from ..notify import clean, valid_contact
@@ -95,9 +96,10 @@ def mask_target(channel: str, target: str) -> str:
     return "***" + clean(t[-4 if channel == "line" else -3:], 4)
 
 
-def channel_status() -> dict[str, str]:
+def channel_status(db=None) -> dict[str, str]:
     """สถานะช่องทางที่เปิดใช้ (อีเมล และ Teams) — แสดงเพียงว่าตั้งค่าแล้วหรือยัง ไม่แสดงค่า"""
-    env = os.environ
+    from ..channel_config import effective_env
+    env = effective_env(db)
     teams = (env.get("TEAMS_WEBHOOK_URL") or "").strip()
     return {
         "teams": ("ช่อง Teams กลางตั้งค่าแล้ว" if teams.lower().startswith("https://") else "ช่อง Teams กลางต้องเป็น https (TEAMS_WEBHOOK_URL)") if teams
@@ -142,7 +144,8 @@ def _send_test(db) -> tuple[str, str]:
     db.execute("INSERT INTO notifications(user_id, event, title, body, link, dedupe_key) VALUES(?,?,?,?,?,?)",
                (user["id"], "test", title, body, "/notifications", stamp))
     db.commit()
-    env = {**os.environ, "NOTIFY_HTTP_TIMEOUT": "6"}
+    from ..channel_config import effective_env
+    env = {**effective_env(db), "NOTIFY_HTTP_TIMEOUT": "6"}
     ok, bad, names = [], [], {"email": "อีเมล", "teams": "Teams"}
     for channel in ACTIVE_OUTBOX:
         target = valid_contact(channel, user) if channel in opted else None
@@ -167,6 +170,13 @@ def notifications():
         action = request.form.get("action", "")
         if action.startswith("rule_"):
             _rule_action(db, action, request.form)
+        elif action == "channels_save":
+            errors = channel_config.save(db, request.form)
+            for e in errors:
+                flash(e)
+            if not errors:
+                flash("บันทึกการตั้งค่าช่องทางแล้ว — กด «ส่งข้อความทดสอบถึงฉัน» เพื่อตรวจว่าส่งได้จริง", "celebrate")
+                return redirect("/admin/notifications")
         elif action == "settings_save":
             values = {k: (request.form.get(k) or "").strip() for k in ("quiet_start", "quiet_end", "daily_time")}
             if all(HHMM_RE.match(v) for v in values.values()):
@@ -200,7 +210,7 @@ def notifications():
     pending = [dict(r, shown=mask_target(r["channel"], r["target"])) for r in db.execute(
         "SELECT * FROM notify_outbox WHERE status <> 'sent' ORDER BY id DESC LIMIT 50")]
     return render_template(
-        "notify_admin.html", rules=rule_rows, settings=settings, counts=counts, outbox=pending, status=channel_status(),
+        "notify_admin.html", rules=rule_rows, settings=settings, counts=counts, outbox=pending, status=channel_status(db), chan=channel_config.form_view(db), tls_modes=channel_config.TLS_MODES,
         event_th=EVENT_TH, channel_th=CHANNEL_TH, status_th=STATUS_TH, channels=ACTIVE_CHANNELS, events=NOTIFY_EVENTS,
         roles=db.execute("SELECT key FROM safety_roles ORDER BY key").fetchall(),
         no_enabled=not any(r["enabled"] for r in rule_rows), digest_on=digest.enabled(db))

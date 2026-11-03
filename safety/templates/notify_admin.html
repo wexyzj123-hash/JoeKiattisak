@@ -51,9 +51,34 @@
     <small style="color:var(--muted)">ช่วงเงียบหน่วงเฉพาะข้อความภายนอกที่ไม่เร่งด่วน (กระดิ่งในระบบไม่ถูกหน่วง) · เริ่ม = สิ้นสุด หมายถึงไม่มีช่วงเงียบ</small>
     <button type="submit">บันทึก</button>
   </form>
+
+  {% macro src(f) -%}<small style="color:var(--muted)">{% if f.source == 'web' %}ตั้งบนหน้าเว็บแล้ว{% elif f.source == 'env' %}ใช้ค่าจากไฟล์ .env อยู่{% else %}ยังไม่ได้ตั้งค่า{% endif %}</small>{%- endmacro %}
+  <form method="post" class="card" style="max-width:none;margin:0 0 16px" autocomplete="off">
+    <h2>ตั้งค่าช่องทาง</h2>
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="channels_save">
+    <h3>อีเมล (SMTP)</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,260px),1fr));gap:12px">
+      <label>เซิร์ฟเวอร์ SMTP <input name="smtp_host" value="{{ chan.smtp_host.value }}" placeholder="{{ chan.smtp_host.env_value or 'smtp.company.com' }}" maxlength="253">{{ src(chan.smtp_host) }}</label>
+      <label>พอร์ต <input name="smtp_port" value="{{ chan.smtp_port.value }}" placeholder="{{ chan.smtp_port.env_value or '587' }}" inputmode="numeric" maxlength="5">{{ src(chan.smtp_port) }}</label>
+      <label>การเข้ารหัส <select name="smtp_tls">{% for k, label in tls_modes.items() %}<option value="{{ k }}" {{ 'selected' if chan.smtp_tls.value == k }}>{{ label }}</option>{% endfor %}</select>{{ src(chan.smtp_tls) }}</label>
+      <label>อีเมลผู้ส่ง <input name="smtp_from" type="email" value="{{ chan.smtp_from.value }}" placeholder="{{ chan.smtp_from.env_value or 'safety@company.com' }}" maxlength="254">{{ src(chan.smtp_from) }}</label>
+      <label>ชื่อผู้ใช้ SMTP (เว้นว่างถ้าไม่ต้องล็อกอิน) <input name="smtp_user" value="{{ chan.smtp_user.value }}" placeholder="{{ chan.smtp_user.env_value }}" maxlength="200" autocomplete="off">{{ src(chan.smtp_user) }}</label>
+      <label>รหัสผ่าน SMTP <input name="smtp_password" type="password" autocomplete="new-password" maxlength="300" placeholder="{{ 'ตั้งแล้ว — เว้นว่างเพื่อคงเดิม' if chan.smtp_password.source != 'none' else 'ยังไม่ได้ตั้ง' }}">
+        {{ src(chan.smtp_password) }}{% if chan.smtp_password.source == 'web' %} · <label style="display:inline"><input type="checkbox" name="clear_smtp_password" value="1"> ลบรหัสผ่านที่ตั้งไว้</label>{% endif %}</label>
+    </div>
+    <h3>Microsoft Teams</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:12px">
+      <label>Webhook ของช่อง Teams กลาง (ประกาศเข้าห้องรวม — ไม่บังคับ) <input name="teams_webhook" type="password" autocomplete="new-password" maxlength="600" placeholder="{{ 'ตั้งแล้ว — เว้นว่างเพื่อคงเดิม' if chan.teams_webhook.source != 'none' else 'https://…webhook.office.com/…' }}">
+        {{ src(chan.teams_webhook) }}{% if chan.teams_webhook.source == 'web' %} · <label style="display:inline"><input type="checkbox" name="clear_teams_webhook" value="1"> ลบที่ตั้งไว้</label>{% endif %}</label>
+      <label>โดเมนอื่นที่อนุญาตสำหรับ Webhook (คั่นด้วย , — ถ้าใช้ Power Automate/ตัวกลางของบริษัท) <input name="teams_allowed_hosts" value="{{ chan.teams_allowed_hosts.value }}" placeholder="{{ chan.teams_allowed_hosts.env_value }}" maxlength="500">{{ src(chan.teams_allowed_hosts) }}</label>
+      <label>เวลารอผลสูงสุดต่อการส่ง (วินาที) <input name="http_timeout" value="{{ chan.http_timeout.value }}" placeholder="{{ chan.http_timeout.env_value or '10' }}" inputmode="numeric" maxlength="2">{{ src(chan.http_timeout) }}</label>
+    </div>
+    <p style="color:var(--muted)"><small>ช่องที่เว้นว่าง = ใช้ค่าจากไฟล์ <code>.env</code> (ถ้ามี) · ผู้ใช้แต่ละคนใส่อีเมลและ Webhook ของ Teams ของตัวเองที่ «โปรไฟล์ของฉัน» · หลังบันทึก กด «ส่งข้อความทดสอบถึงฉัน» เพื่อตรวจ</small></p>
+    <button type="submit">บันทึกการตั้งค่าช่องทาง</button>
+  </form>
   <div class="card" style="max-width:none;margin:0">
     <h2>สถานะช่องทาง</h2>
-    <p style="color:var(--muted)">โทเค็นและรหัสผ่านตั้งในไฟล์ <code>.env</code> เท่านั้น ไม่แสดงในหน้านี้</p>
+    <p style="color:var(--muted)">ตั้งค่าได้ที่ฟอร์ม «ตั้งค่าช่องทาง» ด้านล่างนี้ ไม่ต้องแก้ไฟล์ — รหัสผ่านและ URL ที่เป็นความลับเก็บแบบเข้ารหัสและไม่แสดงกลับ (ค่าที่ตั้งบนหน้านี้มีผลก่อนไฟล์ <code>.env</code>)</p>
     {% for c in ('email', 'teams') %}<p><strong>{{ channel_th[c] }}:</strong> {{ status[c] }}</p>{% endfor %}
     <p style="color:var(--muted)"><small>ผู้ใช้แต่ละคนใส่อีเมลและ Webhook ของ Teams ของตัวเองได้ที่ «โปรไฟล์ของฉัน» ระบบส่งแจ้งเตือนงานมอบหมาย ใกล้ครบกำหนด เกินกำหนด และสรุปงานค้างรายวัน ตามกฎด้านบนและที่ผู้ใช้เลือกรับ ช่องทางอื่นนอกจากอีเมลและ Teams ยังไม่เปิดใช้</small></p>
     <form method="post" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="digest_toggle"><input type="hidden" name="on" value="{{ '0' if digest_on else '1' }}">
