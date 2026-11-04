@@ -15,6 +15,7 @@ from ..db import get_db
 from ..hazards import EVENT_TH, STATUS_TH, can_view_all, hazard_scope_sql, location_history, next_code, org_options, risk_area_options, user_in_scope, visible_hazard
 from ..images import KINDS, MAX_PER_KIND, ImageError, process_image, save_attachment
 from ..master import REGISTRY, active_options
+from ..security import safety_login_required
 from ..perms import permission_any, permission_required, user_permissions
 from ..risk import calc_score, list_levels, scale_rows
 
@@ -85,7 +86,12 @@ def index():
     scope_sql, scope_args = hazard_scope_sql(g.user)
     conds.append(scope_sql); args += scope_args
     if not can_view_all(perms):
-        conds.append("(h.reported_by = ? OR h.owner_id = ?)"); args += [g.user["id"]] * 2
+        mine, mine_args = "h.reported_by = ? OR h.owner_id = ?", [g.user["id"]] * 2
+        from .. import unit
+        uc = unit.clause(get_db(), g.user, "h")                               # + รายการในหน่วยงานของตน
+        if uc is not None:
+            mine, mine_args = f"{mine} OR ({uc[0]})", mine_args + uc[1]
+        conds.append(f"({mine})"); args += mine_args
     status = request.args.get("status", "")
     if status in STATUS_TH:
         conds.append("h.status = ?"); args.append(status)
@@ -203,7 +209,7 @@ def _custom_rows(db, hazard):
 
 
 @bp.route("/<int:hazard_id>")
-@permission_any(*ANY_HAZARD_PERM)
+@safety_login_required
 def detail(hazard_id):
     db, perms = get_db(), _perms()
     h = _load(hazard_id)
@@ -306,7 +312,7 @@ def photos(hazard_id):
 
 
 @bp.route("/<int:hazard_id>/files/<int:att_id>")
-@permission_any(*ANY_HAZARD_PERM)
+@safety_login_required
 def file(hazard_id, att_id):
     _load(hazard_id)
     att = get_db().execute("SELECT * FROM hazard_attachments WHERE id=? AND hazard_id=?", (att_id, hazard_id)).fetchone()

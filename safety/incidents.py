@@ -43,7 +43,9 @@ def visible_incident(db, user, incident_id: int):
     if row is None:
         return None
     if not can_view_all(user_permissions(db, user)) and user["id"] not in (row["reported_by"], row["owner_id"]):
-        return None
+        from . import unit
+        if not unit.member(db, user, row):
+            return None                                     # เห็นที่ตนแจ้ง/ได้รับมอบหมาย และรายการในหน่วยงานของตน (ไม่เห็นรายชื่อผู้เกี่ยวข้อง)
     return row
 
 

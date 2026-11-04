@@ -20,6 +20,18 @@
   <div class="hero-art">{{ mascot('alert', 170, decorative=True) }}</div>
 </section>
 
+{% if unit_ov %}
+<section class="card" style="max-width:none;margin:0 0 16px">
+  <div class="card-head"><h2>สถานะหน่วยงานของฉัน · {{ unit_ov.label }}</h2><a class="btn" href="/unit">ดูทั้งหมด</a></div>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+    <a class="chip-link" href="/unit">อันตรายเปิดอยู่ {{ unit_ov.open_hazard }}</a><a class="chip-link" href="/unit">อุบัติเหตุเปิดอยู่ {{ unit_ov.open_incident }}</a>
+    <a class="chip-link" href="/unit">เกินกำหนด {{ unit_ov.overdue }}</a><a class="chip-link" href="/unit">รออนุมัติ {{ unit_ov.pending_approvals }}</a>
+  </div>
+  {% if unit_notes %}<ul style="list-style:none;padding:0;margin:0;display:grid;gap:6px">
+    {% for n in unit_notes %}<li><a href="{{ n['link'] or '/unit' }}">{{ n['title'] }}</a>{% if not n['read_at'] %} <span class="chip" style="background:var(--accent)">ใหม่</span>{% endif %} <small style="color:var(--muted)">{{ n['created_at'] }}</small></li>{% endfor %}</ul>
+  {% else %}<p style="color:var(--muted);margin:0">ยังไม่มีประกาศจากหน่วยงาน</p>{% endif %}
+</section>
+{% endif %}
 <div class="kpis">
   {% macro spark_svg(key, values) -%}{% if values|length > 1 %}<svg class="kpi-spark" viewBox="0 0 120 36" preserveAspectRatio="none" aria-hidden="true"><polyline class="spark-line" points="{{ spark(values) }}"/></svg>{% endif %}{%- endmacro %}
   {% macro delta_chip(k) -%}{% if k.delta_pct is not none %}<span class="delta {{ 'up' if k.delta_pct > 0 else ('down' if k.delta_pct < 0 else '') }}">{{ '▲' if k.delta_pct > 0 else ('▼' if k.delta_pct < 0 else '＝') }} {{ '%.0f'|format(k.delta_pct|abs) }}% จากเดือนก่อน</span>{% endif %}{%- endmacro %}

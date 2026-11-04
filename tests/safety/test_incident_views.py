@@ -77,7 +77,7 @@ def test_list_new_detail_render_for_admin_assessor_and_reporter(v):
 
 def test_viewer_and_anonymous_cannot_use_incidents(v, safety_app):
     iid = v.make()
-    assert v.viewer.get("/incidents").status_code == 403 and v.viewer.get(f"/incidents/{iid}").status_code == 403
+    assert v.viewer.get("/incidents").status_code == 403 and v.viewer.get(f"/incidents/{iid}").status_code in (403, 404)   # ไม่ผูกหน่วยงาน/ไม่มีสิทธิ์ → เปิดไม่ได้
     assert safety_app.test_client().get("/incidents").status_code == 302
 
 

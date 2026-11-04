@@ -1,5 +1,5 @@
 """safety/views/users.py — ผู้ใช้งานของ Safety (บัญชีของ Safety เอง): สร้างบัญชี อนุมัติ/ปฏิเสธคำขอ ตั้งรหัสผ่านใหม่
-กำหนดบทบาท ขอบเขตหน่วยงาน ตำแหน่ง ระดับ (L0-L2) และเปิด/ปิดใช้งาน"""
+กำหนดบทบาท ขอบเขตหน่วยงาน ตำแหน่ง และเปิด/ปิดใช้งาน"""
 from __future__ import annotations
 
 import sqlite3
@@ -8,7 +8,7 @@ from flask import Blueprint, flash, g, redirect, render_template, request
 
 from shared.auth import MIN_PASSWORD, hash_password
 
-from .. import accounts
+from .. import accounts, approvals
 from ..db import get_db
 
 from ..perms import permission_required, role_permissions, user_permissions
@@ -106,9 +106,9 @@ def users():
             flash("ไม่พบผู้ใช้")
         elif action in ("approve", "reject"):
             _review(db, user, f, actor, action)
-        elif user["pending"] and action in ("toggle", "set_role", "set_scope", "reset_password", "set_profile"):
+        elif user["pending"] and action in ("toggle", "set_role", "set_scope", "reset_password", "set_profile", "save_user"):
             flash("บัญชีนี้รออนุมัติ — กดอนุมัติหรือปฏิเสธก่อน")
-        elif action in ("reset_password", "set_profile") and not role_permissions(db, user["role"]) <= actor:
+        elif action in ("reset_password", "set_profile", "save_user") and not role_permissions(db, user["role"]) <= actor:
             flash("จัดการผู้ใช้ที่มีสิทธิ์สูงกว่าคุณไม่ได้")
         elif action == "reset_password":
             if len(f.get("password", "")) < MIN_PASSWORD:
@@ -118,11 +118,11 @@ def users():
                 db.commit()
                 flash(f"ตั้งรหัสผ่านใหม่ให้ {user['name']} แล้ว — แจ้งรหัสให้เจ้าของบัญชีโดยตรง")
         elif action == "set_profile":
-            pos, lv = _pick(db, "positions", f.get("position_id"), user["position_id"]), _pick(db, "user_levels", f.get("level_id"), user["level_id"])
-            if pos is False or lv is False:
-                flash("ตำแหน่งหรือระดับที่เลือกไม่ถูกต้อง")
+            pos = _pick(db, "positions", f.get("position_id"), user["position_id"])
+            if pos is False:
+                flash("ตำแหน่งที่เลือกไม่ถูกต้อง")
             else:
-                db.execute("UPDATE safety_users SET position_id=?, level_id=? WHERE id=?", (pos, lv, user["id"]))
+                db.execute("UPDATE safety_users SET position_id=? WHERE id=?", (pos, user["id"]))
                 db.commit()
         elif action in ("toggle", "set_role") and not role_permissions(db, user["role"]) <= actor:
             flash("จัดการผู้ใช้ที่มีสิทธิ์สูงกว่าคุณไม่ได้")           # เช่น ผู้ถือ users.manage แตะต้องผู้ดูแลระบบไม่ได้
@@ -143,29 +143,53 @@ def users():
                 flash("ลดสิทธิ์ผู้ดูแลระบบคนสุดท้ายไม่ได้")
         elif action == "set_scope":
             _set_scope(db, user, f)
+        elif action == "save_user":
+            _save_user(db, user, f, actor)
         return redirect("/admin/users")
-    rows = db.execute("""SELECT u.*, r.name_th AS role_name, fa.name_th AS factory_name, d.name_th AS department_name
-                         FROM safety_users u LEFT JOIN safety_roles r ON r.key = u.role
+    rows = db.execute("""SELECT u.*, r.name_th AS role_name, fa.name_th AS factory_name, d.name_th AS department_name,
+                         pos.name_th AS position_name, pos.code AS position_code
+                         FROM safety_users u LEFT JOIN safety_roles r ON r.key = u.role LEFT JOIN positions pos ON pos.id = u.position_id
                          LEFT JOIN factories fa ON fa.id = u.factory_id LEFT JOIN departments d ON d.id = u.department_id
                          WHERE u.pending = 0 ORDER BY u.id""").fetchall()
     pending = db.execute("SELECT u.* FROM safety_users u WHERE u.pending = 1 ORDER BY u.id").fetchall()
     return render_template(
-        "users.html", users=rows, pending=pending, reg_open=accounts.registration_open(db),
+        "users.html", users=rows, step1=approvals.step_codes(db, 1), step2=approvals.step_codes(db, 2), notify_codes=approvals.codes(db, "approval_notify"),
+        step1_names=approvals.position_names(db, approvals.step_codes(db, 1)), step2_names=approvals.position_names(db, approvals.step_codes(db, 2)),
+        approvals_on=approvals.enabled(db), pending=pending, reg_open=accounts.registration_open(db),
         positions=db.execute("SELECT id, name_th, active FROM positions ORDER BY id").fetchall(),
-        levels=db.execute("SELECT id, name_th, active FROM user_levels ORDER BY code").fetchall(),
         roles=db.execute("SELECT key, name_th FROM safety_roles ORDER BY is_system DESC, key").fetchall(),
         factories=db.execute("SELECT id, name_th, active FROM factories ORDER BY code").fetchall(),
         departments=db.execute("""SELECT d.id, d.name_th, d.active, f.name_th AS factory FROM departments d
                                   JOIN factories f ON f.id = d.factory_id ORDER BY f.code, d.code""").fetchall())
 
 
+def _save_user(db, user, f, actor: set) -> None:
+    """แก้บทบาท ตำแหน่ง และขอบเขตหน่วยงานของผู้ใช้ในฟอร์มเดียว (ตรวจสิทธิ์/กติกาเดียวกับปุ่มแยกเดิม)"""
+    role = f.get("role", user["role"])
+    if role != user["role"]:
+        if db.execute("SELECT 1 FROM safety_roles WHERE key=?", (role,)).fetchone() is None:
+            return flash("ไม่พบบทบาทที่เลือก")
+        if not role_permissions(db, role) <= actor:
+            return flash("กำหนดบทบาทที่มีสิทธิ์มากกว่าที่คุณมีไม่ได้")
+    pos = _pick(db, "positions", f.get("position_id"), user["position_id"])
+    if pos is False:
+        return flash("ตำแหน่งที่เลือกไม่ถูกต้อง")
+    if role != user["role"] and not safe_set_role(db, user["id"], role):
+        return flash("ลดสิทธิ์ผู้ดูแลระบบคนสุดท้ายไม่ได้")
+    db.execute("UPDATE safety_users SET position_id=? WHERE id=?", (pos, user["id"]))
+    db.commit()
+    if not _set_scope(db, user, f):
+        return
+    flash(f"บันทึกข้อมูลของ {user['name']} แล้ว", "celebrate")
+
+
 def _create(db, f, actor: set) -> None:
     username, name = f.get("username", "").strip(), f.get("name", "").strip()
     role = f.get("role", "reporter")
     errors = accounts.validate_new(db, username, name, f.get("password", ""), None, f.get("email", "").strip())
-    pos, lv = _pick(db, "positions", f.get("position_id")), _pick(db, "user_levels", f.get("level_id"))
-    if pos is False or lv is False:
-        errors.append("ตำแหน่งหรือระดับที่เลือกไม่ถูกต้อง")
+    pos = _pick(db, "positions", f.get("position_id"))
+    if pos is False:
+        errors.append("ตำแหน่งที่เลือกไม่ถูกต้อง")
     if not _can_grant(db, actor, role):
         errors.append("กำหนดบทบาทที่มีสิทธิ์มากกว่าที่คุณมีไม่ได้ (หรือไม่พบบทบาทที่เลือก)")
     if errors:
@@ -173,7 +197,7 @@ def _create(db, f, actor: set) -> None:
             flash(e)
         return
     try:
-        uid = accounts.create_user(db, username=username, name=name, password=f["password"], role=role, level_id=lv, position_id=pos, email=f.get("email", "").strip())
+        uid = accounts.create_user(db, username=username, name=name, password=f["password"], role=role, position_id=pos, email=f.get("email", "").strip())
     except sqlite3.IntegrityError:
         return flash("ชื่อผู้ใช้นี้ถูกใช้แล้ว กรุณาเลือกชื่ออื่น")
     user = db.execute("SELECT * FROM safety_users WHERE id=?", (uid,)).fetchone()
@@ -192,11 +216,11 @@ def _review(db, user, f, actor: set, action: str) -> None:
     role = f.get("role", "reporter")
     if not _can_grant(db, actor, role):
         return flash("กำหนดบทบาทที่มีสิทธิ์มากกว่าที่คุณมีไม่ได้ (หรือไม่พบบทบาทที่เลือก)")
-    pos, lv = _pick(db, "positions", f.get("position_id"), user["position_id"]), _pick(db, "user_levels", f.get("level_id"), user["level_id"])
-    if pos is False or lv is False:
-        return flash("ตำแหน่งหรือระดับที่เลือกไม่ถูกต้อง")
+    pos = _pick(db, "positions", f.get("position_id"), user["position_id"])
+    if pos is False:
+        return flash("ตำแหน่งที่เลือกไม่ถูกต้อง")
     if (f.get("factory_id") or f.get("department_id")) and not _set_scope(db, user, f):
         return
-    db.execute("UPDATE safety_users SET active=1, pending=0, role=?, position_id=?, level_id=? WHERE id=? AND pending=1", (role, pos, lv, user["id"]))
+    db.execute("UPDATE safety_users SET active=1, pending=0, role=?, position_id=? WHERE id=? AND pending=1", (role, pos, user["id"]))
     db.commit()
     flash(f"อนุมัติบัญชี {user['name']} แล้ว — แจ้งผู้ขอให้เข้าสู่ระบบด้วยชื่อผู้ใช้ {user['username']}")

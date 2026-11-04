@@ -224,13 +224,13 @@ def emit_user_request(db, user_id: int) -> int:
     """แจ้งผู้ดูแลระบบว่ามีคำขอสร้างบัญชีใหม่ (ไม่มีข้อมูลลับ: ไม่ใส่รหัสผ่าน/อีเมลในข้อความ); สัญญาเดียวกับ emit (SAVEPOINT, ไม่ throw, ไม่ commit)"""
     db.execute("SAVEPOINT notify")
     try:
-        u = db.execute("SELECT u.name, u.username, u.requested_org, p.name_th AS position, l.name_th AS level FROM safety_users u "
-                       "LEFT JOIN positions p ON p.id = u.position_id LEFT JOIN user_levels l ON l.id = u.level_id WHERE u.id=?", (user_id,)).fetchone()
+        u = db.execute("SELECT u.name, u.username, u.requested_org, p.name_th AS position FROM safety_users u "
+                       "LEFT JOIN positions p ON p.id = u.position_id WHERE u.id=?", (user_id,)).fetchone()
         if u is None:
             db.execute("RELEASE notify")
             return 0
         title = clean(f"คำขอสร้างบัญชีใหม่: {u['name']}", TITLE_MAX)
-        body = clean(f"{u['username']} · {u['requested_org']} · {u['position'] or '-'} {u['level'] or ''} — รอผู้ดูแลระบบอนุมัติ", BODY_MAX)
+        body = clean(f"{u['username']} · {u['requested_org']} · {u['position'] or '-'} — รอผู้ดูแลระบบอนุมัติ", BODY_MAX)
         rec = {"department_id": None, "reported_by": None, "owner_id": None, "id": user_id}
         created = _write_rows(db, "user_requested", rec, title, body, "new", f"u{user_id}", "/admin/users#pending", None, None, user_id, None, False,
                               frozenset({"users.manage"}), frozenset())

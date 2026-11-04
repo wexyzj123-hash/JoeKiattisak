@@ -143,29 +143,28 @@ def org(safety_app):
     con.close()
     admin_with_password(safety_app)
     pos = sql(safety_app, "SELECT id FROM positions WHERE code='SV'")[0][0]
-    lv = sql(safety_app, "SELECT id FROM user_levels WHERE code='L1'")[0][0]
-    return {"a": a, "b": b, "pos": pos, "lv": lv}
+    return {"a": a, "b": b, "pos": pos}
 
 
 def form(org, **kw):
     return {"username": "newbie", "name": "สมหญิง ใจดี", "factory_id": str(org["a"]["f"]), "department_id": str(org["a"]["d"]), "line_id": str(org["a"]["l"]),
-            "position_id": str(org["pos"]), "level_id": str(org["lv"]), "email": "sy@example.com", "password": "Passw0rd!", "password2": "Passw0rd!", **kw}
+            "position_id": str(org["pos"]), "email": "sy@example.com", "password": "Passw0rd!", "password2": "Passw0rd!", **kw}
 
 
 def test_seeded_positions_and_levels(safety_app):
     pos = [r[0] for r in sql(safety_app, "SELECT name_th FROM positions ORDER BY id")]
     assert pos == ["Operator", "LL", "Staff", "Sr.Staff", "FM", "SV", "SSV", "ผู้จัดการ (Manager)", "DM", "DGM", "GM"]
-    assert [r[0] for r in sql(safety_app, "SELECT name_th FROM user_levels ORDER BY code")] == ["L0", "L1", "L2"]
+    assert safety_app.test_client().get("/master/user-levels").status_code in (302, 404)          # ระดับ L0-L2 ถูกถอดออกจากระบบ
 
 
 def test_register_creates_a_pending_inactive_reporter_with_org_position_level(safety_app, org):
     c = safety_app.test_client()
     page = c.get("/register").get_data(as_text=True)
-    assert "โรงงาน A" in page and "Sr.Staff" in page and "L2" in page and 'id="f-dept"' in page and "/static/safety/register.js" in page
+    assert "โรงงาน A" in page and "Sr.Staff" in page and 'id="f-dept"' in page and "/static/safety/register.js" in page
     r = post(c, "/register", **form(org))
     assert r.status_code == 200 and "ส่งคำขอแล้ว" in r.get_data(as_text=True)
     u = sql(safety_app, "SELECT * FROM safety_users WHERE username='newbie'")[0]
-    assert (u["active"], u["pending"], u["role"], u["position_id"], u["level_id"]) == (0, 1, "reporter", org["pos"], org["lv"])
+    assert (u["active"], u["pending"], u["role"], u["position_id"]) == (0, 1, "reporter", org["pos"])
     assert u["requested_org"] == "โรงงาน A › แผนก A › ไลน์ A" and (u["req_factory_id"], u["req_department_id"]) == (org["a"]["f"], org["a"]["d"])
     assert u["email"] == "sy@example.com" and u["hub_uid"] < 0 and check_password(u["password_hash"], "Passw0rd!")
     assert "รอผู้ดูแลระบบอนุมัติ" in post(c, "/login", username="newbie", password="Passw0rd!").get_data(as_text=True)
@@ -176,7 +175,7 @@ def test_register_validation_rejects_each_bad_input_and_creates_nothing(safety_a
     bad = ({"username": "a b"}, {"username": "ab"}, {"username": "boss"}, {"username": "BOSS"}, {"name": " "}, {"password": "short", "password2": "short"},
            {"password2": "other-pass1"}, {"email": "no-at"}, {"factory_id": ""}, {"department_id": ""},
            {"department_id": str(org["b"]["d"])}, {"line_id": str(org["b"]["l"])}, {"position_id": ""}, {"position_id": "9999"},
-           {"level_id": ""}, {"level_id": "9999"}, {"factory_id": "x"})
+           {"factory_id": "x"})
     for extra in bad:
         r = post(c, "/register", **form(org, **extra))
         assert r.status_code == 200 and "ส่งคำขอแล้ว" not in r.get_data(as_text=True), extra
@@ -231,7 +230,7 @@ def test_admin_sees_pending_box_with_requested_org_and_prefilled_scope(safety_ap
 def test_approve_activates_with_chosen_role_scope_and_the_user_can_login(safety_app, org):
     uid = request_user(safety_app, org)
     c = admin_client(safety_app)
-    post(c, "/admin/users", action="approve", id=uid, role="assessor", factory_id=org["a"]["f"], department_id=org["a"]["d"], position_id=org["pos"], level_id=org["lv"])
+    post(c, "/admin/users", action="approve", id=uid, role="assessor", factory_id=org["a"]["f"], department_id=org["a"]["d"], position_id=org["pos"])
     u = sql(safety_app, "SELECT * FROM safety_users WHERE id=?", (uid,))[0]
     assert (u["active"], u["pending"], u["role"], u["factory_id"], u["department_id"]) == (1, 0, "assessor", org["a"]["f"], org["a"]["d"])
     assert post(safety_app.test_client(), "/login", username="newbie", password="Passw0rd!").headers["Location"] == "/"
@@ -273,10 +272,10 @@ def test_reject_deletes_only_pending_and_registration_switch_works(safety_app, o
 
 def test_admin_creates_user_with_position_level_and_reset_password(safety_app, org):
     c = admin_client(safety_app)
-    post(c, "/admin/users", action="create", username="somchai", name="สมชาย", password="Initial-pass1", role="reporter", position_id=org["pos"], level_id=org["lv"],
+    post(c, "/admin/users", action="create", username="somchai", name="สมชาย", password="Initial-pass1", role="reporter", position_id=org["pos"],
          factory_id=org["a"]["f"], department_id=org["a"]["d"], email="sc@example.com")
     u = sql(safety_app, "SELECT * FROM safety_users WHERE username='somchai'")[0]
-    assert (u["active"], u["pending"], u["role"], u["position_id"], u["level_id"], u["factory_id"]) == (1, 0, "reporter", org["pos"], org["lv"], org["a"]["f"])
+    assert (u["active"], u["pending"], u["role"], u["position_id"], u["factory_id"]) == (1, 0, "reporter", org["pos"], org["a"]["f"])
     assert post(safety_app.test_client(), "/login", username="somchai", password="Initial-pass1").status_code == 302
     for bad in ({"username": "somchai"}, {"username": "x y"}, {"password": "short"}, {"role": "ghost"}):
         before = sql(safety_app, "SELECT COUNT(*) FROM safety_users")[0][0]
@@ -287,9 +286,9 @@ def test_admin_creates_user_with_position_level_and_reset_password(safety_app, o
     assert post(safety_app.test_client(), "/login", username="somchai", password="Brand-new-pass2").status_code == 302
     post(c, "/admin/users", action="reset_password", id=u["id"], password="short")
     assert check_password(sql(safety_app, "SELECT password_hash FROM safety_users WHERE id=?", (u["id"],))[0][0], "Brand-new-pass2")
-    post(c, "/admin/users", action="set_profile", id=u["id"], position_id="", level_id="")
-    assert sql(safety_app, "SELECT position_id, level_id FROM safety_users WHERE id=?", (u["id"],))[0][:] == (None, None)
-    post(c, "/admin/users", action="set_profile", id=u["id"], position_id="9999", level_id="")
+    post(c, "/admin/users", action="set_profile", id=u["id"], position_id="")
+    assert sql(safety_app, "SELECT position_id FROM safety_users WHERE id=?", (u["id"],))[0][0] is None
+    post(c, "/admin/users", action="set_profile", id=u["id"], position_id="9999")
     assert sql(safety_app, "SELECT position_id FROM safety_users WHERE id=?", (u["id"],))[0][0] is None
 
 

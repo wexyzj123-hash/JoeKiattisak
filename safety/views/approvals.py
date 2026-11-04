@@ -5,6 +5,8 @@ from flask import Blueprint, abort, flash, g, redirect, render_template, request
 
 from .. import approvals
 from ..db import get_db
+from ..hazards import STATUS_TH as HAZARD_STATUS_TH
+from ..incidents import INCIDENT_STATUS_TH
 from ..perms import permission_required
 from ..security import safety_login_required
 
@@ -53,6 +55,19 @@ def decide(kind, ref_id, step):
         flash("บันทึกการอนุมัติแล้ว" if decision == "approve" else "บันทึกการไม่อนุมัติแล้ว", "celebrate" if decision == "approve" else "")
     nxt = request.form.get("next", "")
     return redirect(nxt if nxt in ("/approvals",) else "/approvals")
+
+
+@bp.route("/unit")
+@safety_login_required
+def unit_page():
+    from .. import unit
+    db = get_db()
+    ov = unit.overview(db, g.user)
+    notes = db.execute("SELECT id, event, title, body, link, created_at, read_at FROM notifications WHERE user_id=? AND event IN "
+                       "('unit_hazard_notice','unit_incident_notice','approval_requested','approval_completed','approval_rejected') "
+                       "ORDER BY created_at DESC, id DESC LIMIT 15", (g.user["id"],)).fetchall()
+    return render_template("unit.html", ov=ov, notes=notes, enabled=approvals.enabled(db), status_th=approvals.STATUS_TH,
+                           hazard_status_th=HAZARD_STATUS_TH, incident_status_th=INCIDENT_STATUS_TH)
 
 
 @bp.route("/approvals/<kind>/<int:ref_id>/restart", methods=["POST"])

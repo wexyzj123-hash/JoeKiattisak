@@ -24,6 +24,7 @@ MENU = (
     ("ระบบข้อมูลหลัก", (
         ("ภาพรวมดำเนินงาน", "/overview", "overview", "master.view"),
         ("ภาพรวมตามหน่วยงาน", "/overview/departments", "departments", "master.view"),
+        ("หน่วยงานของฉัน", "/unit", "departments", "unit.view"),
         ("งานรออนุมัติ", "/approvals", "check", "approval.act"),
         ("พื้นที่เสี่ยง", "/master/risk-areas", "map-pin", "master.view"),
         ("ลงทะเบียนบันทึกอันตราย", "/hazards", "clipboard", "hazard.report"),
@@ -48,7 +49,6 @@ MENU = (
         ("ไลน์/กลุ่มงาน", "/master/lines", "sliders", "master.view"),
         ("สาเหตุอุบัติเหตุ", "/master/incident-causes", "tag", "master.view"),
         ("ตำแหน่ง", "/master/positions", "users", "master.view"),
-        ("ระดับ (L0-L2)", "/master/user-levels", "layers", "master.view"),
     )),
     ("ผู้ดูแลระบบ", (
         ("ประเภทผู้ใช้งาน", "/admin/roles", "shield", "roles.manage"),

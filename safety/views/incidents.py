@@ -14,6 +14,7 @@ from ..images import MAX_PER_KIND, ImageError, save_attachment
 from ..incidents import (INCIDENT_EVENT_TH, INCIDENT_KIND_TH, INCIDENT_STATUS_TH, OPEN_STATUSES, PEOPLE_ROLES, can_view_all, people_count,
                          people_for, scope_sql, visible_incident)
 from ..master import breadcrumb, REGISTRY
+from ..security import safety_login_required
 from ..perms import permission_any, permission_required, user_permissions
 from ..risk import scale_rows
 from .hazards import STORED_RE, _int, _like, _precheck, _uploads
@@ -61,7 +62,12 @@ def index():
     sql, args = scope_sql(g.user)
     conds, args = [sql], list(args)
     if not can_view_all(perms):
-        conds.append("(i.reported_by = ? OR i.owner_id = ?)"); args += [g.user["id"]] * 2
+        mine, mine_args = "i.reported_by = ? OR i.owner_id = ?", [g.user["id"]] * 2
+        from .. import unit
+        uc = unit.clause(db, g.user, "i")                                   # + รายการในหน่วยงานของตน
+        if uc is not None:
+            mine, mine_args = f"{mine} OR ({uc[0]})", mine_args + uc[1]
+        conds.append(f"({mine})"); args += mine_args
     kind, status = request.args.get("kind", ""), request.args.get("status", "")
     if kind in INCIDENT_KIND_TH:
         conds.append("i.kind = ?"); args.append(kind)
@@ -132,7 +138,7 @@ def new():
 
 # ---------- รายละเอียด ----------
 @bp.route("/<int:incident_id>")
-@permission_any(*ANY_INCIDENT_PERM)
+@safety_login_required
 def detail(incident_id):
     db, perms = get_db(), _perms()
     inc = _load(incident_id)
@@ -255,7 +261,7 @@ def photos(incident_id):
 
 
 @bp.route("/<int:incident_id>/files/<int:att_id>")
-@permission_any(*ANY_INCIDENT_PERM)
+@safety_login_required
 def file(incident_id, att_id):
     _load(incident_id)
     att = get_db().execute("SELECT * FROM incident_attachments WHERE id=? AND incident_id=?", (att_id, incident_id)).fetchone()

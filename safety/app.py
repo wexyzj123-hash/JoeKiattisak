@@ -117,7 +117,10 @@ def create_app(test_config: dict | None = None) -> Flask:
         perms = user_permissions(db, g.user)
         from .views.approvals import is_approver
         if is_approver(db, g.user) or g.user["role"] == "admin" and approvals.enabled(db):
-            perms = perms | {"approval.act"}                                  # เมนู «งานรออนุมัติ» เฉพาะผู้ดำรงตำแหน่งในสายอนุมัติ (และแอดมินที่อนุมัติแทน)
+            perms = perms | {"approval.act"}
+        from . import unit
+        if unit.scope(db, g.user) is not None:
+            perms = perms | {"unit.view"}                                     # เมนู «หน่วยงานของฉัน» ของผู้ที่ผูกกับโรงงาน/แผนก                                  # เมนู «งานรออนุมัติ» เฉพาะผู้ดำรงตำแหน่งในสายอนุมัติ (และแอดมินที่อนุมัติแทน)
         return {"nav": nav_items(perms, request.path), "unread_count": unread_count(db, g.user["id"]),
                 "role_name": role["name_th"] if role else g.user["role"]}
 

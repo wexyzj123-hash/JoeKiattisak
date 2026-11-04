@@ -64,7 +64,9 @@ def visible_hazard(db, user, hazard_id: int):
     if row is None:
         return None
     if not can_view_all(user_permissions(db, user)) and user["id"] not in (row["reported_by"], row["owner_id"]):
-        return None                                         # ผู้ใช้ทั่วไปเห็นเฉพาะที่ตนแจ้งหรือที่ได้รับมอบหมาย
+        from . import unit
+        if not unit.member(db, user, row):
+            return None                                     # ผู้ใช้ทั่วไปเห็นที่ตนแจ้ง/ได้รับมอบหมาย และรายการในหน่วยงานของตน (อ่านอย่างเดียว)
     return row
 
 

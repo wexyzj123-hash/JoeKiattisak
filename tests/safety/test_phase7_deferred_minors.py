@@ -47,7 +47,7 @@ def test_capa_detail_hides_source_the_viewer_cannot_open_and_owner_list_is_scope
     con = connect(safety_app.config["DATABASE"])
     a, b = add_chain(con, "A"), add_chain(con, "B")
     rep = add_user(con, "reporter", "ผู้แจ้งอื่น")
-    hid = add_hazard(con, a["a"], rep, code="HZ-SECRET-1", title="หัวข้อลับ")
+    hid = add_hazard(con, b["a"], rep, code="HZ-SECRET-1", title="หัวข้อลับ")             # ต้นทางอยู่คนละหน่วยงานกับผู้ดู (ผู้ดูเห็นเฉพาะหน่วยงานตน)
     con.commit(); con.close()
     c = login(safety_app, "reporter", factory_id=a["f"])
     con = connect(safety_app.config["DATABASE"])

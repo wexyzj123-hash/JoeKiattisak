@@ -39,8 +39,7 @@ def _org_lists(db) -> dict:
 
 
 def _choices(db) -> dict:
-    return {"levels": db.execute("SELECT id, name_th FROM user_levels WHERE active=1 ORDER BY code").fetchall(),
-            "positions": db.execute("SELECT id, name_th FROM positions WHERE active=1 ORDER BY id").fetchall()}
+    return {"positions": db.execute("SELECT id, name_th FROM positions WHERE active=1 ORDER BY id").fetchall()}
 
 
 @bp.route("/login", methods=["GET", "POST"])
@@ -120,11 +119,8 @@ def register():
         if f.get("line_id", "") and line is None and dep is not None:
             errors.append("ไลน์ที่เลือกไม่อยู่ในแผนกนี้")
         pos = db.execute("SELECT id, name_th FROM positions WHERE id=? AND active=1", (f.get("position_id") or 0,)).fetchone()
-        lv = db.execute("SELECT id, name_th FROM user_levels WHERE id=? AND active=1", (f.get("level_id") or 0,)).fetchone()
         if pos is None:
             errors.append("กรุณาเลือกตำแหน่ง")
-        if lv is None:
-            errors.append("กรุณาเลือกระดับ (L0/L1/L2)")
         if not errors and db.execute("SELECT COUNT(*) FROM safety_users WHERE pending=1").fetchone()[0] >= accounts.MAX_PENDING:
             errors.append("มีคำขอรออนุมัติมากเกินไปในขณะนี้ กรุณาติดต่อผู้ดูแลระบบโดยตรง")
         if errors:
@@ -134,7 +130,7 @@ def register():
             org_text = " › ".join(x["name"] for x in (fac, dep, line) if x)
             try:
                 uid = accounts.create_user(db, username=username, name=name, password=f["password"], role="reporter", active=0, pending=1,
-                                           level_id=lv["id"], position_id=pos["id"], email=email, requested_org=org_text,
+                                           position_id=pos["id"], email=email, requested_org=org_text,
                                            req_factory_id=fac["id"], req_department_id=dep["id"])
             except sqlite3.IntegrityError:
                 flash("ชื่อผู้ใช้นี้ถูกใช้แล้ว กรุณาเลือกชื่ออื่น")

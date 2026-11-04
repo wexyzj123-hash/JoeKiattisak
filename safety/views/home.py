@@ -72,8 +72,13 @@ def index():
     lti_days, lti_date = incident_stats.days_without_lost_time(db, user)
     perms = user_permissions(db, user)
     dd = dash.home_data(db, user)
+    from .. import unit
+    unit_ov = unit.overview(db, user)
+    unit_notes = db.execute("SELECT id, event, title, link, created_at, read_at FROM notifications WHERE user_id=? AND event IN "
+                            "('unit_hazard_notice','unit_incident_notice','approval_requested','approval_completed','approval_rejected') "
+                            "ORDER BY created_at DESC, id DESC LIMIT 4", (user["id"],)).fetchall()
     return render_template(
-        "home.html", dd=dd, spark=charts.spark, this_month=timeutil.today().strftime("%Y-%m"), lti_days=lti_days, lti_date=lti_date, capa_overdue=capa.overdue_count(db, user), latest_patrols=patrol.latest_rounds(db, user, 5),
+        "home.html", unit_ov=unit_ov, unit_notes=unit_notes, dd=dd, spark=charts.spark, this_month=timeutil.today().strftime("%Y-%m"), lti_days=lti_days, lti_date=lti_date, capa_overdue=capa.overdue_count(db, user), latest_patrols=patrol.latest_rounds(db, user, 5),
         can_patrol=bool(perms & {"patrol.perform", "patrol.view"}), can_capa=bool(perms & {"capa.create", "capa.verify", "hazard.report", "incident.report", "patrol.perform"}), open_total=counts["reported"] + counts["assessed"] + counts["assigned"], overdue=stats.overdue_count(db, user),
         closed_month=stats.closed_this_month(db, user), high_risk=stats.high_risk_open(db, user),
         donut=donut_svg, legend=legend, trend_svg=charts.trend(trend_rows), trend_rows=trend_rows,

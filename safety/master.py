@@ -44,7 +44,6 @@ REGISTRY: dict[str, TableDef] = {td.slug: td for td in (
     TableDef("hazard_sources", "hazard-sources", "แหล่งที่มา"),
     TableDef("hiyari_types", "hiyari-types", "ประเภทของ Hiyari Hatto"),
     TableDef("incident_causes", "incident-causes", "สาเหตุอุบัติเหตุ"),
-    TableDef("user_levels", "user-levels", "ระดับ (L0-L2)"),
     TableDef("positions", "positions", "ตำแหน่ง"),
 )}
 

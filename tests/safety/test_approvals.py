@@ -39,7 +39,8 @@ class World:
         approvals.save_config(self.db, True, ["SV"], ["DM", "DGM"], ["GM"])
 
     def hazard(self, chain=None):
-        hid, errors = workflow.report(self.db, user_row(self.db, self.rep), {
+        reporter = self.rep if chain is None or chain is self.a else self.sv_b           # แจ้งในหน่วยงาน B ต้องเป็นคนที่ผูกกับ B
+        hid, errors = workflow.report(self.db, user_row(self.db, reporter), {
             "title": "น้ำมันหก", "risk_area_id": str((chain or self.a)["a"]), "hazard_type_id": str(self.t), "source_id": str(self.s)})
         assert errors == [], errors
         return hid
