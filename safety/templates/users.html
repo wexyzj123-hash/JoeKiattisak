@@ -36,13 +36,16 @@
   <span style="color:var(--muted)">ทั้งหมด {{ users | length }} บัญชี · ผู้อนุมัติ: ขั้น 1 = {{ step1_names }} · ขั้น 2 = {{ step2_names }}{% if not approvals_on %} (สายอนุมัติปิดอยู่ — <a href="/admin/approvals">เปิดที่นี่</a>){% endif %}</span>
 </div>
 <table class="table-stack" style="width:100%" id="user-table">
-  <tr><th>ชื่อ</th><th>ตำแหน่ง</th><th>บทบาท</th><th>หน่วยงาน (ขอบเขต)</th><th>หน้าที่ในสายอนุมัติ</th><th>สถานะ</th><th>จัดการ</th></tr>
+  <tr><th>ชื่อ</th><th>ตำแหน่ง</th><th>บทบาท</th><th>หน่วยงาน (ขอบเขต)</th><th>ช่องทางแจ้งเตือน</th><th>หน้าที่ในสายอนุมัติ</th><th>สถานะ</th><th>จัดการ</th></tr>
   {% for u in users %}
   <tr data-search="{{ (u['name'] ~ ' ' ~ (u['username'] or '') ~ ' ' ~ (u['position_name'] or '') ~ ' ' ~ (u['factory_name'] or '') ~ ' ' ~ (u['department_name'] or '')) | lower }}">
     <td data-label="ชื่อ"><strong>{{ u['name'] }}</strong>{% if u['username'] %}<br><small style="color:var(--muted)">{{ u['username'] }}</small>{% else %}<br><small style="color:var(--muted)">ยังไม่มีชื่อผู้ใช้/รหัสผ่าน — ตั้งรหัสผ่านใหม่ในปุ่ม «จัดการ»</small>{% endif %}{% if u['requested_org'] %}<br><small style="color:var(--muted)">ระบุเองว่า: {{ u['requested_org'] }}</small>{% endif %}</td>
     <td data-label="ตำแหน่ง">{{ u['position_name'] or '-' }}</td>
     <td data-label="บทบาท">{{ u['role_name'] or u['role'] }}</td>
     <td data-label="หน่วยงาน (ขอบเขต)">{{ u['factory_name'] or 'ทุกโรงงาน' }}{% if u['department_name'] %} › {{ u['department_name'] }}{% elif u['factory_name'] %} (ทั้งโรงงาน){% endif %}</td>
+    <td data-label="ช่องทางแจ้งเตือน">{% set chs = (u['notify_channels'] or 'inapp').split(',') %}
+      <small>{% if u['email'] %}✉ {{ u['email'] }}{{ '' if 'email' in chs else ' (ไม่รับ)' }}{% else %}<span style="color:var(--muted)">ไม่มีอีเมล</span>{% endif %}<br>
+      {% if u['teams_webhook'] %}Teams: ตั้งแล้ว{{ '' if 'teams' in chs else ' (ไม่รับ)' }}{% else %}<span style="color:var(--muted)">ไม่มี Teams</span>{% endif %}</small></td>
     <td data-label="หน้าที่ในสายอนุมัติ">{% set code = (u['position_code'] or '')|upper %}{% set badges = [] %}
       {% if code in step1 %}<span class="chip">อนุมัติขั้น 1</span>{% endif %}{% if code in step2 %} <span class="chip">อนุมัติขั้น 2</span>{% endif %}{% if code in notify_codes %} <span class="chip">รับแจ้งทุกหน่วยงาน</span>{% endif %}
       {% if code not in step1 and code not in step2 and code not in notify_codes %}-{% endif %}</td>
@@ -54,8 +57,16 @@
           <label>ตำแหน่ง <select name="position_id"><option value="">ไม่ระบุตำแหน่ง</option>{% for p in positions if p['active'] or p['id'] == u['position_id'] %}<option value="{{ p['id'] }}" {{ 'selected' if p['id'] == u['position_id'] }}>{{ p['name_th'] }}</option>{% endfor %}</select></label>
           <label>โรงงาน <select name="factory_id"><option value="">ทุกโรงงาน</option>{% for f in factories if f['active'] or f['id'] == u['factory_id'] %}<option value="{{ f['id'] }}" {{ 'selected' if f['id'] == u['factory_id'] }}>{{ f['name_th'] }}</option>{% endfor %}</select></label>
           <label>แผนก <select name="department_id"><option value="">ทั้งโรงงาน / ทุกแผนก</option>{% for d in departments if d['active'] or d['id'] == u['department_id'] %}<option value="{{ d['id'] }}" {{ 'selected' if d['id'] == u['department_id'] }}>{{ d['factory'] }} › {{ d['name_th'] }}</option>{% endfor %}</select></label>
+          <label>อีเมล <input name="email" type="email" value="{{ u['email'] or '' }}" maxlength="254" autocomplete="off" placeholder="name@company.com"></label>
+          <label>Webhook ของ Teams <input name="teams_webhook" value="{{ u['teams_webhook'] or '' }}" maxlength="600" autocomplete="off" placeholder="https://…webhook.office.com/…"></label>
+          <div style="display:flex;gap:12px;flex-wrap:wrap">
+            <label style="display:inline-flex;gap:4px;align-items:center;margin:0"><input type="checkbox" name="channels" value="email" {{ 'checked' if 'email' in chs }}> รับทางอีเมล</label>
+            <label style="display:inline-flex;gap:4px;align-items:center;margin:0"><input type="checkbox" name="channels" value="teams" {{ 'checked' if 'teams' in chs }}> รับทาง Teams</label>
+            <small style="color:var(--muted)">กระดิ่งในระบบรับเสมอ</small></div>
           <button type="submit">บันทึก</button>
         </form>
+        <form method="post" style="margin-top:8px"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ u['id'] }}"><input type="hidden" name="action" value="test_contact">
+          <button type="submit">ส่งข้อความทดสอบถึงคนนี้</button></form>
         <form method="post" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ u['id'] }}">
           <input type="hidden" name="action" value="reset_password"><input name="password" type="password" minlength="8" placeholder="รหัสผ่านใหม่" autocomplete="new-password" required style="width:9rem">
           <button type="submit">ตั้งรหัสผ่านใหม่</button></form>
@@ -84,7 +95,10 @@
   <label>ชื่อผู้ใช้ (อังกฤษ/ตัวเลข 3-32 ตัว) <input name="username" pattern="[A-Za-z0-9._-]{3,32}" required autocomplete="off"></label>
   <label>ชื่อ-นามสกุล <input name="name" maxlength="100" required></label>
   <label>รหัสผ่านเริ่มต้น (อย่างน้อย 8 ตัวอักษร) <input name="password" type="password" minlength="8" required autocomplete="new-password"></label>
-  <label>อีเมล (ไม่บังคับ) <input name="email" type="email" maxlength="254"></label>
+  <label>อีเมล (ไม่บังคับ — ใช้รับแจ้งเตือน) <input name="email" type="email" maxlength="254"></label>
+  <label>Webhook ของ Teams (ไม่บังคับ) <input name="teams_webhook" maxlength="600" autocomplete="off" placeholder="https://…webhook.office.com/…"></label>
+  <div style="display:flex;gap:12px;flex-wrap:wrap"><label style="display:inline-flex;gap:4px;align-items:center;margin:0"><input type="checkbox" name="channels" value="email" checked> รับทางอีเมล</label>
+    <label style="display:inline-flex;gap:4px;align-items:center;margin:0"><input type="checkbox" name="channels" value="teams" checked> รับทาง Teams</label></div>
   <label>บทบาท <select name="role">{% for r in roles %}<option value="{{ r['key'] }}" {{ 'selected' if r['key'] == 'reporter' }}>{{ r['name_th'] }}</option>{% endfor %}</select></label>
   <label>ตำแหน่ง <select name="position_id"><option value="">ไม่ระบุ</option>{% for p in positions if p['active'] %}<option value="{{ p['id'] }}">{{ p['name_th'] }}</option>{% endfor %}</select></label>
   <label>โรงงาน <select name="factory_id"><option value="">ทุกโรงงาน</option>{% for f in factories if f['active'] %}<option value="{{ f['id'] }}">{{ f['name_th'] }}</option>{% endfor %}</select></label>

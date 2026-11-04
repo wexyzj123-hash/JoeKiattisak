@@ -11,6 +11,7 @@ from shared.auth import MIN_PASSWORD, hash_password
 from .. import accounts, approvals
 from ..db import get_db
 
+from ..notify import valid_contact
 from ..perms import permission_required, role_permissions, user_permissions
 
 bp = Blueprint("users", __name__, url_prefix="/admin")
@@ -106,7 +107,7 @@ def users():
             flash("ไม่พบผู้ใช้")
         elif action in ("approve", "reject"):
             _review(db, user, f, actor, action)
-        elif user["pending"] and action in ("toggle", "set_role", "set_scope", "reset_password", "set_profile", "save_user"):
+        elif user["pending"] and action in ("toggle", "set_role", "set_scope", "reset_password", "set_profile", "save_user", "test_contact"):
             flash("บัญชีนี้รออนุมัติ — กดอนุมัติหรือปฏิเสธก่อน")
         elif action in ("reset_password", "set_profile", "save_user") and not role_permissions(db, user["role"]) <= actor:
             flash("จัดการผู้ใช้ที่มีสิทธิ์สูงกว่าคุณไม่ได้")
@@ -145,6 +146,8 @@ def users():
             _set_scope(db, user, f)
         elif action == "save_user":
             _save_user(db, user, f, actor)
+        elif action == "test_contact":
+            _test_contact(db, user)
         return redirect("/admin/users")
     rows = db.execute("""SELECT u.*, r.name_th AS role_name, fa.name_th AS factory_name, d.name_th AS department_name,
                          pos.name_th AS position_name, pos.code AS position_code
@@ -176,11 +179,56 @@ def _save_user(db, user, f, actor: set) -> None:
         return flash("ตำแหน่งที่เลือกไม่ถูกต้อง")
     if role != user["role"] and not safe_set_role(db, user["id"], role):
         return flash("ลดสิทธิ์ผู้ดูแลระบบคนสุดท้ายไม่ได้")
-    db.execute("UPDATE safety_users SET position_id=? WHERE id=?", (pos, user["id"]))
+    contact = _contact_values(f, user)
+    if contact is None:
+        return
+    db.execute("UPDATE safety_users SET position_id=?, email=?, teams_webhook=?, notify_channels=? WHERE id=?", (pos, *contact, user["id"]))
     db.commit()
     if not _set_scope(db, user, f):
         return
     flash(f"บันทึกข้อมูลของ {user['name']} แล้ว", "celebrate")
+
+
+def _contact_values(f, user=None):
+    """(อีเมล, Teams webhook, ช่องทางที่รับ) จากฟอร์ม — ตรวจรูปแบบเหมือนหน้าโปรไฟล์; ผิด → flash แล้วคืน None
+    ช่องทางที่ติ๊กรับต้องมีข้อมูลติดต่อ; ติ๊กไม่ติ๊กไม่ได้ส่งมา = คงตามที่กรอก (กรอกแล้วถือว่าต้องการรับ)"""
+    email, hook = (f.get("email") or "").strip(), (f.get("teams_webhook") or "").strip()
+    errors = []
+    if email and valid_contact("email", {"email": email}) is None:
+        errors.append("อีเมลไม่ถูกต้อง")
+    if hook and valid_contact("teams", {"teams_webhook": hook}) is None:
+        errors.append("Webhook ของ Teams ไม่ถูกต้อง — ต้องเป็นลิงก์ https ของ Microsoft (หรือโดเมนที่อนุญาตไว้ที่หน้าการแจ้งเตือน)")
+    chosen = set(f.getlist("channels"))
+    if "email" in chosen and not email:
+        errors.append("เลือกรับทางอีเมลแล้ว ต้องกรอกอีเมลด้วย")
+    if "teams" in chosen and not hook:
+        errors.append("เลือกรับทาง Teams แล้ว ต้องกรอก Webhook ของ Teams ด้วย")
+    if errors:
+        for e in errors:
+            flash(e)
+        return None
+    channels = ",".join(["inapp"] + [c for c in ("email", "teams") if c in chosen])
+    return email or None, hook or None, channels
+
+
+def _test_contact(db, user) -> None:
+    """ส่งข้อความทดสอบถึงอีเมล/Teams ของผู้ใช้คนนี้ทันที แล้วบอกผลจริง"""
+    from .. import channel_config, delivery
+    env = {**channel_config.effective_env(db), "NOTIFY_HTTP_TIMEOUT": "6"}
+    ok, bad = [], []
+    for channel, label in (("email", "อีเมล"), ("teams", "Teams")):
+        target = valid_contact(channel, user)
+        if not target:
+            continue
+        try:
+            delivery.REAL[channel](target, "ทดสอบการแจ้งเตือน AIAT Safety", f"ข้อความทดสอบจากผู้ดูแลระบบถึง {user['name']} — หากเห็นข้อความนี้แสดงว่าช่องทางทำงานปกติ", env)
+            ok.append(label)
+        except delivery.TransportError as exc:
+            bad.append(f"{label} ({exc})")
+    if not ok and not bad:
+        return flash(f"{user['name']} ยังไม่มีอีเมลหรือ Teams ที่ใช้ได้ — กรอกในช่อง «แก้ไข» ก่อน")
+    message = (f"ส่งทดสอบถึง {user['name']} สำเร็จ: " + ", ".join(ok) if ok else "") + (" · " if ok and bad else "") + ("ส่งไม่สำเร็จ: " + ", ".join(bad) if bad else "")
+    flash(message, "celebrate" if ok and not bad else "")
 
 
 def _create(db, f, actor: set) -> None:
@@ -192,6 +240,14 @@ def _create(db, f, actor: set) -> None:
         errors.append("ตำแหน่งที่เลือกไม่ถูกต้อง")
     if not _can_grant(db, actor, role):
         errors.append("กำหนดบทบาทที่มีสิทธิ์มากกว่าที่คุณมีไม่ได้ (หรือไม่พบบทบาทที่เลือก)")
+    contact = None
+    if not errors:
+        chosen = [c for c in f.getlist("channels") if (c == "email" and f.get("email", "").strip()) or (c == "teams" and f.get("teams_webhook", "").strip())]
+        from werkzeug.datastructures import MultiDict
+        f2 = MultiDict([(k, v) for k, v in f.items(multi=True) if k != "channels"] + [("channels", c) for c in chosen])
+        contact = _contact_values(f2, None)               # ไม่ติ๊กช่องที่ไม่มีข้อมูล (ฟอร์มสร้างติ๊กไว้ให้ตั้งต้น) — ถ้ากรอกผิดรูปแบบจะแจ้งและไม่สร้าง
+        if contact is None:
+            return
     if errors:
         for e in errors:
             flash(e)
@@ -200,6 +256,9 @@ def _create(db, f, actor: set) -> None:
         uid = accounts.create_user(db, username=username, name=name, password=f["password"], role=role, position_id=pos, email=f.get("email", "").strip())
     except sqlite3.IntegrityError:
         return flash("ชื่อผู้ใช้นี้ถูกใช้แล้ว กรุณาเลือกชื่ออื่น")
+    if contact and (contact[0] or contact[1]):
+        db.execute("UPDATE safety_users SET email=?, teams_webhook=?, notify_channels=? WHERE id=?", (contact[0], contact[1], contact[2], uid))
+        db.commit()
     user = db.execute("SELECT * FROM safety_users WHERE id=?", (uid,)).fetchone()
     if f.get("factory_id") or f.get("department_id"):
         _set_scope(db, user, f)
