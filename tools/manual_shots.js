@@ -71,6 +71,7 @@ process.stdin.on('end', async () => {
   add('admin-capa-settings', { who: 'admin', url: '/admin/capa-settings', full: true });
   add('admin-report-due', { who: 'admin', url: '/admin/report-due', full: true });
   add('unit', { who: 'head', url: '/unit', full: true });
+  add('admin-message-templates', { who: 'admin', url: '/admin/message-templates', full: false, waitMs: 800 });
   add('admin-approvals', { who: 'admin', url: '/admin/approvals', full: true });
   add('admin-notifications', { who: 'admin', url: '/admin/notifications', full: true });
   add('search', { who: 'admin', url: '/search?q=น้ำมัน' });

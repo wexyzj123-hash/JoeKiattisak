@@ -9,7 +9,7 @@ import time
 
 from flask import Blueprint, flash, g, redirect, render_template, request
 
-from .. import channel_config
+from .. import channel_config, msgtemplates
 from .. import digest, scheduler
 from ..db import get_db
 from ..notify import clean, valid_contact
@@ -216,3 +216,39 @@ def notifications():
         event_th=EVENT_TH, channel_th=CHANNEL_TH, status_th=STATUS_TH, channels=ACTIVE_CHANNELS, events=NOTIFY_EVENTS,
         roles=db.execute("SELECT key FROM safety_roles ORDER BY key").fetchall(),
         no_enabled=not any(r["enabled"] for r in rule_rows), digest_on=digest.enabled(db))
+
+
+GROUPS = (("อันตราย", ("hazard_reported", "hazard_assessed", "hazard_assigned", "hazard_closed", "hazard_rejected", "due_soon", "overdue")),
+          ("อุบัติเหตุ / Near Miss", ("incident_reported", "incident_assigned", "incident_closed")),
+          ("ประกาศหน่วยงาน (ข้อความทางการ)", ("unit_hazard_notice", "unit_incident_notice")),
+          ("การอนุมัติ", ("approval_requested", "approval_completed", "approval_rejected")),
+          ("CAPA", ("capa_assigned", "capa_done", "capa_verified", "capa_reopened", "capa_due_soon", "capa_overdue")),
+          ("Safety Patrol และรายงาน", ("patrol_due", "patrol_overdue", "report_due_soon", "report_overdue")),
+          ("บัญชีผู้ใช้", ("user_requested",)))
+
+
+@bp.route("/message-templates", methods=["GET", "POST"])
+@permission_required("users.manage")
+def message_templates():
+    """แต่งข้อความแจ้งเตือนมาตรฐานของแต่ละเหตุการณ์ (ชื่อเรื่อง + เนื้อหา) — ใช้กับทุกช่องทาง (ในระบบ/อีเมล/Teams)"""
+    db = get_db()
+    if request.method == "POST":
+        event, action = request.form.get("event", ""), request.form.get("action", "")
+        if event not in msgtemplates.DEFAULTS:
+            flash("ไม่พบเหตุการณ์")
+        elif action == "reset":
+            msgtemplates.reset(db, event)
+            flash(f"คืนค่ามาตรฐานของ «{EVENT_TH.get(event, event)}» แล้ว")
+        else:
+            errors = msgtemplates.save(db, event, request.form.get("title", ""), request.form.get("body", ""), g.user["id"])
+            for e in errors:
+                flash(f"{EVENT_TH.get(event, event)}: {e}")
+            if not errors:
+                flash(f"บันทึกข้อความของ «{EVENT_TH.get(event, event)}» แล้ว — มีผลกับข้อความที่ส่งจากนี้ไป", "celebrate")
+        return redirect(f"/admin/message-templates#ev-{event}")
+    rows = {}
+    for event in msgtemplates.DEFAULTS:
+        title, body = msgtemplates.get(db, event)
+        rows[event] = {"title": title, "body": body, "custom": msgtemplates.is_custom(db, event), "default_title": msgtemplates.DEFAULTS[event][0],
+                       "default_body": msgtemplates.DEFAULTS[event][1], "vars": msgtemplates.allowed(event), "sample": msgtemplates.sample_values(event)}
+    return render_template("message_templates.html", groups=GROUPS, rows=rows, event_th=EVENT_TH)

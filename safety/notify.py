@@ -12,6 +12,7 @@ from typing import Mapping
 
 from .hazards import user_in_scope
 from .perms import user_permissions
+from . import msgtemplates
 from .schema import ACTIVE_OUTBOX, NOTIFY_EVENTS, OUTBOX_CHANNELS  # noqa: F401
 
 log = logging.getLogger("safety.notify")
@@ -140,24 +141,14 @@ def recipients_for(db, rule, hazard, actor_id: int | None, owner_fallback_role: 
     return list(found.values())
 
 
-def render_message(event: str, hazard, extra: Mapping | None = None) -> tuple[str, str]:
+def render_message(event: str, hazard, extra: Mapping | None = None, tpl=None) -> tuple[str, str]:
     extra = extra or {}
-    code, title = clean(hazard["code"], 40), clean(hazard["title"], FIELD_MAX)
-    area = clean(extra.get("area"), FIELD_MAX)
-    level = f" · ระดับ {clean(hazard['level_name'], 40)} ({hazard['score']})" if hazard["level_name"] else ""
-    due = f" · ครบกำหนด {clean(hazard['due_date'], 10)}" if hazard["due_date"] else ""
-    where = f" · พื้นที่ {area}" if area else ""
-    days = extra.get("days")
-    head, tail = {
-        "hazard_reported": (f"แจ้งอันตรายใหม่ {code}", f"{title}{where}"),
-        "hazard_assessed": (f"ประเมินความเสี่ยง {code}", f"{title}{level}{where}"),
-        "hazard_assigned": (f"มอบหมายงานแก้ไข {code}", f"{title}{due}{where}"),
-        "hazard_closed": (f"ปิดรายการอันตราย {code}", f"{title} · ผลการแก้ไข: {clean(hazard['closing_note'], 200)}"),
-        "hazard_rejected": (f"รายการถูกปฏิเสธ {code}", f"{title} · เหตุผล: {clean(extra.get('reason') or hazard['reject_reason'], 200)}"),
-        "due_soon": (f"ใกล้ครบกำหนด {code} (อีก {days} วัน)", f"{title}{level}{due}{where}"),
-        "overdue": (f"เกินกำหนด {code} ({days} วัน)", f"{title}{level}{due}{where}"),
-    }.get(event, (f"แจ้งเตือน {code}", title))
-    return clean(head, TITLE_MAX), clean(tail, BODY_MAX)
+    values = {"code": hazard["code"], "title": hazard["title"], "area": extra.get("area"), "level": hazard["level_name"],
+              "score": hazard["score"] if hazard["level_name"] else "", "due": hazard["due_date"], "days": extra.get("days"),
+              "reason": extra.get("reason") or hazard["reject_reason"], "note": hazard["closing_note"], "reporter": extra.get("reporter"),
+              "owner": extra.get("owner"), "location": hazard["location_text"] if "location_text" in hazard.keys() else ""}
+    t, b = tpl or msgtemplates.get(None, event)
+    return msgtemplates.render(t, b, values)
 
 
 def _stage(event: str, hazard, offset_days: int | None) -> str:
@@ -229,8 +220,8 @@ def emit_user_request(db, user_id: int) -> int:
         if u is None:
             db.execute("RELEASE notify")
             return 0
-        title = clean(f"คำขอสร้างบัญชีใหม่: {u['name']}", TITLE_MAX)
-        body = clean(f"{u['username']} · {u['requested_org']} · {u['position'] or '-'} — รอผู้ดูแลระบบอนุมัติ", BODY_MAX)
+        t, b = msgtemplates.get(db, "user_requested")
+        title, body = msgtemplates.render(t, b, {"name": u["name"], "username": u["username"], "org": u["requested_org"], "position": u["position"] or "-"})
         rec = {"department_id": None, "reported_by": None, "owner_id": None, "id": user_id}
         created = _write_rows(db, "user_requested", rec, title, body, "new", f"u{user_id}", "/admin/users#pending", None, None, user_id, None, False,
                               frozenset({"users.manage"}), frozenset())
@@ -241,6 +232,12 @@ def emit_user_request(db, user_id: int) -> int:
         db.execute("ROLLBACK TO notify")
         db.execute("RELEASE notify")
         return 0
+
+
+def _people(db, rec) -> dict:
+    """ชื่อผู้แจ้ง/ผู้รับผิดชอบสำหรับตัวแปร {reporter} {owner} ของแม่แบบ (ชื่อพนักงานที่ใช้งานในระบบเท่านั้น ไม่ใช่ผู้เกี่ยวข้องในอุบัติเหตุ)"""
+    get = lambda uid: (db.execute("SELECT name FROM safety_users WHERE id=?", (uid,)).fetchone() or [""])[0] if uid else ""
+    return {"reporter": get(rec["reported_by"]), "owner": get(rec["owner_id"])}
 
 
 def emit(db, event: str, hazard_id: int, actor_id: int | None, *, offset_days: int | None = None,
@@ -255,7 +252,8 @@ def emit(db, event: str, hazard_id: int, actor_id: int | None, *, offset_days: i
             db.execute("RELEASE notify")
             return 0
         area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (hazard["risk_area_id"],)).fetchone()
-        title, body = render_message(event, hazard, {"area": area[0] if area else "", "days": days if days is not None else offset_days})
+        title, body = render_message(event, hazard, {"area": area[0] if area else "", "days": days if days is not None else offset_days, **_people(db, hazard)},
+                                     msgtemplates.get(db, event))
         stage = stage if stage is not None else _stage(event, hazard, offset_days)
         created = _write_rows(db, event, hazard, title, body, stage, str(hazard_id), f"/hazards/{hazard_id}", hazard_id, None,
                               actor_id, offset_days, bool(hazard["level_requires_approval"]))
@@ -271,19 +269,13 @@ def emit(db, event: str, hazard_id: int, actor_id: int | None, *, offset_days: i
 KIND_TH = {"accident": "อุบัติเหตุ", "near_miss": "Near Miss"}
 
 
-def render_incident_message(event: str, incident, extra: Mapping | None = None) -> tuple[str, str]:
-    """ข้อความแจ้งเตือนอุบัติเหตุ: รหัส ประเภท หัวข้อ พื้นที่ เท่านั้น — ไม่มีชื่อ/รหัสพนักงานของผู้เกี่ยวข้องเด็ดขาด"""
+def render_incident_message(event: str, incident, extra: Mapping | None = None, tpl=None) -> tuple[str, str]:
+    """ข้อความแจ้งเตือนอุบัติเหตุ: รหัส ประเภท หัวข้อ พื้นที่ — ไม่มีชื่อ/รหัสพนักงานของผู้เกี่ยวข้องเด็ดขาด (ตัวแปรของแม่แบบไม่มีข้อมูลดังกล่าว)"""
     extra = extra or {}
-    code, title = clean(incident["code"], 40), clean(incident["title"], FIELD_MAX)
-    kind = KIND_TH.get(incident["kind"], "อุบัติเหตุ")
-    where = f" · พื้นที่ {clean(extra.get('area'), FIELD_MAX)}" if extra.get("area") else ""
-    due = f" · ครบกำหนด {clean(incident['due_date'], 10)}" if incident["due_date"] else ""
-    head, tail = {
-        "incident_reported": (f"แจ้ง{kind}ใหม่ {code}", f"{title}{where}"),
-        "incident_assigned": (f"มอบหมายสอบสวน{kind} {code}", f"{title}{due}{where}"),
-        "incident_closed": (f"ปิดรายการ{kind} {code}", f"{title}{where}"),                  # ไม่คัดลอกข้อความอิสระ (อาจมีชื่อบุคคล)
-    }.get(event, (f"แจ้งเตือน {code}", title))
-    return clean(head, TITLE_MAX), clean(tail, BODY_MAX)
+    values = {"code": incident["code"], "title": incident["title"], "kind": KIND_TH.get(incident["kind"], "อุบัติเหตุ"), "area": extra.get("area"),
+              "due": incident["due_date"], "when": str(incident["occurred_at"] or "").replace("T", " ")[:16], "reporter": extra.get("reporter"), "owner": extra.get("owner")}
+    t, b = tpl or msgtemplates.get(None, event)
+    return msgtemplates.render(t, b, values)
 
 
 def emit_incident(db, event: str, incident_id: int, actor_id: int | None) -> int:
@@ -298,7 +290,7 @@ def emit_incident(db, event: str, incident_id: int, actor_id: int | None) -> int
             db.execute("RELEASE notify")
             return 0
         area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (inc["risk_area_id"],)).fetchone()
-        title, body = render_incident_message(event, inc, {"area": area[0] if area else ""})
+        title, body = render_incident_message(event, inc, {"area": area[0] if area else "", **_people(db, inc)}, msgtemplates.get(db, event))
         stage = f"{inc['owner_id']}:{inc['due_date']}" if event == "incident_assigned" else "1"
         created = _write_rows(db, event, inc, title, body, stage, f"i{incident_id}", f"/incidents/{incident_id}", None, incident_id,
                               actor_id, None, bool(inc["lost_time"] or inc["level_requires_approval"]),
@@ -316,41 +308,18 @@ def emit_incident(db, event: str, incident_id: int, actor_id: int | None) -> int
 OFFICIAL_SIGN = "จึงเรียนมาเพื่อโปรดทราบ ขอแสดงความนับถือ — ระบบ AIAT Safety"
 
 
-def render_unit_notice(kind: str, rec, extra: Mapping) -> tuple[str, str]:
-    code, title = clean(rec["code"], 40), clean(rec["title"], FIELD_MAX)
-    area = clean(extra.get("area"), FIELD_MAX)
-    when = clean(extra.get("when"), 20)
-    where = f" ณ {area}" if area else ""
-    if kind == "incident":
-        kind_th = KIND_TH.get(rec["kind"], "อุบัติเหตุ")
-        head = f"[แจ้งเพื่อทราบ] เกิด{kind_th}ในหน่วยงาน {code}"
-        body = (f"เรียน ผู้เกี่ยวข้อง\nขอแจ้งให้ทราบว่า ได้เกิดเหตุ{kind_th}{where} เรื่อง \"{title}\" (เลขที่ {code}) เมื่อ {when} "
-                f"ขณะนี้อยู่ระหว่างการสอบสวนและดำเนินการแก้ไข โปรดติดตามความคืบหน้าและให้ความร่วมมือกับผู้เกี่ยวข้อง\n{OFFICIAL_SIGN}")
-    else:
-        head = f"[แจ้งเพื่อทราบ] พบอันตรายในหน่วยงาน {code}"
-        body = (f"เรียน ผู้เกี่ยวข้อง\nขอแจ้งให้ทราบว่า มีการรายงานอันตราย{where} เรื่อง \"{title}\" (เลขที่ {code}) เมื่อ {when} "
-                f"ขณะนี้อยู่ระหว่างการประเมินความเสี่ยงและดำเนินการแก้ไข โปรดใช้ความระมัดระวังและแจ้งผู้ดูแลหากพบเหตุเพิ่มเติม\n{OFFICIAL_SIGN}")
-    return clean(head, TITLE_MAX), clean(body, 1200)
+def render_unit_notice(kind: str, rec, extra: Mapping, tpl=None) -> tuple[str, str]:
+    kind_th = KIND_TH.get(rec["kind"], "อุบัติเหตุ") if kind == "incident" else "อันตราย"
+    values = {"kind": kind_th, "code": rec["code"], "title": rec["title"], "area": extra.get("area"), "when": extra.get("when"), "reporter": extra.get("reporter")}
+    t, b = tpl or msgtemplates.get(None, "unit_incident_notice" if kind == "incident" else "unit_hazard_notice")
+    return msgtemplates.render(t, b, values)
 
 
-def render_approval_message(event: str, kind: str, rec, extra: Mapping) -> tuple[str, str]:
-    code, title = clean(rec["code"], 40), clean(rec["title"], FIELD_MAX)
-    label = "รายการอันตราย" if kind == "hazard" else "รายการอุบัติเหตุ"
-    step, who = extra.get("step"), clean(extra.get("approvers"), 120)
-    if event == "approval_requested":
-        head = f"[ขออนุมัติ] {label} {code} (ขั้นที่ {step}: {who})"
-        body = (f"เรียน ผู้อนุมัติ ({who})\nขอเรียนเชิญพิจารณาอนุมัติ{label} เลขที่ {code} เรื่อง \"{title}\" "
-                f"ตามสายการอนุมัติขั้นที่ {step} โดยเข้าที่เมนู «งานรออนุมัติ» ในระบบ AIAT Safety\n{OFFICIAL_SIGN}")
-    elif event == "approval_completed":
-        head = f"[แจ้งผลการอนุมัติ] {label} {code} ได้รับอนุมัติครบทุกขั้น"
-        body = (f"เรียน ผู้เกี่ยวข้อง\nขอแจ้งว่า{label} เลขที่ {code} เรื่อง \"{title}\" ได้รับการอนุมัติครบทุกขั้นตอนแล้ว "
-                f"สามารถดำเนินการปิดรายการได้เมื่อการแก้ไขเสร็จสมบูรณ์\n{OFFICIAL_SIGN}")
-    else:
-        reason = clean(extra.get("reason"), 300)
-        head = f"[แจ้งผลการอนุมัติ] {label} {code} ไม่ได้รับอนุมัติ"
-        body = (f"เรียน ผู้เกี่ยวข้อง\nขอแจ้งว่า{label} เลขที่ {code} เรื่อง \"{title}\" ไม่ได้รับอนุมัติในขั้นที่ {step}"
-                f"{' เนื่องจาก ' + reason if reason else ''} โปรดตรวจสอบและดำเนินการตามที่เห็นสมควร\n{OFFICIAL_SIGN}")
-    return clean(head, TITLE_MAX), clean(body, 1200)
+def render_approval_message(event: str, kind: str, rec, extra: Mapping, tpl=None) -> tuple[str, str]:
+    values = {"kind": "รายการอันตราย" if kind == "hazard" else "รายการอุบัติเหตุ", "code": rec["code"], "title": rec["title"], "step": extra.get("step"),
+              "approvers": extra.get("approvers"), "reason": extra.get("reason")}
+    t, b = tpl or msgtemplates.get(None, event)
+    return msgtemplates.render(t, b, values)
 
 
 def _base_event_receivers(db, kind: str, ref_id: int) -> frozenset:
@@ -371,7 +340,7 @@ def emit_unit_notice(db, kind: str, ref_id: int, actor_id: int | None) -> int:
             return 0
         area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (rec["risk_area_id"],)).fetchone()
         when = (rec["occurred_at"] if kind == "incident" else rec["reported_at"]) or ""
-        title, body = render_unit_notice(kind, rec, {"area": area[0] if area else "", "when": str(when).replace("T", " ")[:16]})
+        title, body = render_unit_notice(kind, rec, {"area": area[0] if area else "", "when": str(when).replace("T", " ")[:16], **_people(db, rec)}, msgtemplates.get(db, event))
         created = _write_rows(db, event, rec, title, body, "1", f"{kind[0]}{ref_id}", ("/incidents/" if kind == "incident" else "/hazards/") + str(ref_id),
                               ref_id if kind == "hazard" else None, ref_id if kind == "incident" else None, actor_id, None,
                               False, ctx={"skip": _base_event_receivers(db, kind, ref_id)})
@@ -400,7 +369,7 @@ def emit_approval(db, event: str, kind: str, ref_id: int, actor_id: int | None, 
             row = db.execute("SELECT comment FROM approvals WHERE kind=? AND ref_id=? AND step=?", (kind, ref_id, step)).fetchone()
             reason = row[0] if row else ""
         title, body = render_approval_message(event, kind, rec, {"step": step, "reason": reason,
-                                                                  "approvers": approvals.position_names(db, approvals.step_codes(db, step))})
+                                                                  "approvers": approvals.position_names(db, approvals.step_codes(db, step))}, msgtemplates.get(db, event))
         link = "/approvals" if event == "approval_requested" else (("/incidents/" if kind == "incident" else "/hazards/") + str(ref_id))
         created = _write_rows(db, event, rec, title, body, f"{step}:{db.execute('SELECT COALESCE(MAX(decided_at), created_at) FROM approvals WHERE kind=? AND ref_id=?', (kind, ref_id)).fetchone()[0]}",
                               f"{kind[0]}{ref_id}", link, ref_id if kind == "hazard" else None, ref_id if kind == "incident" else None,
@@ -415,35 +384,19 @@ def emit_approval(db, event: str, kind: str, ref_id: int, actor_id: int | None, 
 
 
 # ---------- CAPA และ Safety Patrol ----------
-def render_capa_message(event: str, capa, extra: Mapping | None = None) -> tuple[str, str]:
+def render_capa_message(event: str, capa, extra: Mapping | None = None, tpl=None) -> tuple[str, str]:
     """ข้อความแจ้งเตือน CAPA: รหัส หัวข้อ พื้นที่ กำหนดส่ง เท่านั้น — ไม่คัดลอกข้อความอิสระ (หมายเหตุ/รายละเอียด)"""
     extra = extra or {}
-    code, title = clean(capa["code"], 40), clean(capa["title"], FIELD_MAX)
-    where = f" · พื้นที่ {clean(extra.get('area'), FIELD_MAX)}" if extra.get("area") else ""
-    due = f" · ครบกำหนด {clean(capa['due_date'], 10)}"
-    days = extra.get("days")
-    head, tail = {
-        "capa_assigned": (f"มอบหมาย CAPA {code}", f"{title}{due}{where}"),
-        "capa_done": (f"CAPA ดำเนินการเสร็จ รอยืนยัน {code}", f"{title}{where}"),
-        "capa_verified": (f"CAPA ยืนยันผลแล้ว {code}", f"{title}{where}"),
-        "capa_reopened": (f"CAPA ถูกตีกลับให้แก้ไข {code}", f"{title}{due}{where}"),
-        "capa_due_soon": (f"CAPA ใกล้ครบกำหนด {code} (อีก {days} วัน)", f"{title}{due}{where}"),
-        "capa_overdue": (f"CAPA เกินกำหนด {code} ({days} วัน)", f"{title}{due}{where}"),
-    }.get(event, (f"แจ้งเตือน CAPA {code}", title))
-    return clean(head, TITLE_MAX), clean(tail, BODY_MAX)
+    values = {"code": capa["code"], "title": capa["title"], "area": extra.get("area"), "due": capa["due_date"], "days": extra.get("days")}
+    t, b = tpl or msgtemplates.get(None, event)
+    return msgtemplates.render(t, b, values)
 
 
-def render_patrol_message(event: str, plan, extra: Mapping | None = None) -> tuple[str, str]:
+def render_patrol_message(event: str, plan, extra: Mapping | None = None, tpl=None) -> tuple[str, str]:
     extra = extra or {}
-    name = clean(extra.get("checklist"), FIELD_MAX)
-    where = f" · พื้นที่ {clean(extra.get('area'), FIELD_MAX)}" if extra.get("area") else ""
-    due = clean(extra.get("due"), 10)
-    days = extra.get("days")
-    head, tail = {
-        "patrol_due": (f"ถึงรอบตรวจความปลอดภัย: {name}", f"ครบกำหนด {due}{where}"),
-        "patrol_overdue": (f"เลยรอบตรวจความปลอดภัย {days} วัน: {name}", f"ครบกำหนด {due}{where}"),
-    }.get(event, (f"แจ้งเตือนการตรวจ: {name}", f"{due}{where}"))
-    return clean(head, TITLE_MAX), clean(tail, BODY_MAX)
+    values = {"name": extra.get("checklist"), "area": extra.get("area"), "due": extra.get("due"), "days": extra.get("days")}
+    t, b = tpl or msgtemplates.get(None, event)
+    return msgtemplates.render(t, b, values)
 
 
 def emit_capa(db, event: str, capa_id: int, actor_id: int | None, *, offset_days: int | None = None, days: int | None = None) -> int:
@@ -457,7 +410,7 @@ def emit_capa(db, event: str, capa_id: int, actor_id: int | None, *, offset_days
             db.execute("RELEASE notify")
             return 0
         area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (capa["risk_area_id"],)).fetchone()
-        title, body = render_capa_message(event, capa, {"area": area[0] if area else "", "days": days if days is not None else offset_days})
+        title, body = render_capa_message(event, capa, {"area": area[0] if area else "", "days": days if days is not None else offset_days}, msgtemplates.get(db, event))
         if event in ("capa_due_soon", "capa_overdue"):
             stage = f"{offset_days}:{capa['owner_id']}:{capa['due_date']}"       # ย้ายเจ้าของ/เลื่อนกำหนด → เตือนรอบใหม่
         elif event == "capa_assigned":
@@ -490,7 +443,7 @@ def emit_patrol(db, event: str, plan_id: int, actor_id: int | None, *, offset_da
         area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (plan["risk_area_id"],)).fetchone()
         cl = db.execute("SELECT name_th FROM checklists WHERE id=?", (plan["checklist_id"],)).fetchone()
         title, body = render_patrol_message(event, plan, {"area": area[0] if area else "", "checklist": cl[0] if cl else "", "due": due,
-                                                          "days": days if days is not None else offset_days})
+                                                          "days": days if days is not None else offset_days}, msgtemplates.get(db, event))
         created = _write_rows(db, event, plan, title, body, f"{due}:{offset_days}", f"p{plan_id}", f"/patrols?plan={plan_id}", None, None, actor_id,
                               offset_days, False, frozenset({"patrol.perform", "patrol.view"}), frozenset())
         db.execute("RELEASE notify")
@@ -502,15 +455,11 @@ def emit_patrol(db, event: str, plan_id: int, actor_id: int | None, *, offset_da
         return 0
 
 
-def render_report_message(event: str, extra: Mapping | None = None) -> tuple[str, str]:
+def render_report_message(event: str, extra: Mapping | None = None, tpl=None) -> tuple[str, str]:
     extra = extra or {}
-    name = clean(extra.get("report"), FIELD_MAX)
-    days = extra.get("days")
-    where = f" · แผนก {clean(extra.get('department'), FIELD_MAX)}" if extra.get("department") else ""
-    tail = f"งวด {clean(extra.get('period'), 10)}{where} · ครบกำหนด {clean(extra.get('due'), 10)}"
-    head = {"report_due_soon": f"ใกล้ครบกำหนดส่งรายงาน (อีก {days} วัน): {name}",
-            "report_overdue": f"เกินกำหนดส่งรายงาน {days} วัน: {name}"}.get(event, f"แจ้งเตือนการส่งรายงาน: {name}")
-    return clean(head, TITLE_MAX), clean(tail, BODY_MAX)
+    values = {"name": extra.get("report"), "period": extra.get("period"), "department": extra.get("department"), "due": extra.get("due"), "days": extra.get("days")}
+    t, b = tpl or msgtemplates.get(None, event)
+    return msgtemplates.render(t, b, values)
 
 
 def emit_report(db, event: str, rule_id: int, actor_id: int | None, *, period: str, due: str, offset_days: int, days: int) -> int:
@@ -526,7 +475,7 @@ def emit_report(db, event: str, rule_id: int, actor_id: int | None, *, period: s
             return 0
         dept = db.execute("SELECT name_th FROM departments WHERE id=?", (rule["department_id"],)).fetchone() if rule["department_id"] else None
         title, body = render_report_message(event, {"report": REPORTS.get(rule["report_key"], rule["report_key"]), "period": period,
-                                                    "department": dept[0] if dept else "", "due": due, "days": days})
+                                                    "department": dept[0] if dept else "", "due": due, "days": days}, msgtemplates.get(db, event))
         rec = {"department_id": rule["department_id"], "risk_area_id": None, "reported_by": rule["created_by"], "owner_id": None}
         created = _write_rows(db, event, rec, title, body, f"{period}:{due}:{offset_days}", f"rd{rule_id}", f"/reports/{rule['report_key']}", None, None, actor_id,
                               offset_days, False, frozenset({"report.export", "report.manage"}))

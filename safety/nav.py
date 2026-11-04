@@ -62,6 +62,7 @@ MENU = (
         ("ตั้งค่า CAPA", "/admin/capa-settings", "sliders", "criteria.manage"),
         ("สายการอนุมัติ", "/admin/approvals", "shield", "users.manage"),
         ("การแจ้งเตือน", "/admin/notifications", "bell", "users.manage"),
+        ("ข้อความแจ้งเตือน", "/admin/message-templates", "bell", "users.manage"),
     )),
 )
 

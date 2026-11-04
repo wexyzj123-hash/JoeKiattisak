@@ -19,6 +19,7 @@ from email.message import EmailMessage
 from typing import Callable, Mapping
 
 from .db import connect
+from .msgtemplates import clean_text
 from .notify import clean
 
 log = logging.getLogger("safety.delivery")
@@ -49,7 +50,8 @@ def _timeout(env: Mapping) -> float:
 
 def _text(subject: str, body: str, channel: str, sep: str = "\n") -> str:
     limit = LIMITS[channel]
-    return f"{clean(subject, SUBJECT_MAX)}{sep}{clean(body, limit)}"[:limit]
+    from .msgtemplates import clean_text
+    return f"{clean(subject, SUBJECT_MAX)}{sep}{clean_text(body, limit)}"[:limit]            # เนื้อหาคงการขึ้นบรรทัดใหม่ตามที่ผู้ดูแลแต่ง
 
 
 def _post_json(url: str, payload: dict, headers: dict, env: Mapping, what: str) -> None:
@@ -107,7 +109,7 @@ def send_email(target: str, subject: str, body: str, env: Mapping) -> None:
         msg["From"] = env.get("SMTP_FROM") or env.get("SMTP_USER") or "aiat-safety@localhost"
         msg["To"] = target
         msg["Subject"] = clean(subject, SUBJECT_MAX)
-        msg.set_content(clean(body, LIMITS["email"]), charset="utf-8")
+        msg.set_content(clean_text(body, LIMITS["email"]), charset="utf-8")
     except (ValueError, TypeError):
         raise TransportError("ที่อยู่อีเมลไม่ถูกต้อง", retryable=False) from None
     try:

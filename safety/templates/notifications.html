@@ -13,7 +13,7 @@
   <div class="card note{{ ' unread' if not r['read_at'] }}" style="max-width:none;margin:0;display:flex;justify-content:space-between;gap:12px;align-items:start;{{ 'border-left:4px solid var(--accent)' if not r['read_at'] }}">
     <div>
       <a href="/notifications/go/{{ r['id'] }}"><strong>{{ r['title'] }}</strong></a>
-      <div>{{ r['body'] }}</div>
+      <div style="white-space:pre-line">{{ r['body'] }}</div>
       <small style="color:var(--muted)">{{ r['created_at'] }}</small>
     </div>
     {% if not r['read_at'] %}<form method="post" action="/notifications/{{ r['id'] }}/read"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button type="submit">อ่านแล้ว</button></form>{% endif %}

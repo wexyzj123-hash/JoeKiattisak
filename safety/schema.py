@@ -327,6 +327,16 @@ def rebuild_notify_rules_if_needed(con) -> None:
         con.commit()
 
 
+TEMPLATE_DDL = """
+CREATE TABLE IF NOT EXISTS notify_templates (
+    event      TEXT PRIMARY KEY,
+    title      TEXT NOT NULL,
+    body       TEXT NOT NULL,
+    updated_by INTEGER REFERENCES safety_users(id),
+    updated_at TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+);
+"""
+
 APPROVAL_DDL = """
 CREATE TABLE IF NOT EXISTS approvals (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -748,7 +758,7 @@ def ensure_schema(con) -> None:
     _add_column(con, "safety_users", "line_user_id", "TEXT")
     _add_column(con, "safety_users", "email", "TEXT")
     _add_column(con, "safety_users", "notify_channels", "TEXT NOT NULL DEFAULT 'inapp'")
-    con.executescript(MASTER_DDL + ROLES_DDL + RISK_DDL + HAZARD_DDL + CUSTOM_DDL + NOTIFY_DDL + INCIDENT_DDL + PATROL_DDL + CAPA_DDL + REPORT_DDL + APPROVAL_DDL)
+    con.executescript(MASTER_DDL + ROLES_DDL + RISK_DDL + HAZARD_DDL + CUSTOM_DDL + NOTIFY_DDL + INCIDENT_DDL + PATROL_DDL + CAPA_DDL + REPORT_DDL + APPROVAL_DDL + TEMPLATE_DDL)
     _add_column(con, "notifications", "incident_id", "INTEGER")
     _add_column(con, "hazards", "patrol_answer_id", "INTEGER")
     con.execute("CREATE UNIQUE INDEX IF NOT EXISTS uq_hazards_patrol_answer ON hazards(patrol_answer_id) WHERE patrol_answer_id IS NOT NULL")
