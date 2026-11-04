@@ -72,6 +72,7 @@ process.stdin.on('end', async () => {
   add('admin-report-due', { who: 'admin', url: '/admin/report-due', full: true });
   add('unit', { who: 'head', url: '/unit', full: true });
   add('admin-message-templates', { who: 'admin', url: '/admin/message-templates', full: false, waitMs: 800 });
+  add('pending-dialog', { who: 'head', url: '/', waitMs: 2500 });
   add('admin-approvals', { who: 'admin', url: '/admin/approvals', full: true });
   add('admin-notifications', { who: 'admin', url: '/admin/notifications', full: true });
   add('search', { who: 'admin', url: '/search?q=น้ำมัน' });
@@ -92,6 +93,7 @@ process.stdin.on('end', async () => {
           else { const opts = await el.locator('option').allTextContents(); const hit = opts.find((t) => v.label.test(t)); await el.selectOption({ label: hit }); }
         }
       }
+      if (j.name !== 'pending-dialog') await page.evaluate(() => { const d = document.getElementById('pending-dialog'); if (d && d.open) d.close(); });   // หน้าต่างสรุปงานค้างเด้งเองบนหน้าหลัก — ปิดก่อนจับภาพอื่น
       if (j.click) { await page.locator(j.click).first().click(); }
       await page.waitForTimeout(j.waitMs || 1600);
       if (j.full) await page.addStyleTag({ content: '.topbar,.sidebar,aside{position:static !important}' });   // ภาพยาว: ไม่ให้แถบบน/เมนูที่ตรึงไว้ไปโผล่กลางภาพ
