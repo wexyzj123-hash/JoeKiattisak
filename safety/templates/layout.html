@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block toggle %}{% endblock %}
+{% block shell %}
+<div class="shell">
+  <aside class="sidebar">
+    <input type="checkbox" id="nav-toggle" class="nav-toggle" aria-label="เปิด/ปิดเมนู">
+    <div class="sidebar-top">
+      <a class="brand" href="/">{{ shield_logo(38) }}<span><strong>{{ BRAND_TITLE }}</strong><small>{{ BRAND_TAGLINE }}</small></span></a>
+      <label for="nav-toggle" class="nav-burger">{{ icon('menu', 20) }}<span>เมนู</span></label>
+    </div>
+    <nav class="nav-body" aria-label="เมนูหลัก">
+    {% for grp in nav %}
+    <details class="nav-sec" data-key="{{ grp.title }}"{{ ' open'|safe if grp.open }}>
+      <summary class="nav-group"><span>{{ grp.title }}</span>{{ icon('chevron-down', 14) }}</summary>
+      {% for i in grp.items %}<a class="nav-item{{ ' active' if i.active }}" href="{{ i.href }}"{{ ' aria-current="page"'|safe if i.active }}>{{ icon(i.icon, 18) }}<span>{{ i.label }}</span></a>{% endfor %}
+    </details>
+    {% endfor %}
+    <div class="nav-foot">{{ aisin_wordmark(96, '#ffffff') }}<small>{{ BRAND_FOOTER }}</small></div>
+    </nav>
+  </aside>
+  <div class="main-col">
+    <header class="topbar">
+      <button type="button" class="icon-btn nav-collapse" id="nav-collapse" aria-label="ซ่อน/แสดงเมนูด้านข้าง" aria-expanded="true" title="ซ่อน/แสดงเมนู">{{ icon('menu', 20) }}</button>
+      <form class="search" action="/search" method="get" role="search">
+        <input type="search" name="q" maxlength="100" placeholder="ค้นหารหัสหรือชื่อรายการอันตราย" aria-label="ค้นหารายการอันตราย">
+        <button type="submit" class="icon-btn flat" aria-label="ค้นหา">{{ icon('search', 18) }}</button>
+      </form>
+      <button type="button" class="icon-btn" id="pending-open" aria-haspopup="dialog" aria-label="สรุปงานค้าง" title="สรุปงานค้าง">{{ icon('clipboard', 20) }}</button>
+      <a class="icon-btn" href="/notifications" aria-label="การแจ้งเตือน">{{ icon('bell', 20) }}<span class="badge" id="bell-badge"{{ ' style="display:none"'|safe if not unread_count }}>{{ unread_count }}</span></a>
+      <button type="button" class="icon-btn" data-theme-toggle aria-label="สลับธีมสว่าง/มืด" title="สลับธีมสว่าง/มืด">{{ icon('sun-moon', 20) }}</button>
+      <details class="user-menu">
+        <summary aria-label="เมนูผู้ใช้: {{ g.user['name'] }}">{{ icon('user', 18) }}<span class="who">{{ g.user['name'] }}</span>{{ icon('chevron-down', 16) }}</summary>
+        <div class="menu-pop">
+          <div class="menu-head"><strong>{{ g.user['name'] }}</strong><small>{{ role_name }}</small></div>
+          <a href="/profile">{{ icon('user', 16) }} โปรไฟล์ของฉัน</a>
+          <form method="post" action="/logout"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button type="submit" class="link-btn">{{ icon('logout', 16) }} ออกจากระบบ</button></form>
+        </div>
+      </details>
+    </header>
+    <main class="content">
+    {% for category, m in get_flashed_messages(with_categories=true) %}
+    {% if category == 'celebrate' %}<div class="flash success">{{ mascot('celebrate', 56, decorative=True) }}<span>{{ m }}</span></div>
+    {% else %}<div class="flash">{{ m }}</div>{% endif %}
+    {% endfor %}
+    {% block body %}{% endblock %}
+    </main>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+// เมนูด้านข้าง: กลุ่มเป็นดรอปดาวน์ (จำว่าเปิด/พับอะไรไว้) และซ่อนทั้งแถบได้บนจอใหญ่ — จำค่าไว้ในเบราว์เซอร์นี้ (ใช้ไม่ได้ก็ยังเปิดดูเมนูได้ตามปกติ)
+(function () {
+  var store = { get: function (k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set: function (k, v) { try { localStorage.setItem(k, v); } catch (e) {} } };
+  Array.prototype.forEach.call(document.querySelectorAll('details.nav-sec'), function (d) {
+    var key = 'aiat.nav.' + d.getAttribute('data-key'), saved = store.get(key);
+    if (saved === '1') d.open = true; else if (saved === '0' && !d.querySelector('.nav-item.active') && d.getAttribute('data-key') !== 'เมนูหลัก') d.open = false;
+    d.addEventListener('toggle', function () { store.set(key, d.open ? '1' : '0'); });
+  });
+  var shell = document.querySelector('.shell'), btn = document.getElementById('nav-collapse');
+  if (shell && btn) {
+    function apply(hidden) { shell.classList.toggle('nav-hidden', hidden); btn.setAttribute('aria-expanded', hidden ? 'false' : 'true'); }
+    apply(store.get('aiat.nav.hidden') === '1');
+    btn.addEventListener('click', function () { var h = !shell.classList.contains('nav-hidden'); apply(h); store.set('aiat.nav.hidden', h ? '1' : '0'); });
+  }
+})();
+</script>
+<script>
+// อัปเดตตัวเลขกระดิ่งทุก 60 วินาที (พังเงียบ ๆ ได้ — หน้ายังใช้งานปกติ)
+(function () {
+  var badge = document.getElementById('bell-badge');
+  if (!badge || !window.fetch) return;
+  function tick() {
+    fetch('/notifications/unread-count', {credentials: 'same-origin', cache: 'no-store'})
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { if (d) { badge.textContent = d.count; badge.style.display = d.count ? '' : 'none'; } })
+      .catch(function () {});
+  }
+  setInterval(tick, 60000);
+})();
+</script>
+<link rel="stylesheet" href="/static/safety/pending.css">
+<dialog id="pending-dialog" aria-labelledby="pd-title"{{ ' data-auto="1"'|safe if g.get('auto_pending') }}>
+  <div class="pd-head"><h2 id="pd-title">สรุปงานค้าง</h2><div class="pd-actions"><button type="button" class="btn" data-pd-close>ปิด</button></div></div>
+  <div class="pd-body" role="region" aria-live="polite"></div>
+</dialog>
+<script src="/static/safety/pending.js" defer></script>
+{% endblock %}

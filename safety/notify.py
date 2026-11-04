@@ -1,0 +1,488 @@
+"""safety/notify.py — ศูนย์กลางการแจ้งเตือน: ใครต้องได้รับ (ตามกฎใน notify_rules), ข้อความ, และการเขียนแถวแจ้งเตือน/คิวส่ง
+ทุกอย่างเขียนลงฐานข้อมูลใน transaction ของผู้เรียก (ไม่ commit, ไม่เรียกเครือข่าย) — การส่งจริงเป็นหน้าที่ของ delivery.py
+ปัญหาในการแจ้งเตือนต้องไม่ทำให้ขั้นตอนหลักล้ม: emit() ครอบด้วย SAVEPOINT และกลืนข้อผิดพลาด (บันทึก log)"""
+from __future__ import annotations
+
+import logging
+import os
+import re
+from urllib.parse import urlsplit
+from datetime import date
+from typing import Mapping
+
+from .hazards import user_in_scope
+from .perms import user_permissions
+from . import msgtemplates
+from .schema import ACTIVE_OUTBOX, NOTIFY_EVENTS, OUTBOX_CHANNELS  # noqa: F401
+
+log = logging.getLogger("safety.notify")
+
+TITLE_MAX, BODY_MAX, FIELD_MAX = 150, 500, 200
+CHAT_RE = re.compile(r"^-?\d{1,20}$")
+LINE_RE = re.compile(r"^U[0-9a-f]{32}$")
+UNSAFE_RE = re.compile(r"[\x00-\x1f\x7f-\x9f  ]")
+
+
+def clean(text, limit: int) -> str:
+    """ข้อความธรรมดาบรรทัดเดียว: ตัดอักขระควบคุม/ขึ้นบรรทัดใหม่ เหลือช่องว่างเดียว และจำกัดความยาว"""
+    return re.sub(r"\s+", " ", UNSAFE_RE.sub(" ", "" if text is None else str(text))).strip()[:limit]
+
+
+TEAMS_HOST_SUFFIXES = ("webhook.office.com", "office.com", "logic.azure.com", "azure.com", "powerplatform.com", "microsoft.com")
+
+
+def teams_host_ok(url: str, env=None) -> bool:
+    """Webhook ของ Teams รายบุคคลต้องเป็น https และโฮสต์อยู่ในโดเมนของ Microsoft (หรือที่ผู้ดูแลอนุญาตด้วย TEAMS_ALLOWED_HOSTS) — กันผู้ใช้ชี้เซิร์ฟเวอร์ไปยิงเครือข่ายภายใน"""
+    if env is None:
+        from .channel_config import effective_env
+        env = effective_env()
+    try:
+        parts = urlsplit(url)
+        host = (parts.hostname or "").lower()
+        port = parts.port
+    except ValueError:
+        return False
+    if parts.scheme != "https" or not host or parts.username or parts.password or port not in (None, 443):
+        return False
+    extra = tuple(h.strip().lower() for h in str(env.get("TEAMS_ALLOWED_HOSTS", "")).split(",") if h.strip())
+    return any(host == suf or host.endswith("." + suf) for suf in TEAMS_HOST_SUFFIXES + extra)
+
+
+def _central_teams(db) -> str:
+    from .channel_config import effective_env
+    return effective_env(db).get("TEAMS_WEBHOOK_URL", "")
+
+
+def valid_contact(channel: str, user) -> str | None:
+    """ค่าติดต่อของผู้ใช้สำหรับช่องทางนั้นถ้ารูปแบบถูกต้อง ไม่เช่นนั้น None"""
+    field = {"telegram": "telegram_chat_id", "line": "line_user_id", "email": "email", "teams": "teams_webhook"}.get(channel)
+    try:
+        value = user[field] if field else None
+    except (KeyError, IndexError):
+        return None
+    if not isinstance(value, str):
+        return None
+    if channel == "telegram":
+        return value if CHAT_RE.match(value) else None
+    if channel == "line":
+        return value if LINE_RE.match(value) else None
+    if channel == "teams":
+        return value if len(value) <= 600 and not re.search(r"[\s\x00-\x1f\x7f]", value) and teams_host_ok(value) else None
+    if len(value) > 254 or re.search(r"[\s\x00-\x1f\x7f]", value) or value.count("@") != 1:
+        return None
+    local, domain = value.split("@")
+    return value if local and "." in domain and not domain.startswith(".") and not domain.endswith(".") else None
+
+
+def _split(text) -> list[str]:
+    return [p.strip() for p in str(text or "").split(",") if p.strip()]
+
+
+def _covers(db, user, rec) -> bool:
+    """ขอบเขตของผู้ใช้ครอบคลุมรายการหรือไม่ — รายงานมี department_id (ว่าง = ทั้งบริษัท: เฉพาะผู้ไม่มีขอบเขต), รายการอื่นใช้พื้นที่เสี่ยง"""
+    try:
+        dept = rec["department_id"]
+    except (KeyError, IndexError):
+        return user_in_scope(db, user, rec["risk_area_id"])
+    if dept is None:
+        return user["factory_id"] is None and user["department_id"] is None
+    conds, args = ["d.id = ?"], [dept]
+    if user["factory_id"] is not None:
+        conds.append("d.factory_id = ?"); args.append(user["factory_id"])
+    if user["department_id"] is not None:
+        conds.append("d.id = ?"); args.append(user["department_id"])
+    return db.execute(f"SELECT 1 FROM departments d WHERE {' AND '.join(conds)}", args).fetchone() is not None
+
+
+def recipients_for(db, rule, hazard, actor_id: int | None, owner_fallback_role: str | None = None, ctx: dict | None = None) -> list:
+    """ผู้ใช้ที่ใช้งานอยู่ตามกฎ: reporter / owner / role:<key> (เฉพาะผู้ที่ขอบเขตครอบคลุมรายการ); ไม่รวมผู้กระทำเอง ไม่ซ้ำ"""
+    found: dict[int, object] = {}
+
+    def add(row):
+        if row is not None and row["active"] and row["id"] != actor_id:
+            found.setdefault(row["id"], row)
+
+    get = lambda uid: db.execute("SELECT * FROM safety_users WHERE id=?", (uid,)).fetchone() if uid else None
+    for kind in _split(rule["recipients"]):
+        if kind == "reporter":
+            add(get(hazard["reported_by"]))
+        elif kind == "owner":
+            owner = get(hazard["owner_id"])
+            if owner is None and owner_fallback_role:                        # ไม่มีผู้ตรวจประจำแผน → ผู้ที่มีบทบาทนี้ในขอบเขต
+                for u in db.execute("SELECT * FROM safety_users WHERE role=? AND active=1 ORDER BY id", (owner_fallback_role,)):
+                    if _covers(db, u, hazard):
+                        add(u)
+            else:
+                add(owner)
+        elif kind.startswith("owner_else:"):                                 # เจ้าของงาน ถ้าไม่มี → ผู้ที่มีบทบาทนี้ในขอบเขต (แอดมินแก้ได้ในกฎ)
+            owner = get(hazard["owner_id"])
+            if owner is not None:
+                add(owner)
+            else:
+                for u in db.execute("SELECT * FROM safety_users WHERE role=? AND active=1 ORDER BY id", (kind[11:],)):
+                    if _covers(db, u, hazard):
+                        add(u)
+        elif kind.startswith("role:"):
+            for u in db.execute("SELECT * FROM safety_users WHERE role=? AND active=1 ORDER BY id", (kind[5:],)):
+                if _covers(db, u, hazard):
+                    add(u)
+        elif kind in ("unit", "approvers") or kind.startswith("position:"):       # หน่วยงานของรายการ / ผู้อนุมัติขั้นปัจจุบัน / ผู้ดำรงตำแหน่ง — แจ้งแม้ไม่มีสิทธิ์เปิดรายการ
+            from . import approvals
+            if kind == "unit":
+                people = approvals.unit_users(db, hazard)
+            elif kind == "approvers":
+                people = approvals.approvers_for(db, hazard, int((ctx or {}).get("step", 1)))
+            else:
+                people = approvals.users_with_positions(db, [kind[9:]], hazard)
+            for u in people:
+                add(u)
+                if ctx is not None:
+                    ctx.setdefault("bypass", set()).add(u["id"])
+    return list(found.values())
+
+
+def render_message(event: str, hazard, extra: Mapping | None = None, tpl=None) -> tuple[str, str]:
+    extra = extra or {}
+    values = {"code": hazard["code"], "title": hazard["title"], "area": extra.get("area"), "level": hazard["level_name"],
+              "score": hazard["score"] if hazard["level_name"] else "", "due": hazard["due_date"], "days": extra.get("days"),
+              "reason": extra.get("reason") or hazard["reject_reason"], "note": hazard["closing_note"], "reporter": extra.get("reporter"),
+              "owner": extra.get("owner"), "location": hazard["location_text"] if "location_text" in hazard.keys() else ""}
+    t, b = tpl or msgtemplates.get(None, event)
+    return msgtemplates.render(t, b, values)
+
+
+def _stage(event: str, hazard, offset_days: int | None) -> str:
+    if event in ("due_soon", "overdue"):
+        return str(offset_days)
+    if event == "hazard_assigned":
+        return f"{hazard['owner_id']}:{hazard['due_date']}"
+    if event == "hazard_assessed":
+        return str(hazard["score"])
+    return "1"
+
+
+def _rule_matches(rule, event: str, hazard, offset_days: int | None) -> bool:
+    if event in ("due_soon", "overdue", "capa_due_soon", "capa_overdue", "patrol_due", "patrol_overdue", "report_due_soon", "report_overdue") and rule["offset_days"] != offset_days:
+        return False
+    if event == "hazard_assessed" and rule["min_score"] is not None:
+        return hazard["score"] is not None and hazard["score"] >= rule["min_score"]
+    return True
+
+
+def _queue_external(db, channel: str, target: str, title: str, body: str, urgent: int, notification_id, key: str) -> None:
+    db.execute("INSERT OR IGNORE INTO notify_outbox(channel, target, subject, body, urgent, notification_id, dedupe_key, next_try_at) "
+               "VALUES(?,?,?,?,?,?,?, datetime('now','localtime'))", (channel, target, title, body, urgent, notification_id, key))
+
+
+def _write_rows(db, event: str, rec, title: str, body: str, stage: str, ref: str, link: str, hazard_id, incident_id,
+                actor_id, offset_days, urgent_base: bool, require_any: frozenset = frozenset(), allow_ids: frozenset = frozenset(),
+                owner_fallback_role: str | None = None, ctx: dict | None = None) -> int:
+    """เขียนแถวแจ้งเตือน/คิวส่งตามกฎของเหตุการณ์ (ใช้ร่วมกันระหว่างอันตรายและอุบัติเหตุ); คืนจำนวนแถวในระบบที่สร้างใหม่"""
+    created = 0
+    for rule in db.execute("SELECT * FROM notify_rules WHERE event=? AND enabled=1 ORDER BY id", (event,)).fetchall():
+        if not _rule_matches(rule, event, rec, offset_days):
+            continue
+        key = f"{event}:{ref}:{rule['id']}:{stage}"
+        channels = set(_split(rule["channels"]))
+        urgent = int(urgent_base or (event in ("overdue", "capa_overdue", "report_overdue") and rule["offset_days"] >= 3))
+        ctx = {} if ctx is None else ctx
+        for user in recipients_for(db, rule, rec, actor_id, owner_fallback_role, ctx):
+            if user["id"] in ctx.get("skip", ()):
+                continue                                       # ได้รับแจ้งเรื่องเดียวกันจากกฎอื่นแล้ว — ไม่ส่งซ้ำ
+            if require_any and user["id"] not in allow_ids and user["id"] not in ctx.get("bypass", ()) and not (require_any & user_permissions(db, user)):
+                continue                                       # ไม่แจ้งคนที่เปิดรายการนี้ไม่ได้ (ลิงก์จะ 404)
+            note_id = None
+            if "inapp" in channels:
+                cur = db.execute("INSERT OR IGNORE INTO notifications(user_id, event, title, body, link, hazard_id, incident_id, dedupe_key) "
+                                 "VALUES(?,?,?,?,?,?,?,?)", (user["id"], event, title, body, link, hazard_id, incident_id, key))
+                if cur.rowcount != 1:
+                    continue                                   # เคยแจ้งผู้ใช้คนนี้สำหรับขั้นนี้แล้ว — ไม่ซ้ำ ทั้งในระบบและช่องทางอื่น
+                created += 1
+                note_id = cur.lastrowid
+            opted = set(_split(user["notify_channels"]))
+            for channel in ACTIVE_OUTBOX:                      # อีเมล และ Teams รายบุคคล (webhook ของผู้ใช้เอง) — เฉพาะที่ผู้ใช้เลือกรับและกรอกถูกต้อง
+                if channel not in channels or channel not in opted:
+                    continue
+                target = valid_contact(channel, user)
+                if target:
+                    _queue_external(db, channel, target, title, body, urgent, note_id, key)
+        if "teams" in channels and (_central_teams(db) or "").strip():     # ประกาศเข้าช่อง Teams กลาง (ถ้าตั้งไว้) หนึ่งข้อความต่อกฎ+รายการ+ขั้น
+            _queue_external(db, "teams", "teams", title, body, urgent, None, key)
+    return created
+
+
+def emit_user_request(db, user_id: int) -> int:
+    """แจ้งผู้ดูแลระบบว่ามีคำขอสร้างบัญชีใหม่ (ไม่มีข้อมูลลับ: ไม่ใส่รหัสผ่าน/อีเมลในข้อความ); สัญญาเดียวกับ emit (SAVEPOINT, ไม่ throw, ไม่ commit)"""
+    db.execute("SAVEPOINT notify")
+    try:
+        u = db.execute("SELECT u.name, u.username, u.requested_org, p.name_th AS position FROM safety_users u "
+                       "LEFT JOIN positions p ON p.id = u.position_id WHERE u.id=?", (user_id,)).fetchone()
+        if u is None:
+            db.execute("RELEASE notify")
+            return 0
+        t, b = msgtemplates.get(db, "user_requested")
+        title, body = msgtemplates.render(t, b, {"name": u["name"], "username": u["username"], "org": u["requested_org"], "position": u["position"] or "-"})
+        rec = {"department_id": None, "reported_by": None, "owner_id": None, "id": user_id}
+        created = _write_rows(db, "user_requested", rec, title, body, "new", f"u{user_id}", "/admin/users#pending", None, None, user_id, None, False,
+                              frozenset({"users.manage"}), frozenset())
+        db.execute("RELEASE notify")
+        return created
+    except Exception:                                              # noqa: BLE001 — การแจ้งเตือนต้องไม่ทำให้การขอบัญชีล้ม
+        log.exception("emit_user_request(user=%s) failed; rolled back", user_id)
+        db.execute("ROLLBACK TO notify")
+        db.execute("RELEASE notify")
+        return 0
+
+
+def _people(db, rec) -> dict:
+    """ชื่อผู้แจ้ง/ผู้รับผิดชอบสำหรับตัวแปร {reporter} {owner} ของแม่แบบ (ชื่อพนักงานที่ใช้งานในระบบเท่านั้น ไม่ใช่ผู้เกี่ยวข้องในอุบัติเหตุ)"""
+    get = lambda uid: (db.execute("SELECT name FROM safety_users WHERE id=?", (uid,)).fetchone() or [""])[0] if uid else ""
+    return {"reporter": get(rec["reported_by"]), "owner": get(rec["owner_id"])}
+
+
+def emit(db, event: str, hazard_id: int, actor_id: int | None, *, offset_days: int | None = None,
+         today: date | None = None, stage: str | None = None, days: int | None = None) -> int:
+    """เขียนการแจ้งเตือนตามกฎของเหตุการณ์นี้ คืนจำนวนแถวแจ้งเตือนในระบบที่สร้างใหม่; ไม่ throw ไม่ commit"""
+    if event not in NOTIFY_EVENTS or event.startswith("incident_"):
+        return 0
+    db.execute("SAVEPOINT notify")
+    try:
+        hazard = db.execute("SELECT * FROM hazards WHERE id=?", (hazard_id,)).fetchone()
+        if hazard is None:
+            db.execute("RELEASE notify")
+            return 0
+        area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (hazard["risk_area_id"],)).fetchone()
+        title, body = render_message(event, hazard, {"area": area[0] if area else "", "days": days if days is not None else offset_days, **_people(db, hazard)},
+                                     msgtemplates.get(db, event))
+        stage = stage if stage is not None else _stage(event, hazard, offset_days)
+        created = _write_rows(db, event, hazard, title, body, stage, str(hazard_id), f"/hazards/{hazard_id}", hazard_id, None,
+                              actor_id, offset_days, bool(hazard["level_requires_approval"]))
+        db.execute("RELEASE notify")
+        return created
+    except Exception:                                              # noqa: BLE001 — การแจ้งเตือนต้องไม่ทำให้ขั้นตอนหลักล้ม
+        log.exception("emit(%s, hazard=%s) failed; rolled back", event, hazard_id)
+        db.execute("ROLLBACK TO notify")
+        db.execute("RELEASE notify")
+        return 0
+
+
+KIND_TH = {"accident": "อุบัติเหตุ", "near_miss": "Near Miss"}
+
+
+def render_incident_message(event: str, incident, extra: Mapping | None = None, tpl=None) -> tuple[str, str]:
+    """ข้อความแจ้งเตือนอุบัติเหตุ: รหัส ประเภท หัวข้อ พื้นที่ — ไม่มีชื่อ/รหัสพนักงานของผู้เกี่ยวข้องเด็ดขาด (ตัวแปรของแม่แบบไม่มีข้อมูลดังกล่าว)"""
+    extra = extra or {}
+    values = {"code": incident["code"], "title": incident["title"], "kind": KIND_TH.get(incident["kind"], "อุบัติเหตุ"), "area": extra.get("area"),
+              "due": incident["due_date"], "when": str(incident["occurred_at"] or "").replace("T", " ")[:16], "reporter": extra.get("reporter"), "owner": extra.get("owner")}
+    t, b = tpl or msgtemplates.get(None, event)
+    return msgtemplates.render(t, b, values)
+
+
+def emit_incident(db, event: str, incident_id: int, actor_id: int | None) -> int:
+    """แจ้งเตือนเหตุการณ์อุบัติเหตุตามกฎ; สัญญาเดียวกับ emit (SAVEPOINT, ไม่ throw, ไม่ commit)"""
+    if event not in NOTIFY_EVENTS or not event.startswith("incident_"):
+        return 0
+    db.execute("SAVEPOINT notify")
+    try:
+        inc = db.execute("SELECT i.*, COALESCE(s.counts_lost_time, 0) AS lost_time FROM incidents i "
+                         "LEFT JOIN injury_severities s ON s.id = i.injury_severity_id WHERE i.id=?", (incident_id,)).fetchone()
+        if inc is None:
+            db.execute("RELEASE notify")
+            return 0
+        area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (inc["risk_area_id"],)).fetchone()
+        title, body = render_incident_message(event, inc, {"area": area[0] if area else "", **_people(db, inc)}, msgtemplates.get(db, event))
+        stage = f"{inc['owner_id']}:{inc['due_date']}" if event == "incident_assigned" else "1"
+        created = _write_rows(db, event, inc, title, body, stage, f"i{incident_id}", f"/incidents/{incident_id}", None, incident_id,
+                              actor_id, None, bool(inc["lost_time"] or inc["level_requires_approval"]),
+                              frozenset({"incident.report", "incident.investigate", "incident.close"}))
+        db.execute("RELEASE notify")
+        return created
+    except Exception:                                              # noqa: BLE001
+        log.exception("emit_incident(%s, incident=%s) failed; rolled back", event, incident_id)
+        db.execute("ROLLBACK TO notify")
+        db.execute("RELEASE notify")
+        return 0
+
+
+# ---------- แจ้งหน่วยงาน (ข้อความทางการ) และสายอนุมัติ ----------
+OFFICIAL_SIGN = "จึงเรียนมาเพื่อโปรดทราบ ขอแสดงความนับถือ — ระบบ AIAT Safety"
+
+
+def render_unit_notice(kind: str, rec, extra: Mapping, tpl=None) -> tuple[str, str]:
+    kind_th = KIND_TH.get(rec["kind"], "อุบัติเหตุ") if kind == "incident" else "อันตราย"
+    values = {"kind": kind_th, "code": rec["code"], "title": rec["title"], "area": extra.get("area"), "when": extra.get("when"), "reporter": extra.get("reporter")}
+    t, b = tpl or msgtemplates.get(None, "unit_incident_notice" if kind == "incident" else "unit_hazard_notice")
+    return msgtemplates.render(t, b, values)
+
+
+def render_approval_message(event: str, kind: str, rec, extra: Mapping, tpl=None) -> tuple[str, str]:
+    values = {"kind": "รายการอันตราย" if kind == "hazard" else "รายการอุบัติเหตุ", "code": rec["code"], "title": rec["title"], "step": extra.get("step"),
+              "approvers": extra.get("approvers"), "reason": extra.get("reason")}
+    t, b = tpl or msgtemplates.get(None, event)
+    return msgtemplates.render(t, b, values)
+
+
+def _base_event_receivers(db, kind: str, ref_id: int) -> frozenset:
+    """ผู้ที่ได้รับแจ้ง 'แจ้งใหม่' ของรายการนี้จากกฎเดิมแล้ว — ไม่ส่งประกาศหน่วยงานซ้ำให้คนเดิม"""
+    col, event = ("hazard_id", "hazard_reported") if kind == "hazard" else ("incident_id", "incident_reported")
+    return frozenset(r[0] for r in db.execute(f"SELECT user_id FROM notifications WHERE {col}=? AND event=?", (ref_id, event)))
+
+
+def emit_unit_notice(db, kind: str, ref_id: int, actor_id: int | None) -> int:
+    """ประกาศเป็นทางการถึงทุกคนที่ผูกกับหน่วยงานของรายการ (และตำแหน่งที่แอดมินกำหนดในกฎ เช่น GM) ผ่านช่องทางที่ผู้ใช้เลือกไว้"""
+    event = "unit_hazard_notice" if kind == "hazard" else "unit_incident_notice"
+    db.execute("SAVEPOINT notify")
+    try:
+        table = "hazards" if kind == "hazard" else "incidents"
+        rec = db.execute(f"SELECT * FROM {table} WHERE id=?", (ref_id,)).fetchone()
+        if rec is None:
+            db.execute("RELEASE notify")
+            return 0
+        area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (rec["risk_area_id"],)).fetchone()
+        when = (rec["occurred_at"] if kind == "incident" else rec["reported_at"]) or ""
+        title, body = render_unit_notice(kind, rec, {"area": area[0] if area else "", "when": str(when).replace("T", " ")[:16], **_people(db, rec)}, msgtemplates.get(db, event))
+        created = _write_rows(db, event, rec, title, body, "1", f"{kind[0]}{ref_id}", ("/incidents/" if kind == "incident" else "/hazards/") + str(ref_id),
+                              ref_id if kind == "hazard" else None, ref_id if kind == "incident" else None, actor_id, None,
+                              False, ctx={"skip": _base_event_receivers(db, kind, ref_id)})
+        db.execute("RELEASE notify")
+        return created
+    except Exception:                                              # noqa: BLE001
+        log.exception("emit_unit_notice(%s,%s) failed; rolled back", kind, ref_id)
+        db.execute("ROLLBACK TO notify")
+        db.execute("RELEASE notify")
+        return 0
+
+
+def emit_approval(db, event: str, kind: str, ref_id: int, actor_id: int | None, step: int = 1) -> int:
+    if event not in ("approval_requested", "approval_completed", "approval_rejected"):
+        return 0
+    db.execute("SAVEPOINT notify")
+    try:
+        from . import approvals
+        table = "hazards" if kind == "hazard" else "incidents"
+        rec = db.execute(f"SELECT * FROM {table} WHERE id=?", (ref_id,)).fetchone()
+        if rec is None:
+            db.execute("RELEASE notify")
+            return 0
+        reason = ""
+        if event == "approval_rejected":
+            row = db.execute("SELECT comment FROM approvals WHERE kind=? AND ref_id=? AND step=?", (kind, ref_id, step)).fetchone()
+            reason = row[0] if row else ""
+        title, body = render_approval_message(event, kind, rec, {"step": step, "reason": reason,
+                                                                  "approvers": approvals.position_names(db, approvals.step_codes(db, step))}, msgtemplates.get(db, event))
+        link = "/approvals" if event == "approval_requested" else (("/incidents/" if kind == "incident" else "/hazards/") + str(ref_id))
+        created = _write_rows(db, event, rec, title, body, f"{step}:{db.execute('SELECT COALESCE(MAX(decided_at), created_at) FROM approvals WHERE kind=? AND ref_id=?', (kind, ref_id)).fetchone()[0]}",
+                              f"{kind[0]}{ref_id}", link, ref_id if kind == "hazard" else None, ref_id if kind == "incident" else None,
+                              actor_id, None, True, ctx={"step": step})
+        db.execute("RELEASE notify")
+        return created
+    except Exception:                                              # noqa: BLE001
+        log.exception("emit_approval(%s,%s,%s) failed; rolled back", event, kind, ref_id)
+        db.execute("ROLLBACK TO notify")
+        db.execute("RELEASE notify")
+        return 0
+
+
+# ---------- CAPA และ Safety Patrol ----------
+def render_capa_message(event: str, capa, extra: Mapping | None = None, tpl=None) -> tuple[str, str]:
+    """ข้อความแจ้งเตือน CAPA: รหัส หัวข้อ พื้นที่ กำหนดส่ง เท่านั้น — ไม่คัดลอกข้อความอิสระ (หมายเหตุ/รายละเอียด)"""
+    extra = extra or {}
+    values = {"code": capa["code"], "title": capa["title"], "area": extra.get("area"), "due": capa["due_date"], "days": extra.get("days")}
+    t, b = tpl or msgtemplates.get(None, event)
+    return msgtemplates.render(t, b, values)
+
+
+def render_patrol_message(event: str, plan, extra: Mapping | None = None, tpl=None) -> tuple[str, str]:
+    extra = extra or {}
+    values = {"name": extra.get("checklist"), "area": extra.get("area"), "due": extra.get("due"), "days": extra.get("days")}
+    t, b = tpl or msgtemplates.get(None, event)
+    return msgtemplates.render(t, b, values)
+
+
+def emit_capa(db, event: str, capa_id: int, actor_id: int | None, *, offset_days: int | None = None, days: int | None = None) -> int:
+    """แจ้งเตือนเหตุการณ์ของ CAPA ตามกฎ; สัญญาเดียวกับ emit (SAVEPOINT, ไม่ throw, ไม่ commit)"""
+    if event not in NOTIFY_EVENTS or not event.startswith("capa_"):
+        return 0
+    db.execute("SAVEPOINT notify")
+    try:
+        capa = db.execute("SELECT c.*, c.created_by AS reported_by FROM capas c WHERE c.id=?", (capa_id,)).fetchone()
+        if capa is None:
+            db.execute("RELEASE notify")
+            return 0
+        area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (capa["risk_area_id"],)).fetchone()
+        title, body = render_capa_message(event, capa, {"area": area[0] if area else "", "days": days if days is not None else offset_days}, msgtemplates.get(db, event))
+        if event in ("capa_due_soon", "capa_overdue"):
+            stage = f"{offset_days}:{capa['owner_id']}:{capa['due_date']}"       # ย้ายเจ้าของ/เลื่อนกำหนด → เตือนรอบใหม่
+        elif event == "capa_assigned":
+            stage = f"{capa['owner_id']}:{capa['due_date']}"
+        elif event in ("capa_done", "capa_reopened"):
+            stage = str(capa["reopen_count"])
+        else:
+            stage = "1"
+        created = _write_rows(db, event, capa, title, body, stage, f"c{capa_id}", f"/capas/{capa_id}", None, None, actor_id, offset_days, False,
+                              frozenset({"capa.create", "capa.verify"}), frozenset({capa["owner_id"], capa["created_by"]}))
+        db.execute("RELEASE notify")
+        return created
+    except Exception:                                              # noqa: BLE001
+        log.exception("emit_capa(%s, capa=%s) failed; rolled back", event, capa_id)
+        db.execute("ROLLBACK TO notify")
+        db.execute("RELEASE notify")
+        return 0
+
+
+def emit_patrol(db, event: str, plan_id: int, actor_id: int | None, *, offset_days: int | None = None, days: int | None = None, due: str = "") -> int:
+    """แจ้งเตือนครบรอบ/เลยรอบตรวจของแผนการตรวจ (ผู้ตรวจประจำแผน หรือผู้ประเมินในขอบเขตถ้าไม่ได้กำหนด)"""
+    if event not in NOTIFY_EVENTS or not event.startswith("patrol_"):
+        return 0
+    db.execute("SAVEPOINT notify")
+    try:
+        plan = db.execute("SELECT p.*, p.inspector_id AS owner_id, p.created_by AS reported_by FROM patrol_plans p WHERE p.id=?", (plan_id,)).fetchone()
+        if plan is None:
+            db.execute("RELEASE notify")
+            return 0
+        area = db.execute("SELECT name_th FROM risk_areas WHERE id=?", (plan["risk_area_id"],)).fetchone()
+        cl = db.execute("SELECT name_th FROM checklists WHERE id=?", (plan["checklist_id"],)).fetchone()
+        title, body = render_patrol_message(event, plan, {"area": area[0] if area else "", "checklist": cl[0] if cl else "", "due": due,
+                                                          "days": days if days is not None else offset_days}, msgtemplates.get(db, event))
+        created = _write_rows(db, event, plan, title, body, f"{due}:{offset_days}", f"p{plan_id}", f"/patrols?plan={plan_id}", None, None, actor_id,
+                              offset_days, False, frozenset({"patrol.perform", "patrol.view"}), frozenset())
+        db.execute("RELEASE notify")
+        return created
+    except Exception:                                              # noqa: BLE001
+        log.exception("emit_patrol(%s, plan=%s) failed; rolled back", event, plan_id)
+        db.execute("ROLLBACK TO notify")
+        db.execute("RELEASE notify")
+        return 0
+
+
+def render_report_message(event: str, extra: Mapping | None = None, tpl=None) -> tuple[str, str]:
+    extra = extra or {}
+    values = {"name": extra.get("report"), "period": extra.get("period"), "department": extra.get("department"), "due": extra.get("due"), "days": extra.get("days")}
+    t, b = tpl or msgtemplates.get(None, event)
+    return msgtemplates.render(t, b, values)
+
+
+def emit_report(db, event: str, rule_id: int, actor_id: int | None, *, period: str, due: str, offset_days: int, days: int) -> int:
+    """แจ้งเตือนกำหนดส่งรายงาน (ผู้รับตามกฎ ในขอบเขตของแผนกที่รายงานเกี่ยวข้อง); สัญญาเดียวกับ emit (SAVEPOINT, ไม่ throw, ไม่ commit)"""
+    if event not in NOTIFY_EVENTS or not event.startswith("report_"):
+        return 0
+    from .reports import REPORTS
+    db.execute("SAVEPOINT notify")
+    try:
+        rule = db.execute("SELECT * FROM report_due WHERE id=?", (rule_id,)).fetchone()
+        if rule is None:
+            db.execute("RELEASE notify")
+            return 0
+        dept = db.execute("SELECT name_th FROM departments WHERE id=?", (rule["department_id"],)).fetchone() if rule["department_id"] else None
+        title, body = render_report_message(event, {"report": REPORTS.get(rule["report_key"], rule["report_key"]), "period": period,
+                                                    "department": dept[0] if dept else "", "due": due, "days": days}, msgtemplates.get(db, event))
+        rec = {"department_id": rule["department_id"], "risk_area_id": None, "reported_by": rule["created_by"], "owner_id": None}
+        created = _write_rows(db, event, rec, title, body, f"{period}:{due}:{offset_days}", f"rd{rule_id}", f"/reports/{rule['report_key']}", None, None, actor_id,
+                              offset_days, False, frozenset({"report.export", "report.manage"}))
+        db.execute("RELEASE notify")
+        return created
+    except Exception:                                              # noqa: BLE001
+        log.exception("emit_report(%s, rule=%s) failed; rolled back", event, rule_id)
+        db.execute("ROLLBACK TO notify")
+        db.execute("RELEASE notify")
+        return 0

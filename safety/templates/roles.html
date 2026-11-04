@@ -1,0 +1,32 @@
+{% extends "layout.html" %}
+{% block title %}ประเภทผู้ใช้งาน · AIAT Safety{% endblock %}
+{% block body %}
+<h1>ประเภทผู้ใช้งาน</h1>
+{% for r in roles %}
+<form method="post" class="card" style="max-width:none;margin:12px 0">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="key" value="{{ r['key'] }}">
+  <strong>{{ r['key'] }}</strong> · ผู้ใช้ {{ r['users'] }} คน {% if r['is_system'] %}(ระบบ){% endif %}
+  <label>ชื่อบทบาท <input name="name_th" value="{{ r['name_th'] }}" required></label>
+  <div style="display:flex;flex-wrap:wrap;gap:12px">
+    {% for k, label in permissions.items() %}
+    <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="permissions" value="{{ k }}"
+      {{ 'checked' if k in r['permissions'].split(',') or r['key'] == 'admin' }} {{ 'disabled' if r['key'] == 'admin' }}> {{ label }}</label>
+    {% endfor %}
+  </div>
+  <div style="display:flex;gap:8px"><button name="action" value="update">บันทึก</button>
+  {% if not r['is_system'] %}<button name="action" value="delete">ลบ</button>{% endif %}</div>
+</form>
+{% endfor %}
+<form method="post" class="card" style="max-width:none;margin:12px 0">
+  <h2>เพิ่มบทบาทใหม่</h2>
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="create">
+  <label>รหัสบทบาท (a-z 0-9 _) <input name="key" required pattern="[a-z][a-z0-9_]{1,31}"></label>
+  <label>ชื่อบทบาท <input name="name_th" required></label>
+  <div style="display:flex;flex-wrap:wrap;gap:12px">
+    {% for k, label in permissions.items() %}
+    <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="permissions" value="{{ k }}"> {{ label }}</label>
+    {% endfor %}
+  </div>
+  <button type="submit">เพิ่มบทบาท</button>
+</form>
+{% endblock %}

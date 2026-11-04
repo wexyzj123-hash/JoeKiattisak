@@ -1,0 +1,29 @@
+{% extends "layout.html" %}
+{% block title %}สายการอนุมัติ · AIAT Safety{% endblock %}
+{% block body %}
+<h1>สายการอนุมัติ</h1>
+<p style="color:var(--muted)">เมื่อเปิดใช้ รายการอันตรายและอุบัติเหตุที่แจ้งใหม่ต้องได้รับอนุมัติเป็นขั้นจากผู้ดำรงตำแหน่งที่กำหนดในหน่วยงานนั้น จึงจะปิดรายการได้ — รายการที่แจ้งก่อนเปิดใช้ไม่ถูกบล็อก ผู้แจ้งอนุมัติรายการตนเองไม่ได้ และผู้ดูแลระบบอนุมัติแทนได้เมื่อระบุเหตุผล</p>
+<form method="post" class="card" style="max-width:none;margin:0 0 16px">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <h2>ตั้งค่า</h2>
+  <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="enabled" value="1" {{ 'checked' if enabled }}> เปิดใช้สายการอนุมัติ</label>
+  {% macro picks(name, chosen) -%}
+  <div style="display:flex;flex-wrap:wrap;gap:6px 14px">{% for p in positions %}<label style="display:inline-flex;gap:4px;align-items:center"><input type="checkbox" name="{{ name }}" value="{{ p['code'] }}" {{ 'checked' if p['code']|upper in chosen }}> {{ p['name_th'] }}</label>{% endfor %}</div>
+  {%- endmacro %}
+  <h3>ขั้นที่ 1 — ผู้อนุมัติ (เลือกได้หลายตำแหน่ง ใครคนใดคนหนึ่งอนุมัติก็ผ่านขั้น)</h3>{{ picks('step1', step1) }}
+  <h3>ขั้นที่ 2 — ผู้อนุมัติ (ต่อจากขั้นที่ 1)</h3>{{ picks('step2', step2) }}
+  <h3>แจ้งให้ทราบเมื่อมีการแจ้ง/อนุมัติครบ (ไม่ต้องอนุมัติ)</h3>{{ picks('notify', notify_set) }}
+  <p style="color:var(--muted)"><small>ลำดับตำแหน่งตามรายการที่ ข้อมูลองค์กร › ตำแหน่ง (ต่ำ → สูง) · ผู้ใช้ต้องกำหนดตำแหน่งและหน่วยงานที่หน้า «ผู้ใช้งาน» จึงจะเป็นผู้อนุมัติของหน่วยงานนั้นได้ · ข้อความแจ้งเตือนและช่องทางปรับที่ «การแจ้งเตือน» (กฎเหตุการณ์ ขออนุมัติ / อนุมัติครบ / ไม่อนุมัติ / แจ้งหน่วยงาน)</small></p>
+  <button type="submit">บันทึก</button>
+</form>
+<div class="card" style="max-width:none;margin:0;overflow-x:auto">
+  <h2>ผู้ดำรงตำแหน่งตั้งแต่ FM ขึ้นไป แยกตามหน่วยงาน</h2>
+  {% for g in matrix %}
+  <h3>{{ g.label }}</h3>
+  {% if g.users %}<table class="table-stack" style="width:100%"><tr><th>ชื่อ</th><th>ตำแหน่ง</th><th>ขอบเขต</th></tr>
+    {% for u in g.users %}<tr><td>{{ u.name }}</td><td>{{ u.position }}</td><td>{{ u.scope }}</td></tr>{% endfor %}</table>{% else %}<p style="color:var(--muted)">ยังไม่มีผู้ใช้ตำแหน่ง FM ขึ้นไปในหน่วยงานนี้</p>{% endif %}
+  {% if enabled and g.missing %}<div class="flash">สายอนุมัติไม่ครบ — ยังไม่มีผู้ดำรงตำแหน่งสำหรับ: {{ g.missing | join(', ') }} (รายการของหน่วยงานนี้จะค้างจนกว่าผู้ดูแลระบบจะอนุมัติแทน)</div>{% endif %}
+  {% if enabled and g.notify_missing %}<p style="color:var(--muted)"><small>ยังไม่มีผู้ที่ต้องแจ้งให้ทราบ (เช่น GM) ครอบคลุมหน่วยงานนี้</small></p>{% endif %}
+  {% else %}<p style="color:var(--muted)">ยังไม่มีแผนก — เพิ่มที่ ข้อมูลองค์กร › แผนก</p>{% endfor %}
+</div>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "layout.html" %}
+{% block title %}โปรไฟล์ของฉัน · AIAT Safety{% endblock %}
+{% block body %}
+<h1>โปรไฟล์ของฉัน</h1>
+<p style="color:var(--muted)">กระดิ่งในระบบใช้ได้เสมอ — กรอกอีเมลหรือ Teams และเลือกรับ เพื่อให้ระบบส่งแจ้งเตือนงานที่ได้รับมอบหมาย งานใกล้ครบกำหนด งานที่ค้าง และสรุปงานค้างรายวัน (ข้อมูลนี้ใช้ส่งแจ้งเตือนเท่านั้น)</p>
+{% for e in errors %}<div class="flash">{{ e }}</div>{% endfor %}
+<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,360px),1fr));gap:16px;align-items:start">
+<form method="post" class="card" style="max-width:560px;margin:0">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <p><strong>{{ g.user['name'] }}</strong>{% if g.user['username'] %} <small style="color:var(--muted)">· {{ g.user['username'] }}</small>{% endif %}</p>
+  {% for key, field, label in channels %}
+  <label>{{ label }} <input name="{{ field }}" value="{{ values.get(field) or '' }}" maxlength="{{ 600 if key == 'teams' else 254 }}" autocomplete="off" {{ 'type=email' if key == 'email' else '' }}></label>
+  <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="channels" value="{{ key }}" {{ 'checked' if key in chosen }}> รับแจ้งเตือนทาง {{ label.split(' (')[0] }}</label>
+  {% endfor %}
+  <small style="color:var(--muted)">อีเมล: ที่อยู่อีเมลของคุณ · Teams: ลิงก์ Webhook (Workflows หรือ Incoming Webhook) ของแชตหรือช่อง Teams ที่ต้องการให้ระบบส่งข้อความถึงคุณ ต้องเป็นลิงก์ https ของ Microsoft · ล้างช่องแล้วบันทึกเพื่อลบข้อมูลติดต่อ</small>
+  <button type="submit">บันทึก</button>
+</form>
+{% if native %}
+<form method="post" class="card" style="max-width:560px;margin:0">
+  <h2>เปลี่ยนรหัสผ่าน</h2>
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="password">
+  <label>รหัสผ่านปัจจุบัน <input name="old_password" type="password" autocomplete="current-password" required></label>
+  <label>รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร) <input name="new_password" type="password" minlength="8" autocomplete="new-password" required></label>
+  <label>ยืนยันรหัสผ่านใหม่ <input name="new_password2" type="password" minlength="8" autocomplete="new-password" required></label>
+  <button type="submit">เปลี่ยนรหัสผ่าน</button>
+</form>
+{% endif %}
+</div>
+{% endblock %}

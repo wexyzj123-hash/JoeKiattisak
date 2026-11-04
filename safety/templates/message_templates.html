@@ -1,0 +1,64 @@
+{% extends "layout.html" %}
+{% block title %}ข้อความแจ้งเตือน · AIAT Safety{% endblock %}
+{% block body %}
+<h1>ข้อความแจ้งเตือน</h1>
+<p style="color:var(--muted)">กำหนดข้อความมาตรฐานที่ระบบส่งออกในแต่ละเหตุการณ์ (ชื่อเรื่อง + เนื้อหา) ใช้ร่วมกันทุกช่องทาง — ในระบบ อีเมล และ Teams · แก้แล้วมีผลกับข้อความที่ส่งจากนี้ไป ข้อความที่ส่งไปแล้วไม่เปลี่ยน · ผู้รับและช่องทางตั้งที่ <a href="/admin/notifications">การแจ้งเตือน</a></p>
+<div class="card" style="max-width:none;margin:0 0 16px">
+  <h2>วิธีเขียน</h2>
+  <ul style="margin:0;padding-left:1.2rem;display:grid;gap:4px">
+    <li>ใส่ <code>{ชื่อตัวแปร}</code> เพื่อให้ระบบแทนด้วยค่าจริง เช่น <code>{code}</code> เลขที่รายการ, <code>{title}</code> หัวข้อ, <code>{area}</code> พื้นที่ — ตัวแปรที่ใช้ได้ของแต่ละเหตุการณ์แสดงใต้ช่องแก้ไข กดที่ชื่อตัวแปรเพื่อแทรกตรงตำแหน่งเคอร์เซอร์</li>
+    <li>ส่วนเสริม <code>[[ · ครบกำหนด {due}]]</code> — ถ้าตัวแปรข้างในว่าง (เช่นยังไม่มีวันครบกำหนด) ระบบตัดทั้งส่วนทิ้ง ไม่ให้เหลือข้อความขาด</li>
+    <li>เนื้อหาขึ้นบรรทัดใหม่ได้ (อีเมล Teams และหน้าแจ้งเตือนแสดงตามบรรทัดจริง) ชื่อเรื่องต้องบรรทัดเดียว · ข้อความธรรมดาเท่านั้น ไม่รองรับ HTML</li>
+    <li>ช่อง «ตัวอย่าง» แสดงผลทันทีด้วยข้อมูลสมมติ · ปุ่ม «คืนค่ามาตรฐาน» ลบข้อความที่แก้และกลับไปใช้ข้อความของระบบ</li>
+    <li>ข้อความอุบัติเหตุไม่มีตัวแปรชื่อ/รหัสพนักงานของผู้เกี่ยวข้อง จึงไม่ควรเขียนข้อมูลส่วนบุคคลลงในแม่แบบ</li>
+  </ul>
+</div>
+{% for gname, events in groups %}
+<h2 style="margin:18px 0 8px">{{ gname }}</h2>
+{% for ev in events %}{% set r = rows[ev] %}
+<details class="card" id="ev-{{ ev }}" style="max-width:none;margin:0 0 10px" {{ 'open' if r.custom }}>
+  <summary style="cursor:pointer;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><strong>{{ event_th[ev] }}</strong>{% if r.custom %}<span class="chip">แก้ไขแล้ว</span>{% else %}<span style="color:var(--muted)">ข้อความมาตรฐานของระบบ</span>{% endif %}</summary>
+  <form method="post" style="display:grid;gap:10px;margin-top:10px" data-ev="{{ ev }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="event" value="{{ ev }}">
+    <label>ชื่อเรื่อง <input name="title" value="{{ r.title }}" maxlength="300" required data-tpl="title"></label>
+    <label>เนื้อหา <textarea name="body" rows="{{ 7 if '\n' in r.body else 3 }}" maxlength="3000" required data-tpl="body">{{ r.body }}</textarea></label>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><small style="color:var(--muted)">ตัวแปร:</small>
+      {% for name, desc in r.vars.items() %}<button type="button" class="btn" style="padding:2px 8px" data-insert="{{ name }}" title="{{ desc }}">{{ '{' ~ name ~ '}' }}</button>{% endfor %}</div>
+    <small style="color:var(--muted)">{% for name, desc in r.vars.items() %}{{ '{' ~ name ~ '}' }} = {{ desc }}{{ ' · ' if not loop.last }}{% endfor %}</small>
+    <div style="border:1px dashed var(--line);border-radius:10px;padding:10px;background:var(--panel)"><small style="color:var(--muted)">ตัวอย่าง</small>
+      <div data-preview-title style="font-weight:700"></div><div data-preview-body style="white-space:pre-line;margin-top:4px"></div></div>
+    <script type="application/json" data-sample>{{ r.sample | tojson }}</script>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="submit" name="action" value="save">บันทึก</button>
+      {% if r.custom %}<button type="submit" name="action" value="reset" class="btn" formnovalidate>คืนค่ามาตรฐาน</button>{% endif %}</div>
+  </form>
+  {% if r.custom %}<details style="margin-top:8px"><summary style="cursor:pointer;color:var(--muted)">ดูข้อความมาตรฐานของระบบ</summary><pre style="white-space:pre-wrap;margin:6px 0 0">{{ r.default_title }}
+{{ r.default_body }}</pre></details>{% endif %}
+</details>
+{% endfor %}{% endfor %}
+<script>
+(function () {
+  function fill(tpl, v) {
+    tpl = tpl.replace(/\[\[([\s\S]*?)\]\]/g, function (m, inner) {
+      var ok = true; inner.replace(/\{([a-z_]+)\}/g, function (x, n) { if (!String(v[n] == null ? '' : v[n]).trim()) ok = false; return x; });
+      return ok ? inner.replace(/\{([a-z_]+)\}/g, function (x, n) { return v[n] == null ? '' : v[n]; }) : '';
+    });
+    return tpl.replace(/\{([a-z_]+)\}/g, function (x, n) { return v[n] == null ? x : v[n]; });
+  }
+  document.querySelectorAll('form[data-ev]').forEach(function (form) {
+    var sample = JSON.parse(form.querySelector('[data-sample]').textContent);
+    var t = form.querySelector('[data-tpl=title]'), b = form.querySelector('[data-tpl=body]');
+    var pt = form.querySelector('[data-preview-title]'), pb = form.querySelector('[data-preview-body]');
+    var last = b;
+    function draw() { pt.textContent = fill(t.value, sample); pb.textContent = fill(b.value, sample); }
+    [t, b].forEach(function (el) { el.addEventListener('input', draw); el.addEventListener('focus', function () { last = el; }); });
+    form.querySelectorAll('[data-insert]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var s = last.selectionStart == null ? last.value.length : last.selectionStart, e = last.selectionEnd == null ? s : last.selectionEnd, tag = '{' + btn.getAttribute('data-insert') + '}';
+        last.value = last.value.slice(0, s) + tag + last.value.slice(e); last.focus(); last.selectionStart = last.selectionEnd = s + tag.length; draw();
+      });
+    });
+    draw();
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends "layout.html" %}
+{% block title %}{{ c['code'] }} · แบบตรวจ · Safety 4.0{% endblock %}
+{% block body %}
+<p><a href="/admin/checklists">← กลับรายการแบบตรวจ</a></p>
+<h1>{{ c['code'] }} · {{ c['name_th'] }}{% if not c['active'] %} <span class="chip" style="background:var(--panel);border:1px solid var(--line);color:var(--text)">ปิดใช้งาน</span>{% endif %}</h1>
+<form method="post" class="card" style="max-width:640px;margin:0 0 16px">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  <label>ชื่อแบบตรวจ <input name="name_th" value="{{ c['name_th'] }}" required maxlength="200"></label>
+  <label>คำอธิบาย <textarea name="description" rows="2" maxlength="1000">{{ c['description'] }}</textarea></label>
+  <div style="display:flex;gap:8px;flex-wrap:wrap"><button name="action" value="update_checklist">บันทึก</button><button name="action" value="toggle_checklist">{{ 'ปิดใช้งาน' if c['active'] else 'เปิดใช้งาน' }}</button></div>
+</form>
+<h2>รายการตรวจ</h2>
+<div class="card" style="max-width:none;margin:0 0 16px"><div class="table-wrap">
+<table class="table-stack" style="width:100%">
+  <tr><th>หมวด</th><th>ข้อความ</th><th>น้ำหนัก</th><th>ต้องแนบรูปเมื่อไม่ผ่าน</th><th>ลำดับ</th><th>สถานะ</th><th>ดำเนินการ</th></tr>
+  {% for i in items %}
+  <tr>
+    <td><input form="it{{ i['id'] }}" name="section" value="{{ i['section'] }}" maxlength="100" aria-label="หมวด"></td>
+    <td><input form="it{{ i['id'] }}" name="text_th" value="{{ i['text_th'] }}" required maxlength="300" aria-label="ข้อความรายการตรวจ"></td>
+    <td><input form="it{{ i['id'] }}" name="weight" value="{{ i['weight'] }}" size="3" inputmode="numeric" aria-label="น้ำหนัก"></td>
+    <td><input form="it{{ i['id'] }}" type="checkbox" name="require_photo_on_fail" value="1" {{ 'checked' if i['require_photo_on_fail'] }} aria-label="ต้องแนบรูปเมื่อไม่ผ่าน"></td>
+    <td><input form="it{{ i['id'] }}" name="sort" value="{{ i['sort'] }}" size="4" inputmode="numeric" aria-label="ลำดับ"></td>
+    <td>{{ 'ใช้งาน' if i['active'] else 'ปิดใช้งาน' }}</td>
+    <td><form id="it{{ i['id'] }}" method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ i['id'] }}">
+      <button name="action" value="update_item">บันทึก</button> <button name="action" value="toggle_item">{{ 'ปิดใช้งาน' if i['active'] else 'เปิดใช้งาน' }}</button></form></td>
+  </tr>
+  {% else %}<tr><td colspan="7">ยังไม่มีรายการตรวจ</td></tr>{% endfor %}
+</table></div></div>
+<form method="post" class="card" style="max-width:640px;margin:0">
+  <h2>เพิ่มรายการตรวจ</h2>
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="add_item">
+  <label>หมวด <input name="section" maxlength="100"></label>
+  <label>ข้อความ <input name="text_th" required maxlength="300"></label>
+  <label>น้ำหนักคะแนน (1-10) <input name="weight" value="1" inputmode="numeric"></label>
+  <label>ลำดับ <input name="sort" value="0" inputmode="numeric"></label>
+  <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="require_photo_on_fail" value="1"> ต้องแนบรูปเมื่อไม่ผ่าน</label>
+  <button type="submit">เพิ่มรายการตรวจ</button>
+</form>
+{% endblock %}

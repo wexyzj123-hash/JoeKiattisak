@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}ไฟล์ใหญ่เกินกำหนด · AIAT Safety{% endblock %}
+{% block body %}
+<div class="scene">{{ mascot('alert', 110) }}</div>
+<div class="card"><h1>ส่งข้อมูลไม่สำเร็จ</h1>
+<p>ขนาดข้อมูลที่ส่งมารวมกันเกิน 25 MB (รูปภาพแต่ละรูปไม่เกิน 10 MB) กรุณาลดจำนวนหรือขนาดรูปแล้วลองใหม่</p>
+<a class="btn" href="javascript:history.back()">กลับไปแก้ไข</a></div>
+{% endblock %}

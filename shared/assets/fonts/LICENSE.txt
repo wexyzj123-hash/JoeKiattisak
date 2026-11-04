@@ -1,0 +1,8 @@
+Loma (Regular, Bold) — Thai font from NECTEC via the Thai Linux Working Group (fonts-tlwg).
+Copyright 2003 National Electronics and Computer Technology Center; maintained by Theppitak Karoonboonyanan.
+License: GNU GPL v2 or later WITH FONT EXCEPTION — documents (such as PDF reports) that embed this font are not
+covered by the GPL merely because of the embedding.
+The .ttf files here were converted from the upstream OpenType (CFF) files by tools/otf_to_ttf.py (outline conversion only).
+
+To use Sarabun (SIL Open Font License 1.1) instead, drop Sarabun-Regular.ttf and Sarabun-Bold.ttf in this folder;
+safety/report_fonts.py prefers Sarabun when present.

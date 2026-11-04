@@ -1,0 +1,30 @@
+{% extends "layout.html" %}
+{% block title %}งานรออนุมัติ · AIAT Safety{% endblock %}
+{% block body %}
+<h1>งานรออนุมัติ</h1>
+{% if not enabled %}<div class="flash">ขณะนี้ยังไม่เปิดใช้สายการอนุมัติ — ผู้ดูแลระบบเปิดได้ที่ ผู้ดูแลระบบ › สายการอนุมัติ</div>{% endif %}
+<p style="color:var(--muted)">ดูสถานะการอนุมัติของทุกรายการในหน่วยงานได้ที่ <a href="/unit">หน่วยงานของฉัน</a> · รายการอันตราย/อุบัติเหตุในหน่วยงานของคุณที่รอการพิจารณา อนุมัติได้เมื่อถึงขั้นของคุณ (ขั้น 1 ก่อน แล้วจึงถึงขั้น 2) ผู้แจ้งอนุมัติรายการของตนเองไม่ได้</p>
+{% if not items %}
+<div class="card" style="max-width:none">{{ mascot('thinking', 96) }}<p>ไม่มีรายการที่รอการอนุมัติของคุณในขณะนี้</p></div>
+{% endif %}
+{% for m in items %}
+<div class="card" style="max-width:none;margin:0 0 14px">
+  <h2 style="margin-bottom:6px">{{ m.kind_th }} {{ m.code }} · {{ m.title }}</h2>
+  <p style="color:var(--muted);margin:0 0 8px">พื้นที่ {{ m.area }} · ผู้แจ้ง {{ m.reporter }}{% if m.level %} · ระดับ {{ m.level }}{% endif %} · รออนุมัติขั้นที่ {{ m.step }} ({{ m.step_label }}){% if m.mode == 'proxy' %} · <strong>คุณเป็นผู้ดูแลระบบ จึงอนุมัติแทนได้ (ต้องระบุเหตุผล)</strong>{% endif %}</p>
+  <p style="margin:0 0 10px"><a href="{{ m.href }}">เปิดดูรายละเอียดรายการ</a> <span style="color:var(--muted)">(ถ้าไม่มีสิทธิ์เปิด ให้พิจารณาจากข้อมูลข้างต้นหรือสอบถามผู้แจ้ง)</span></p>
+  <form method="post" action="/approvals/{{ m.kind }}/{{ m.ref_id }}/{{ m.step }}" style="display:grid;gap:8px">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>ความเห็น / เหตุผล {{ '(จำเป็น)' if m.mode == 'proxy' else '(จำเป็นเมื่อไม่อนุมัติ)' }} <input name="comment" maxlength="500"></label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button name="decision" value="approve">อนุมัติ</button><button name="decision" value="reject" class="btn">ไม่อนุมัติ</button></div>
+  </form>
+</div>
+{% endfor %}
+{% if recent %}
+<div class="card" style="max-width:none;overflow-x:auto">
+  <h2>การตัดสินใจล่าสุดของฉัน</h2>
+  <table class="table-stack" style="width:100%"><tr><th>เมื่อ</th><th>รายการ</th><th>ขั้น</th><th>ผล</th><th>ความเห็น</th></tr>
+  {% for r in recent %}<tr><td>{{ r['decided_at'] }}</td><td><a href="{{ kinds[r['kind']][2] }}{{ r['ref_id'] }}">{{ kinds[r['kind']][1] }} #{{ r['ref_id'] }}</a></td><td>{{ r['step'] }}</td>
+    <td>{{ status_th[r['status']] }}{{ ' (แทน)' if r['proxy'] }}</td><td>{{ r['comment'] }}</td></tr>{% endfor %}</table>
+</div>
+{% endif %}
+{% endblock %}
