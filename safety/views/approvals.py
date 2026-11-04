@@ -57,6 +57,14 @@ def decide(kind, ref_id, step):
     return redirect(nxt if nxt in ("/approvals",) else "/approvals")
 
 
+@bp.route("/pending")
+@safety_login_required
+def pending_fragment():
+    """เนื้อหาหน้าต่าง «สรุปงานค้าง» (ส่วนของ HTML ที่ JavaScript โหลดมาใส่ใน dialog)"""
+    from .. import pending
+    return render_template("_pending.html", d=pending.collect(get_db(), g.user), mascot_ok=True)
+
+
 @bp.route("/unit")
 @safety_login_required
 def unit_page():

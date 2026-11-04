@@ -29,7 +29,7 @@ def theme_css():
     return send_file(THEME_CSS, mimetype="text/css", max_age=3600)
 
 
-SAFETY_ASSETS = {"premium.css": "text/css", "premium.js": "text/javascript", "auth.css": "text/css", "auth.js": "text/javascript", "register.js": "text/javascript"}
+SAFETY_ASSETS = {"pending.css": "text/css", "pending.js": "text/javascript", "premium.css": "text/css", "premium.js": "text/javascript", "auth.css": "text/css", "auth.js": "text/javascript", "register.js": "text/javascript"}
 
 
 @bp.route("/static/safety/<name>")
@@ -72,6 +72,9 @@ def index():
     lti_days, lti_date = incident_stats.days_without_lost_time(db, user)
     perms = user_permissions(db, user)
     dd = dash.home_data(db, user)
+    if not session.get("pending_seen"):                          # เด้งสรุปงานค้างครั้งเดียวต่อการเข้าสู่ระบบ (ปิดแล้วเปิดซ้ำได้ที่ปุ่ม «งานค้าง»)
+        session["pending_seen"] = True
+        g.auto_pending = True
     from .. import unit
     unit_ov = unit.overview(db, user)
     unit_notes = db.execute("SELECT id, event, title, link, created_at, read_at FROM notifications WHERE user_id=? AND event IN "

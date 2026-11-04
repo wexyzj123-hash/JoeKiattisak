@@ -25,6 +25,7 @@
         <input type="search" name="q" maxlength="100" placeholder="ค้นหารหัสหรือชื่อรายการอันตราย" aria-label="ค้นหารายการอันตราย">
         <button type="submit" class="icon-btn flat" aria-label="ค้นหา">{{ icon('search', 18) }}</button>
       </form>
+      <button type="button" class="icon-btn" id="pending-open" aria-haspopup="dialog" aria-label="สรุปงานค้าง" title="สรุปงานค้าง">{{ icon('clipboard', 20) }}</button>
       <a class="icon-btn" href="/notifications" aria-label="การแจ้งเตือน">{{ icon('bell', 20) }}<span class="badge" id="bell-badge"{{ ' style="display:none"'|safe if not unread_count }}>{{ unread_count }}</span></a>
       <button type="button" class="icon-btn" data-theme-toggle aria-label="สลับธีมสว่าง/มืด" title="สลับธีมสว่าง/มืด">{{ icon('sun-moon', 20) }}</button>
       <details class="user-menu">
@@ -78,4 +79,10 @@
   setInterval(tick, 60000);
 })();
 </script>
+<link rel="stylesheet" href="/static/safety/pending.css">
+<dialog id="pending-dialog" aria-labelledby="pd-title"{{ ' data-auto="1"'|safe if g.get('auto_pending') }}>
+  <div class="pd-head"><h2 id="pd-title">สรุปงานค้าง</h2><div class="pd-actions"><button type="button" class="btn" data-pd-close>ปิด</button></div></div>
+  <div class="pd-body" role="region" aria-live="polite"></div>
+</dialog>
+<script src="/static/safety/pending.js" defer></script>
 {% endblock %}
