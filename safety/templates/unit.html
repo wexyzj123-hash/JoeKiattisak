@@ -18,7 +18,7 @@
   {% if ov['items'] %}
   <table class="table-stack" style="width:100%"><tr><th>รหัส</th><th>ประเภท</th><th>เรื่อง</th><th>ไลน์ · สถานที่</th><th>สถานะ</th><th>ความเสี่ยง</th><th>การอนุมัติ</th></tr>
   {% for it in ov['items'] %}
-  <tr><td data-label="รหัส"><a href="{{ it.href }}">{{ it.code }}</a></td><td data-label="ประเภท">{{ it.kind_th }}</td>
+  <tr><td data-label="รหัส"><a href="{{ it.href }}">{{ it.code }}</a></td><td data-label="ประเภท" style="white-space:nowrap">{{ it.kind_th }}</td>
     <td data-label="เรื่อง"><a href="{{ it.href }}">{{ it.title }}</a></td><td data-label="ไลน์ · สถานที่">{{ it.where }}{% if it.location_text %} · {{ it.location_text }}{% endif %}</td>
     <td data-label="สถานะ">{{ (hazard_status_th if it.kind == 'hazard' else incident_status_th).get(it.status, it.status) }}</td>
     <td data-label="ความเสี่ยง">{% if it.level_name %}<span class="chip" style="background:{{ it.level_color }};color:#111">{{ it.level_name }}</span>{% else %}-{% endif %}</td>

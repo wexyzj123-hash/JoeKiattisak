@@ -14,7 +14,7 @@ process.stdin.on('end', async () => {
   // ---- Hub ----
   add('hub-login', { app: 'hub', who: null, url: '/login' });
   add('login', { who: null, url: '/login' });
-  add('register', { who: null, url: '/register', full: true, fill: { username: 'somying.k', name: 'สมหญิง ใจดี', factory_id: { label: /บางนา/ }, department_id: { label: /ผลิต/ }, line_id: { label: /ประกอบ/ }, position_id: { label: /LL/ }, level_id: { label: /L0/ }, email: 'somying.k@example.com' } });
+  add('register', { who: null, url: '/register', full: true, fill: { username: 'somying.k', name: 'สมหญิง ใจดี', factory_id: { label: /บางนา/ }, department_id: { label: /ผลิต/ }, line_id: { label: /ประกอบ/ }, position_id: { label: /LL/ }, email: 'somying.k@example.com' } });
   add('hub-launcher', { app: 'hub', who: 'hub', url: '/' });
   add('hub-launcher-public', { app: 'hub', who: null, url: '/' });
   add('hub-users', { app: 'hub', who: 'hub', url: '/admin/users', full: true });
@@ -70,6 +70,7 @@ process.stdin.on('end', async () => {
   add('admin-plans', { who: 'admin', url: '/admin/patrol-plans', full: true });
   add('admin-capa-settings', { who: 'admin', url: '/admin/capa-settings', full: true });
   add('admin-report-due', { who: 'admin', url: '/admin/report-due', full: true });
+  add('unit', { who: 'head', url: '/unit', full: true });
   add('admin-approvals', { who: 'admin', url: '/admin/approvals', full: true });
   add('admin-notifications', { who: 'admin', url: '/admin/notifications', full: true });
   add('search', { who: 'admin', url: '/search?q=น้ำมัน' });
