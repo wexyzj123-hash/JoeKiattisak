@@ -1,0 +1,19 @@
+{% if ap %}
+<div class="card" style="max-width:none;margin:0">
+  <h2>การอนุมัติ <span class="chip" style="background:{{ {'approved': 'var(--ok)', 'rejected': 'var(--danger)', 'pending': 'var(--panel)'}[ap.state] }};{{ 'color:var(--text);border:1px solid var(--line)' if ap.state == 'pending' }}">{{ ap.state_th }}</span></h2>
+  <ol style="padding-left:1.2rem;margin:0 0 8px">
+    {% for r in ap.rows %}<li>ขั้น {{ r['step'] }} ({{ ap.labels[r['step']] }}): <strong>{{ ap.status_th[r['status']] }}</strong>
+      {% if r['approver_name'] %} · {{ r['approver_name'] }}{{ ' (อนุมัติแทน)' if r['proxy'] }} · {{ r['decided_at'] }}{% endif %}{% if r['comment'] %}<br><small style="color:var(--muted)">ความเห็น: {{ r['comment'] }}</small>{% endif %}</li>{% endfor %}
+  </ol>
+  {% if ap.my_step %}
+  <form method="post" action="/approvals/{{ ap.kind }}/{{ ap.ref_id }}/{{ ap.my_step }}" style="display:grid;gap:8px">
+    <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+    <label>ความเห็น / เหตุผล {{ '(จำเป็น เพราะอนุมัติแทน)' if ap.my_mode == 'proxy' else '(จำเป็นเมื่อไม่อนุมัติ)' }} <input name="comment" maxlength="500"></label>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button name="decision" value="approve">อนุมัติขั้นที่ {{ ap.my_step }}</button><button name="decision" value="reject" class="btn">ไม่อนุมัติ</button></div>
+  </form>
+  {% endif %}
+  {% if ap.state == 'rejected' and ap.can_restart %}
+  <form method="post" action="/approvals/{{ ap.kind }}/{{ ap.ref_id }}/restart"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><button type="submit">ขออนุมัติใหม่</button></form>
+  {% endif %}
+</div>
+{% endif %}

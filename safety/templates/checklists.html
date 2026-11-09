@@ -1,0 +1,22 @@
+{% extends "layout.html" %}
+{% block title %}แบบตรวจความปลอดภัย · Safety 4.0{% endblock %}
+{% block body %}
+<h1>แบบตรวจความปลอดภัย</h1>
+<p class="muted">แบบตรวจแต่ละแบบมีรายการตรวจแบ่งเป็นหมวด ลบไม่ได้ (ปิดใช้งานแทน) เพราะรอบตรวจเก่าอ้างอิงอยู่ — รอบตรวจจะคัดลอกรายการตรวจไว้ตอนเริ่มตรวจ การแก้ไขภายหลังไม่กระทบรอบที่เริ่มไปแล้ว</p>
+<div class="card" style="max-width:none;margin:0 0 16px"><div class="table-wrap">
+<table class="table-stack" style="width:100%">
+  <tr><th>รหัส</th><th>ชื่อ</th><th>รายการตรวจที่ใช้งาน</th><th>สถานะ</th><th>ดำเนินการ</th></tr>
+  {% for r in rows %}
+  <tr><td><a href="/admin/checklists/{{ r['id'] }}">{{ r['code'] }}</a></td><td>{{ r['name_th'] }}</td><td>{{ r['items'] }}</td><td>{{ 'ใช้งาน' if r['active'] else 'ปิดใช้งาน' }}</td>
+    <td><form method="post"><input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="id" value="{{ r['id'] }}"><button name="action" value="toggle">{{ 'ปิดใช้งาน' if r['active'] else 'เปิดใช้งาน' }}</button></form></td></tr>
+  {% else %}<tr><td colspan="5">ยังไม่มีแบบตรวจ</td></tr>{% endfor %}
+</table></div></div>
+<form method="post" class="card" style="max-width:520px;margin:0">
+  <h2>เพิ่มแบบตรวจ</h2>
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}"><input type="hidden" name="action" value="create">
+  <label>รหัส (A-Z 0-9 _ -) <input name="code" required maxlength="32" pattern="[A-Za-z0-9_-]{1,32}"></label>
+  <label>ชื่อแบบตรวจ <input name="name_th" required maxlength="200"></label>
+  <label>คำอธิบาย <textarea name="description" rows="2" maxlength="1000"></textarea></label>
+  <button type="submit">เพิ่มแบบตรวจ</button>
+</form>
+{% endblock %}

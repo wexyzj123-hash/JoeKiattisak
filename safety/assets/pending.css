@@ -1,0 +1,31 @@
+/* หน้าต่างเด้ง «สรุปงานค้าง» */
+#pending-dialog { border: 1px solid var(--line); border-radius: 18px; padding: 0; width: min(760px, calc(100vw - 24px)); max-height: min(86vh, 900px); background: var(--bg, var(--panel)); color: var(--text); box-shadow: 0 30px 80px rgba(0, 0, 0, .45); }
+#pending-dialog::backdrop { background: rgba(5, 12, 28, .62); backdrop-filter: blur(2px); }
+#pending-dialog[open] { display: flex; flex-direction: column; }
+.pd-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.pd-head h2 { margin: 0; font-size: 1.1rem; }
+.pd-body { padding: 14px 18px; overflow-y: auto; }
+.pd-lead { margin: 0 0 8px; }
+.pd-h { margin: 14px 0 6px; font-size: .98rem; color: var(--muted); border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+.pd-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.pd-item { border: 1px solid var(--line); border-radius: 12px; padding: 9px 12px; background: var(--panel); }
+.pd-main { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: baseline; text-decoration: none; color: inherit; }
+.pd-main:hover .pd-title, .pd-main:focus-visible .pd-title { text-decoration: underline; }
+.pd-kind { font-size: .75rem; border: 1px solid var(--line); border-radius: 999px; padding: 0 8px; color: var(--muted); }
+.pd-title { flex: 1 1 200px; }
+.pd-over { color: #a31515; font-weight: 700; font-size: .85rem; }
+:root[data-theme="dark"] .pd-over { color: #ff9d9d; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .pd-over { color: #ff9d9d; } }
+.pd-lv { font-size: .75rem; border-radius: 999px; padding: 0 8px; font-weight: 700; }
+.pd-meta { color: var(--muted); font-size: .85rem; margin: 3px 0 4px; }
+.pd-steps { list-style: none; display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; font-size: .78rem; }
+.pd-steps li { padding: 1px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.pd-steps li.pd-done { background: rgba(46, 204, 113, .18); color: var(--text); }
+.pd-steps li.pd-now { background: #0b4fb3; color: #fff; border-color: transparent; font-weight: 700; }
+.pd-stage { font-size: .85rem; }
+.pd-more { color: var(--muted); font-size: .85rem; margin: 6px 0 0; }
+.pd-empty { text-align: center; padding: 10px 0 4px; }
+.pd-foot { margin: 14px 0 0; padding-top: 8px; border-top: 1px solid var(--line); font-size: .9rem; }
+.pd-actions { display: flex; gap: 8px; align-items: center; }
+#pending-open .badge { position: static; margin-left: 4px; }
+@media (max-width: 560px) { #pending-dialog { width: calc(100vw - 12px); max-height: 92vh; border-radius: 14px; } .pd-head, .pd-body { padding-left: 12px; padding-right: 12px; } }

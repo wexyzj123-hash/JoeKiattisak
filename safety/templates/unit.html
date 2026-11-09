@@ -1,0 +1,38 @@
+{% extends "layout.html" %}
+{% block title %}หน่วยงานของฉัน · AIAT Safety{% endblock %}
+{% block body %}
+<h1>หน่วยงานของฉัน</h1>
+{% if not ov %}
+<div class="card" style="max-width:none">{{ mascot('thinking', 96) }}<p>บัญชีของคุณยังไม่ได้ผูกกับโรงงานหรือแผนก — แจ้งผู้ดูแลระบบให้กำหนดที่หน้า «ผู้ใช้งาน» เพื่อให้เห็นสถานะของหน่วยงานและได้รับประกาศของหน่วยงาน</p></div>
+{% else %}
+<p style="color:var(--muted)">{{ ov.label }} · เห็นทุกรายการของหน่วยงาน กดชื่อรายการเพื่อดูรายละเอียด รูป ประวัติ และสถานะการอนุมัติ (ผู้เกี่ยวข้องในอุบัติเหตุเห็นได้เฉพาะผู้สอบสวนและผู้แจ้ง)</p>
+<div class="kpis" style="margin-bottom:16px">
+  <div class="kpi"><span class="kpi-n">{{ ov.open_hazard }}</span><span class="kpi-l">อันตรายที่เปิดอยู่</span></div>
+  <div class="kpi kpi-danger"><span class="kpi-n">{{ ov.overdue }}</span><span class="kpi-l">เกินกำหนด</span></div>
+  <div class="kpi"><span class="kpi-n">{{ ov.open_incident }}</span><span class="kpi-l">อุบัติเหตุที่เปิดอยู่</span></div>
+  <div class="kpi kpi-warn"><span class="kpi-n">{{ ov.pending_approvals }}</span><span class="kpi-l">ขั้นอนุมัติที่รออยู่</span></div>
+  <div class="kpi kpi-ok"><span class="kpi-n">{{ ov.closed_hazard + ov.closed_incident }}</span><span class="kpi-l">ปิดแล้ว</span></div>
+</div>
+<div class="card" style="max-width:none;margin:0 0 16px;overflow-x:auto">
+  <h2>รายการล่าสุดของหน่วยงาน</h2>
+  {% if ov['items'] %}
+  <table class="table-stack" style="width:100%"><tr><th>รหัส</th><th>ประเภท</th><th>เรื่อง</th><th>ไลน์ · สถานที่</th><th>สถานะ</th><th>ความเสี่ยง</th><th>การอนุมัติ</th></tr>
+  {% for it in ov['items'] %}
+  <tr><td data-label="รหัส"><a href="{{ it.href }}">{{ it.code }}</a></td><td data-label="ประเภท" style="white-space:nowrap">{{ it.kind_th }}</td>
+    <td data-label="เรื่อง"><a href="{{ it.href }}">{{ it.title }}</a></td><td data-label="ไลน์ · สถานที่">{{ it.where }}{% if it.location_text %} · {{ it.location_text }}{% endif %}</td>
+    <td data-label="สถานะ">{{ (hazard_status_th if it.kind == 'hazard' else incident_status_th).get(it.status, it.status) }}</td>
+    <td data-label="ความเสี่ยง">{% if it.level_name %}<span class="chip" style="background:{{ it.level_color }};color:#111">{{ it.level_name }}</span>{% else %}-{% endif %}</td>
+    <td data-label="การอนุมัติ">{% if it.approval %}<a href="{{ it.href }}">{{ it.approval.state_th }}{% if it.approval.next_step %} (ขั้น {{ it.approval.next_step }}){% endif %}</a>{% else %}-{% endif %}</td></tr>
+  {% endfor %}</table>
+  {% else %}<p style="color:var(--muted)">ยังไม่มีรายการในหน่วยงานนี้</p>{% endif %}
+</div>
+{% endif %}
+<div class="card" style="max-width:none;margin:0">
+  <h2>ประกาศและการอนุมัติที่เกี่ยวกับฉัน</h2>
+  {% if notes %}<ul style="list-style:none;padding:0;margin:0;display:grid;gap:10px">
+    {% for n in notes %}<li><a href="{{ n['link'] or '/notifications' }}"><strong>{{ n['title'] }}</strong></a>{% if not n['read_at'] %} <span class="chip" style="background:var(--accent)">ใหม่</span>{% endif %}<br>
+      <small style="color:var(--muted)">{{ n['created_at'] }}</small><div style="white-space:pre-line;margin-top:2px">{{ n['body'] }}</div></li>{% endfor %}</ul>
+  <p style="margin-top:10px"><a href="/notifications">ดูการแจ้งเตือนทั้งหมด</a></p>
+  {% else %}<p style="color:var(--muted)">ยังไม่มีประกาศ</p>{% endif %}
+</div>
+{% endblock %}

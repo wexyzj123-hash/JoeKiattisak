@@ -1,0 +1,31 @@
+{% extends "layout.html" %}
+{% block title %}CAPA · Safety 4.0{% endblock %}
+{% block body %}
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+  <h1>CAPA — การแก้ไขและป้องกัน</h1>
+  {% if can_create %}<a class="btn" href="/capas/new">+ สร้าง CAPA</a>{% endif %}
+</div>
+<form method="get" class="card" style="max-width:none;margin:0 0 16px;display:flex;gap:10px;align-items:end;flex-wrap:wrap">
+  <label>ค้นหา (รหัส / หัวข้อ) <input name="q" value="{{ f.q }}" maxlength="100"></label>
+  <label>สถานะ <select name="status"><option value="">ทั้งหมด</option>{% for k, v in status_th.items() %}<option value="{{ k }}" {{ 'selected' if f.status == k }}>{{ v }}</option>{% endfor %}</select></label>
+  <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="mine" value="1" {{ 'checked' if f.mine }}> เฉพาะของฉัน</label>
+  <label style="display:flex;gap:6px;align-items:center"><input type="checkbox" name="overdue" value="1" {{ 'checked' if f.overdue }}> เกินกำหนด</label>
+  <button type="submit">ค้นหา</button>
+</form>
+<div class="card" style="max-width:none;margin:0"><div class="table-wrap">
+<table class="table-stack" style="width:100%">
+  <tr><th>รหัส</th><th>หัวข้อ</th><th>แหล่งที่มา</th><th>พื้นที่</th><th>เจ้าของ</th><th>ครบกำหนด</th><th>สถานะ</th></tr>
+  {% for r in rows %}
+  <tr>
+    <td><a href="/capas/{{ r['id'] }}">{{ r['code'] }}</a></td><td>{{ r['title'] }}</td><td>{{ kind_th[r['source_kind']] }}</td><td>{{ r['area_name'] }}</td><td>{{ r['owner_name'] }}</td>
+    <td>{{ r['due_date'] }}{% if r['status'] in ('open', 'in_progress') and r['due_date'] < today %} <span class="chip" style="background:var(--danger)">เกินกำหนด</span>{% endif %}</td>
+    <td>{{ status_th[r['status']] }}</td>
+  </tr>
+  {% else %}<tr><td colspan="7"><div class="empty-state">{{ mascot('sleeping', 96, decorative=True) }}<p>{{ 'ไม่พบรายการตามเงื่อนไข' if f.q or f.status or f.mine or f.overdue else 'ยังไม่มี CAPA' }}</p></div></td></tr>{% endfor %}
+</table></div></div>
+<nav style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;align-items:center">
+  {% for p in range(1, pages + 1) %}{% if p == 1 or p == pages or (p - page) | abs <= 2 %}
+  <a class="btn" style="{{ 'opacity:.6' if p != page }}" href="?{{ {'status': f.status, 'q': f.q, 'mine': f.mine, 'overdue': f.overdue, 'page': p} | urlencode }}">{{ p }}</a>{% endif %}{% endfor %}
+  <span class="muted">ทั้งหมด {{ total }} รายการ</span>
+</nav>
+{% endblock %}

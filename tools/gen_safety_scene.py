@@ -1,0 +1,80 @@
+"""สร้าง hub/templates/_safety_scene.html — ภาพเคลื่อนไหวธีมความปลอดภัยสำหรับหน้าเข้าสู่ระบบ (SVG + CSS ล้วน ไม่มีไลบรารี)
+ใช้: python tools/gen_safety_scene.py"""
+import math
+import os
+import random
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CX, CY = 320, 208
+
+ICONS = {
+    # หมวกนิรภัย
+    "hat": '<path d="M-20 8a20 17 0 0 1 40 0z" fill="#ffc933"/><rect x="-24" y="8" width="48" height="6" rx="3" fill="#f0a500"/><rect x="-4" y="-12" width="8" height="20" rx="2" fill="#ffe08a"/><path d="M-14 -4a16 13 0 0 1 10 -9" stroke="#fff" stroke-opacity=".7" stroke-width="2.2" fill="none" stroke-linecap="round"/>',
+    # ป้ายเตือน
+    "warn": '<path d="M0 -22 22 16H-22z" fill="#ffb81c" stroke="#b86e00" stroke-width="2" stroke-linejoin="round"/><rect x="-2.4" y="-9" width="4.8" height="15" rx="2.2" fill="#1c2733"/><circle cx="0" cy="11" r="2.8" fill="#1c2733"/>',
+    # ปฐมพยาบาล
+    "aid": '<rect x="-21" y="-21" width="42" height="42" rx="10" fill="#1fb57a"/><rect x="-5.5" y="-14" width="11" height="28" rx="2.5" fill="#fff"/><rect x="-14" y="-5.5" width="28" height="11" rx="2.5" fill="#fff"/>',
+    # ถังดับเพลิง
+    "ext": '<rect x="-11" y="-12" width="22" height="34" rx="8" fill="#e5484d"/><rect x="-6" y="-19" width="12" height="9" rx="2.5" fill="#2b3340"/><path d="M6 -16h12v7" stroke="#2b3340" stroke-width="3.4" fill="none" stroke-linecap="round"/><rect x="-11" y="-1" width="22" height="9" fill="#fff" fill-opacity=".85"/>',
+    # แว่นนิรภัย
+    "gog": '<rect x="-24" y="-8" width="19" height="17" rx="7" fill="#7fd6ff" fill-opacity=".85" stroke="#fff" stroke-width="2.4"/><rect x="5" y="-8" width="19" height="17" rx="7" fill="#7fd6ff" fill-opacity=".85" stroke="#fff" stroke-width="2.4"/><path d="M-5 0h10M-24 0h-4M24 0h4" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>',
+}
+
+
+def build() -> str:
+    rnd = random.Random(7)
+    out = ['<svg class="ss" viewBox="0 0 640 430" role="img" aria-label="AIAT Safety — animated safety illustration" xmlns="http://www.w3.org/2000/svg">',
+           '<defs>'
+           '<radialGradient id="ss-glow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#4f9bff" stop-opacity=".55"/><stop offset=".55" stop-color="#2a74e8" stop-opacity=".18"/><stop offset="1" stop-color="#2a74e8" stop-opacity="0"/></radialGradient>'
+           '<linearGradient id="ss-gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe27a"/><stop offset=".55" stop-color="#ffb81c"/><stop offset="1" stop-color="#e98a00"/></linearGradient>'
+           '<linearGradient id="ss-gold-in" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffeaa0"/><stop offset="1" stop-color="#ffc233"/></linearGradient>'
+           '<linearGradient id="ss-sheen" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>'
+           '<pattern id="ss-stripe" width="34" height="34" patternUnits="userSpaceOnUse" patternTransform="rotate(-45)"><rect width="17" height="34" fill="#ffc933"/><rect x="17" width="17" height="34" fill="#16202e"/></pattern>'
+           '<clipPath id="ss-shield-clip"><path id="ss-shield-path" d="M320 108 405 138v66c0 52-34 88-85 110-51-22-85-58-85-110v-66z"/></clipPath>'
+           '<clipPath id="ss-bar"><rect x="70" y="392" width="500" height="16" rx="8"/></clipPath>'
+           '</defs>',
+           f'<ellipse cx="{CX}" cy="{CY}" rx="300" ry="215" fill="url(#ss-glow)"/>']
+    # วงเรดาร์แผ่ออก
+    for i in range(3):
+        out.append(f'<circle class="ss-ring" cx="{CX}" cy="{CY}" r="96" fill="none" stroke="#7fb4ff" stroke-width="1.6" style="--d:{i * 1.7:.1f}s"/>')
+    # วงโคจร
+    out.append(f'<circle class="ss-orbit-line ss-spin-slow" cx="{CX}" cy="{CY}" r="150" fill="none" stroke="#9cc4ff" stroke-opacity=".5" stroke-width="1.2" stroke-dasharray="3 9"/>')
+    out.append(f'<circle class="ss-orbit-line ss-spin-rev" cx="{CX}" cy="{CY}" r="112" fill="none" stroke="#ffd36a" stroke-opacity=".4" stroke-width="1" stroke-dasharray="2 7"/>')
+    # อนุภาคลอยขึ้น
+    for i in range(16):
+        x, y, r = rnd.randint(40, 600), rnd.randint(250, 380), rnd.choice([1.4, 1.8, 2.4, 3])
+        col = rnd.choice(["#bcd9ff", "#ffd36a", "#ffffff"])
+        out.append(f'<circle class="ss-spark" cx="{x}" cy="{y}" r="{r}" fill="{col}" style="--d:{rnd.uniform(0, 6):.1f}s;--t:{rnd.uniform(5, 9):.1f}s"/>')
+    # ไอคอนบนวงโคจรนอก (หมุนรอบโล่ ไอคอนตั้งตรงเสมอ)
+    out.append(f'<g class="ss-orbit">')
+    for k, name in enumerate(("hat", "warn", "aid", "ext", "gog")):
+        ang = -90 + k * 72
+        x, y = CX + 150 * math.cos(math.radians(ang)), CY + 150 * math.sin(math.radians(ang))
+        out.append(f'<g transform="translate({x:.1f} {y:.1f})"><g class="ss-upright"><circle r="31" fill="#0b2a63" fill-opacity=".72" stroke="#8fbcff" stroke-opacity=".55" stroke-width="1.2"/>'
+                   f'<g class="ss-bob" style="--d:{k * .5:.1f}s">{ICONS[name]}</g></g></g>')
+    out.append('</g>')
+    # วงในมีจุดสัญญาณ
+    out.append('<g class="ss-orbit-rev">')
+    for k in range(3):
+        ang = 30 + k * 120
+        x, y = CX + 112 * math.cos(math.radians(ang)), CY + 112 * math.sin(math.radians(ang))
+        out.append(f'<circle cx="{x:.1f}" cy="{y:.1f}" r="5" fill="#ffd36a" class="ss-blink" style="--d:{k * .8:.1f}s"/>')
+    out.append('</g>')
+    # โล่กลาง
+    out.append('<g class="ss-shield"><path d="M320 100 413 133v70c0 57-37 95-93 118-56-23-93-61-93-118v-70z" fill="#0a2358" fill-opacity=".55"/>'
+               '<path d="M320 108 405 138v66c0 52-34 88-85 110-51-22-85-58-85-110v-66z" fill="url(#ss-gold)"/>'
+               '<path d="M320 124 391 150v54c0 42-28 73-71 92-43-19-71-50-71-92v-54z" fill="url(#ss-gold-in)"/>'
+               '<g clip-path="url(#ss-shield-clip)"><rect class="ss-sheen" x="150" y="90" width="70" height="250" fill="url(#ss-sheen)" transform="rotate(18 320 210)"/></g>'
+               '<path class="ss-check" d="M277 206l30 31 57-67" fill="none" stroke="#13306d" stroke-width="15" stroke-linecap="round" stroke-linejoin="round" pathLength="1"/>'
+               '<path d="M277 206l30 31 57-67" fill="none" stroke="#fff" stroke-opacity=".0" stroke-width="2"/></g>')
+    # แถบเตือนอันตรายวิ่ง
+    out.append('<g clip-path="url(#ss-bar)"><rect class="ss-tape" x="36" y="392" width="580" height="16" fill="url(#ss-stripe)"/></g>')
+    out.append('<rect x="70" y="392" width="500" height="16" rx="8" fill="none" stroke="#fff" stroke-opacity=".35" stroke-width="1.2"/>')
+    out.append('</svg>')
+    return "\n".join(out) + "\n"
+
+
+if __name__ == "__main__":
+    with open(os.path.join(ROOT, "hub", "templates", "_safety_scene.html"), "w", encoding="utf-8") as fh:
+        fh.write(build())
+    print("wrote _safety_scene.html")

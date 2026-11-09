@@ -1,0 +1,25 @@
+{% macro row(it, mine) -%}
+<li class="pd-item">
+  <a class="pd-main" href="{{ it.href }}">
+    <span class="pd-kind">{{ it.kind_th }}</span><strong>{{ it.code }}</strong> <span class="pd-title">{{ it.title }}</span>
+    {% if it.overdue %}<span class="pd-over">เกินกำหนด {{ it.overdue }} วัน</span>{% endif %}
+    {% if it.level %}<span class="pd-lv" style="background:{{ it.color or 'var(--panel)' }};color:{{ '#111' if it.color else 'var(--text)' }}">{{ it.level }}</span>{% endif %}
+  </a>
+  <div class="pd-meta">{% if it.where %}📍 {{ it.where }}{% endif %}{% if it.action %} · <strong>{{ it.action }}</strong>{% endif %}{% if it.extra %} · {{ it.extra }}{% endif %}</div>
+  {% if it.steps %}<ol class="pd-steps" aria-label="ขั้นตอน">{% for s in it.steps %}<li class="pd-{{ s.state }}">{{ s.label }}</li>{% endfor %}</ol>{% else %}<div class="pd-stage">ขั้นตอนตอนนี้: {{ it.stage }}</div>{% endif %}
+</li>
+{%- endmacro %}
+{% if d.empty %}
+<div class="pd-empty">
+  {{ mascot('celebrate', 120, decorative=True) }}
+  <h3>ไม่มีงานค้างที่รอคุณ</h3>
+  <p>ขณะนี้ไม่มีรายการที่ต้องให้คุณดำเนินการ{% if d.unit_label %}และหน่วยงาน {{ d.unit_label }} ไม่มีรายการเปิดค้างอยู่{% endif %} — ขอบคุณที่ช่วยกันดูแลความปลอดภัย</p>
+</div>
+{% else %}
+<p class="pd-lead">{% if d.mine_total %}มี <strong>{{ d.mine_total }}</strong> รายการที่รอคุณดำเนินการ{% else %}ไม่มีรายการที่รอคุณดำเนินการ{% endif %}{% if d.others_total %} · ค้างในหน่วยงาน {{ d.others_total }} รายการ{% endif %}{% if d.overdue_total %} · <span class="pd-over">เกินกำหนด {{ d.overdue_total }} รายการ</span>{% endif %}</p>
+{% if d.mine %}<h3 class="pd-h">รอคุณดำเนินการ</h3><ul class="pd-list">{% for it in d.mine %}{{ row(it, true) }}{% endfor %}</ul>
+{% if d.mine_total > d.mine|length %}<p class="pd-more">แสดง {{ d.mine|length }} จาก {{ d.mine_total }} รายการ — <a href="/hazards?open=1">ดูทั้งหมดในทะเบียน</a></p>{% endif %}{% endif %}
+{% if d.others %}<h3 class="pd-h">ค้างในหน่วยงานของฉัน{% if d.unit_label %} · {{ d.unit_label }}{% endif %}</h3><ul class="pd-list">{% for it in d.others %}{{ row(it, false) }}{% endfor %}</ul>
+{% if d.others_total > d.others|length %}<p class="pd-more">แสดง {{ d.others|length }} จาก {{ d.others_total }} รายการ — <a href="/unit">ดูทั้งหมดที่หน่วยงานของฉัน</a></p>{% endif %}{% endif %}
+{% endif %}
+<p class="pd-foot"><a href="/unit">หน่วยงานของฉัน</a> · <a href="/approvals">งานรออนุมัติ</a> · <a href="/notifications">การแจ้งเตือนทั้งหมด</a></p>

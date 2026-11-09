@@ -1,0 +1,17 @@
+{% extends "layout.html" %}
+{% block title %}สร้าง CAPA · Safety 4.0{% endblock %}
+{% block body %}
+<h1>สร้าง CAPA</h1>
+{% for e in errors %}<div class="flash">{{ e }}</div>{% endfor %}
+<form method="post" class="card" style="max-width:640px;margin:0">
+  <input type="hidden" name="_csrf" value="{{ csrf_token() }}">
+  {% if source %}<input type="hidden" name="source" value="{{ source }}"><p class="muted" style="margin:0">ต้นทาง: <strong>{{ source_title }}</strong></p>{% endif %}
+  <label>หัวข้อ <input name="title" value="{{ values.get('title', '') }}" required maxlength="200"></label>
+  <label>ประเภท <select name="action_type">{% for k, v in types.items() %}<option value="{{ k }}" {{ 'selected' if values.get('action_type', 'corrective') == k }}>{{ v }}</option>{% endfor %}</select></label>
+  <label>รายละเอียด <textarea name="description" rows="4" maxlength="2000">{{ values.get('description', '') }}</textarea></label>
+  {% if not source %}<label>พื้นที่เสี่ยง <select name="risk_area_id" required><option value="">— เลือก —</option>{% for a in areas %}<option value="{{ a['id'] }}" {{ 'selected' if values.get('risk_area_id', '') | string == a['id'] | string }}>{{ a['breadcrumb'] }}</option>{% endfor %}</select></label>{% endif %}
+  <label>เจ้าของงาน <select name="owner_id" required><option value="">— เลือก —</option>{% for o in owners %}<option value="{{ o['id'] }}" {{ 'selected' if values.get('owner_id', '') | string == o['id'] | string }}>{{ o['name'] }}</option>{% endfor %}</select></label>
+  <label>ครบกำหนด <input type="date" name="due_date" value="{{ values.get('due_date', '') }}" required></label>
+  <div style="display:flex;gap:8px"><button type="submit">สร้าง CAPA</button><a class="btn" href="/capas">ยกเลิก</a></div>
+</form>
+{% endblock %}
